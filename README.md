@@ -243,6 +243,13 @@ Once everything works, set up automatic triggers:
 - Day: Sunday
 - Time: 8:00 PM - 9:00 PM
 
+**Trigger 4: Monthly Progress Report (Optional)**
+- Function: `sendMonthlyProgressEmail`
+- Event source: Time-driven
+- Type: Month timer
+- Day: 1st
+- Time: 9:00 AM - 10:00 AM
+
 Click **Save** for each trigger.
 
 ## Troubleshooting
@@ -264,6 +271,7 @@ Click **Save** for each trigger.
 | `testRunningData()` | Running data (CS, D', pace zones) |
 | `testWeeklySummary()` | Weekly activity aggregation |
 | `testTrainingLoadAdvisor()` | Training load recommendations |
+| `testMonthlyProgress()` | 8-week progress trends (CTL, eFTP, volume) |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
@@ -288,6 +296,16 @@ A weekly recap email (set up via trigger) includes:
 - Health & recovery averages (sleep, HRV, resting HR) with changes vs previous week
 - Training load advice (target CTL, weekly/daily TSS recommendations)
 - Training phase and goal progress
+
+### Monthly Progress Report
+A monthly report (set up via trigger, e.g., 1st of each month) compares the previous complete calendar month with the month before that:
+- AI-generated monthly training assessment with month-over-month insights
+- Month-over-month comparison (activities, TSS, CTL, eFTP vs previous month)
+- CTL progression with weekly breakdown (trend visualization)
+- eFTP progression over the month
+- Training volume patterns (weekly TSS breakdown)
+- Consistency tracking (weeks trained percentage)
+- Goal progress and training phase context
 
 ## Recovery Integration
 
