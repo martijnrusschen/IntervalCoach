@@ -51,7 +51,8 @@ Google Drive (.zwo files) + Intervals.icu (workout upload) + Email
 This is a Google Apps Script project - no traditional build system, package.json, or CLI commands.
 
 **Git Workflow:**
-For every new feature, create a branch and open a pull request before merging to main.
+- For every new feature, create a branch and open a pull request before merging to main.
+- Always update README.md when adding new features, functions, or configuration options.
 
 **Deployment:**
 1. Open Google Sheet → Extensions → Apps Script
