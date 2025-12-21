@@ -2798,7 +2798,7 @@ ${workout.workoutDescription}
 
   body += `\n${t.footer}`;
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { attachments: [workout.blob] });
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach", attachments: [workout.blob] });
   Logger.log("Email sent successfully.");
 }
 
@@ -2889,7 +2889,7 @@ ${t.focus}: ${phaseInfo.focus}
 
   body += `\n${t.weekly_footer}`;
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body);
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
   Logger.log("Weekly summary email sent successfully.");
 }
 
