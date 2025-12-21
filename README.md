@@ -293,10 +293,6 @@ If you have Whoop, Garmin, or Oura connected to Intervals.icu:
 - Spanish (es)
 - French (fr)
 
-## Disclaimer
-
-IntervalCoach is an experimental tool. Generated workouts are AI-created suggestions. Use at your own risk and listen to your body.
-
 ## License
 
 MIT License
