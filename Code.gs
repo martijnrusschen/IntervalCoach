@@ -4459,6 +4459,48 @@ function testCrossTraining() {
   }
 }
 
+/**
+ * Debug function to see ALL activities from Intervals.icu API
+ * This helps identify what activity types are available
+ */
+function debugAllActivities() {
+  Logger.log("=== DEBUG: ALL ACTIVITIES (last 14 days) ===");
+
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - 14);
+
+  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const activities = JSON.parse(response.getContentText());
+
+      Logger.log("Total activities found: " + activities.length);
+      Logger.log("\n--- Activity List ---");
+
+      activities.forEach((a, i) => {
+        const date = a.start_date_local ? a.start_date_local.substring(0, 10) : 'N/A';
+        Logger.log((i + 1) + ". " + date + " | Type: '" + a.type + "' | Name: '" + a.name + "'");
+      });
+
+      // Show unique types
+      const uniqueTypes = [...new Set(activities.map(a => a.type))];
+      Logger.log("\n--- Unique Activity Types ---");
+      Logger.log(uniqueTypes.join(", "));
+    } else {
+      Logger.log("API Error: " + response.getResponseCode());
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.message);
+  }
+}
+
 // =========================================================
 // 13. DATA PROCESSING & UTILITIES
 // =========================================================
