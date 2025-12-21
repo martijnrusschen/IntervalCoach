@@ -310,16 +310,18 @@ const HEADERS_FIXED = [
 // =========================================================
 // 6. WELLNESS DATA: Fetch from Intervals.icu (Whoop/Garmin/Oura)
 // =========================================================
-function fetchWellnessData(daysBack = 7) {
+function fetchWellnessData(daysBack = 7, daysBackEnd = 0) {
   const today = new Date();
+  const newest = new Date(today);
+  newest.setDate(today.getDate() - daysBackEnd);
   const oldest = new Date(today);
   oldest.setDate(today.getDate() - daysBack);
 
-  const todayStr = formatDateISO(today);
+  const newestStr = formatDateISO(newest);
   const oldestStr = formatDateISO(oldest);
 
   // Use date range endpoint (more reliable, returns fresh data)
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + todayStr;
+  const url = "https://intervals.icu/api/v1/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + newestStr;
 
   try {
     const response = UrlFetchApp.fetch(url, {
@@ -2876,12 +2878,17 @@ function sendWeeklySummaryEmail() {
   const weekData = fetchWeeklyActivities(7);
   const prevWeekData = fetchWeeklyActivities(14, 7); // Previous week for comparison
 
-  // Fetch current fitness metrics
+  // Fetch current and previous week fitness metrics
   const fitnessMetrics = fetchFitnessMetrics();
+  const prevWeekDate = new Date();
+  prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+  const prevFitnessMetrics = fetchFitnessMetrics(prevWeekDate);
 
-  // Fetch wellness/health data for the week
+  // Fetch wellness/health data for current and previous week
   const wellnessRecords = fetchWellnessData(7);
   const wellnessSummary = createWellnessSummary(wellnessRecords);
+  const prevWellnessRecords = fetchWellnessData(14, 7); // 14 days back to 7 days back
+  const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
 
   // Fetch power profile for eFTP
   const powerProfile = fetchPowerCurve();
@@ -2938,14 +2945,18 @@ ${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
 `;
   }
 
-  // Fitness Progress
+  // Fitness Progress with week-over-week comparison
+  const ctlChange = formatChange(fitnessMetrics.ctl, prevFitnessMetrics.ctl, 1);
+  const atlChange = formatChange(fitnessMetrics.atl, prevFitnessMetrics.atl, 1);
+  const tsbChange = formatChange(fitnessMetrics.tsb, prevFitnessMetrics.tsb, 1);
+
   body += `
 -----------------------------------
 ${t.weekly_fitness}
 -----------------------------------
-CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
-ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
-TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}${ctlChange}
+ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}${atlChange}
+TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}${tsbChange}
 ${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
 
   // Add eFTP if available
@@ -2954,17 +2965,23 @@ ${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) :
 eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
   }
 
-  // Health & Recovery Section
+  // Health & Recovery Section with week-over-week comparison
   if (wellnessSummary.available) {
+    const prevAvg = prevWellnessSummary.available ? prevWellnessSummary.averages : {};
+    const sleepChange = formatChange(wellnessSummary.averages.sleep, prevAvg.sleep, 1, 'h');
+    const hrvChange = formatChange(wellnessSummary.averages.hrv, prevAvg.hrv, 0);
+    const rhrChange = formatChange(wellnessSummary.averages.restingHR, prevAvg.restingHR, 0);
+    const recoveryChange = formatChange(wellnessSummary.averages.recovery, prevAvg.recovery, 0, '%');
+
     body += `
 
 -----------------------------------
 ${t.weekly_health}
 -----------------------------------
-${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
-${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
-${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
-${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}`;
+${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange}
+${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange}
+${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}${rhrChange}
+${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}${recoveryChange}`;
   }
 
   // Training Load Advice Section
@@ -3184,6 +3201,21 @@ function formatDuration(seconds) {
 }
 
 /**
+ * Format a change value with sign and optional unit
+ * @param {number} current - Current value
+ * @param {number} previous - Previous value
+ * @param {number} decimals - Number of decimal places
+ * @param {string} unit - Unit to append (e.g., "h", "ms", "%")
+ * @returns {string} Formatted change (e.g., "+2.1" or "↑ 2.1")
+ */
+function formatChange(current, previous, decimals = 1, unit = '') {
+  if (previous == null || current == null) return '';
+  const diff = current - previous;
+  const sign = diff >= 0 ? '+' : '';
+  return ` (${sign}${diff.toFixed(decimals)}${unit})`;
+}
+
+/**
  * Test function for weekly summary
  */
 function testWeeklySummary() {
@@ -3266,9 +3298,10 @@ function subtractPace(paceStr, secsToSubtract) {
 /**
  * Fetch current fitness metrics (CTL, ATL, TSB) from Intervals.icu
  */
-function fetchFitnessMetrics() {
-  const todayStr = formatDateISO(new Date());
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness/" + todayStr;
+function fetchFitnessMetrics(date) {
+  const targetDate = date || new Date();
+  const dateStr = formatDateISO(targetDate);
+  const url = "https://intervals.icu/api/v1/athlete/0/wellness/" + dateStr;
 
   try {
     const response = UrlFetchApp.fetch(url, {
