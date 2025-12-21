@@ -298,10 +298,11 @@ A weekly recap email (set up via trigger) includes:
 - Training phase and goal progress
 
 ### Monthly Progress Report
-A monthly report (set up via trigger, e.g., 1st of each month) includes:
-- AI-generated 8-week training assessment
+A monthly report (set up via trigger, e.g., 1st of each month) compares the previous complete calendar month with the month before that:
+- AI-generated monthly training assessment with month-over-month insights
+- Month-over-month comparison (activities, TSS, CTL, eFTP vs previous month)
 - CTL progression with weekly breakdown (trend visualization)
-- eFTP progression over 8 weeks
+- eFTP progression over the month
 - Training volume patterns (weekly TSS breakdown)
 - Consistency tracking (weeks trained percentage)
 - Goal progress and training phase context
