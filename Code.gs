@@ -2890,8 +2890,9 @@ function sendWeeklySummaryEmail() {
   const prevWellnessRecords = fetchWellnessData(14, 7); // 14 days back to 7 days back
   const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
 
-  // Fetch power profile for eFTP
+  // Fetch power profile for eFTP and previous week's eFTP for comparison
   const powerProfile = fetchPowerCurve();
+  const prevWeekEftp = fetchHistoricalEftp(prevWeekDate);
 
   // Fetch goals for context
   const goals = fetchUpcomingGoals();
@@ -2959,10 +2960,12 @@ ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}${atlChange}
 TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}${tsbChange}
 ${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
 
-  // Add eFTP if available
+  // Add eFTP if available with week-over-week comparison
   if (powerProfile && powerProfile.available) {
+    const currentEftp = powerProfile.currentEftp || powerProfile.ftp;
+    const eftpChange = formatChange(currentEftp, prevWeekEftp, 0, 'W');
     body += `
-eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
+eFTP: ${currentEftp || 'N/A'}W${eftpChange}`;
   }
 
   // Health & Recovery Section with week-over-week comparison
@@ -3293,6 +3296,43 @@ function subtractPace(paceStr, secsToSubtract) {
   const newMins = Math.floor(totalSecs / 60);
   const newSecs = totalSecs % 60;
   return newMins + ":" + (newSecs < 10 ? "0" : "") + newSecs;
+}
+
+/**
+ * Fetch historical eFTP value for a specific date from fitness-model-events
+ * @param {Date} date - The date to get eFTP for (finds most recent SET_EFTP event before this date)
+ * @returns {number|null} eFTP value or null if not available
+ */
+function fetchHistoricalEftp(date) {
+  const targetDate = date || new Date();
+  const targetDateStr = formatDateISO(targetDate);
+
+  const url = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const events = JSON.parse(response.getContentText());
+
+      // Filter SET_EFTP events and find the most recent one on or before the target date
+      const eftpEvents = events
+        .filter(function(e) { return e.category === "SET_EFTP" && e.start_date <= targetDateStr; })
+        .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
+
+      if (eftpEvents.length > 0) {
+        // The value is stored in the event data
+        return eftpEvents[0].value || null;
+      }
+    }
+  } catch (e) {
+    Logger.log("Error fetching historical eFTP: " + e.toString());
+  }
+
+  return null;
 }
 
 /**
