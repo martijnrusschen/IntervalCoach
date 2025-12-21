@@ -76,8 +76,14 @@ const TRANSLATIONS = {
     total_distance: "Total Distance",
     rides: "Rides",
     runs: "Runs",
-    weekly_fitness: "Fitness Status",
+    weekly_fitness: "Fitness Progress",
     weekly_comparison: "vs Previous Week",
+    weekly_health: "Health & Recovery",
+    avg_sleep: "Avg Sleep",
+    avg_hrv: "Avg HRV",
+    avg_rhr: "Avg Resting HR",
+    avg_recovery: "Avg Recovery",
+    ramp_rate: "Ramp Rate",
     weekly_footer: "Keep up the great work!"
   },
   ja: {
@@ -109,8 +115,14 @@ const TRANSLATIONS = {
     total_distance: "総距離",
     rides: "ライド",
     runs: "ラン",
-    weekly_fitness: "フィットネス状態",
+    weekly_fitness: "フィットネス推移",
     weekly_comparison: "前週比",
+    weekly_health: "健康とリカバリー",
+    avg_sleep: "平均睡眠",
+    avg_hrv: "平均HRV",
+    avg_rhr: "平均安静時心拍",
+    avg_recovery: "平均リカバリー",
+    ramp_rate: "ランプレート",
     weekly_footer: "今週もお疲れ様でした！"
   },
   es: {
@@ -142,8 +154,14 @@ const TRANSLATIONS = {
     total_distance: "Distancia Total",
     rides: "Ciclismo",
     runs: "Carrera",
-    weekly_fitness: "Estado de Forma",
+    weekly_fitness: "Progreso de Forma",
     weekly_comparison: "vs Semana Anterior",
+    weekly_health: "Salud y Recuperación",
+    avg_sleep: "Sueño Promedio",
+    avg_hrv: "VFC Promedio",
+    avg_rhr: "FC Reposo Promedio",
+    avg_recovery: "Recuperación Promedio",
+    ramp_rate: "Tasa de Rampa",
     weekly_footer: "¡Sigue así!"
   },
   fr: {
@@ -181,8 +199,14 @@ const TRANSLATIONS = {
     total_distance: "Distance Totale",
     rides: "Vélo",
     runs: "Course",
-    weekly_fitness: "État de Forme",
+    weekly_fitness: "Progression Forme",
     weekly_comparison: "vs Semaine Précédente",
+    weekly_health: "Santé et Récupération",
+    avg_sleep: "Sommeil Moyen",
+    avg_hrv: "VFC Moyenne",
+    avg_rhr: "FC Repos Moyenne",
+    avg_recovery: "Récupération Moyenne",
+    ramp_rate: "Taux de Rampe",
     weekly_footer: "Continuez comme ça!"
   },
   nl: {
@@ -221,8 +245,14 @@ const TRANSLATIONS = {
     total_distance: "Totale Afstand",
     rides: "Fietsen",
     runs: "Hardlopen",
-    weekly_fitness: "Fitness Status",
+    weekly_fitness: "Fitness Voortgang",
     weekly_comparison: "vs Vorige Week",
+    weekly_health: "Gezondheid & Herstel",
+    avg_sleep: "Gem. Slaap",
+    avg_hrv: "Gem. HRV",
+    avg_rhr: "Gem. Rustpols",
+    avg_recovery: "Gem. Herstel",
+    ramp_rate: "Ramp Rate",
     weekly_footer: "Goed bezig, ga zo door!"
   }
 };
@@ -2819,6 +2849,13 @@ function sendWeeklySummaryEmail() {
   // Fetch current fitness metrics
   const fitnessMetrics = fetchFitnessMetrics();
 
+  // Fetch wellness/health data for the week
+  const wellnessRecords = fetchWellnessData(7);
+  const wellnessSummary = createWellnessSummary(wellnessRecords);
+
+  // Fetch power profile for eFTP
+  const powerProfile = fetchPowerCurve();
+
   // Fetch goals for context
   const goals = fetchUpcomingGoals();
   const phaseInfo = goals.available && goals.primaryGoal
@@ -2833,7 +2870,15 @@ function sendWeeklySummaryEmail() {
 
   const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
+  // Generate AI weekly insight
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals);
+
   let body = `${t.weekly_greeting}\n\n`;
+
+  // AI-Generated Weekly Insight
+  if (aiInsight) {
+    body += `${aiInsight}\n\n`;
+  }
 
   // Week Overview
   body += `===================================
@@ -2863,7 +2908,7 @@ ${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
 `;
   }
 
-  // Fitness Status
+  // Fitness Progress
   body += `
 -----------------------------------
 ${t.weekly_fitness}
@@ -2871,7 +2916,26 @@ ${t.weekly_fitness}
 CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
 ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
 TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
-`;
+${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
+
+  // Add eFTP if available
+  if (powerProfile && powerProfile.available) {
+    body += `
+eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
+  }
+
+  // Health & Recovery Section
+  if (wellnessSummary.available) {
+    body += `
+
+-----------------------------------
+${t.weekly_health}
+-----------------------------------
+${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
+${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
+${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}`;
+  }
 
   // Phase & Goal info
   if (goals.available && goals.primaryGoal) {
@@ -2889,6 +2953,96 @@ ${t.focus}: ${phaseInfo.focus}
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
   Logger.log("Weekly summary email sent successfully.");
+}
+
+/**
+ * Generate AI-powered weekly insight based on training data
+ */
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+
+  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's weekly training.
+
+ATHLETE'S WEEK DATA:
+- Activities: ${weekData.totalActivities} (${weekData.rides} rides, ${weekData.runs} runs)
+- Total Time: ${Math.round(weekData.totalTime / 60)} minutes
+- Total TSS: ${weekData.totalTss.toFixed(0)}
+- Total Distance: ${(weekData.totalDistance / 1000).toFixed(1)} km
+
+PREVIOUS WEEK:
+- Activities: ${prevWeekData.totalActivities}
+- Total TSS: ${prevWeekData.totalTss.toFixed(0)}
+
+FITNESS METRICS:
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
+- ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
+- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+- Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}
+
+WELLNESS (7-day averages):
+- Sleep: ${wellnessSummary.available && wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${wellnessSummary.available && wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
+- Resting HR: ${wellnessSummary.available && wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+
+TRAINING PHASE: ${phaseInfo.phaseName}
+GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+WEEKS TO GOAL: ${phaseInfo.weeksOut}
+
+Write a brief, personalized weekly summary (3-4 sentences max) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
+
+Include:
+1. Acknowledge their training effort this week
+2. Note any significant changes from last week (TSS, volume)
+3. One insight about fitness/recovery trends
+4. Brief encouragement for the upcoming week based on their phase
+
+Keep it conversational, supportive, and concise. Do not use bullet points or headers. Just write natural sentences.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("Error generating weekly insight: " + e.toString());
+  }
+
+  return null;
+}
+
+/**
+ * Call Gemini API for text response (not JSON)
+ */
+function callGeminiAPIText(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_SETTINGS.GEMINI_MODEL}:generateContent?key=${API_KEYS.GEMINI_API_KEY}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 500
+    }
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      }
+    }
+  } catch (e) {
+    Logger.log("Error calling Gemini API for text: " + e.toString());
+  }
+
+  return null;
 }
 
 /**
