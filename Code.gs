@@ -2908,8 +2908,9 @@ function sendWeeklySummaryEmail() {
 
   const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI weekly insight
-  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals);
+  // Generate AI weekly insight with comparison data
+  const currentEftp = powerProfile && powerProfile.available ? (powerProfile.currentEftp || powerProfile.ftp) : null;
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals);
 
   let body = `${t.weekly_greeting}\n\n`;
 
@@ -3025,8 +3026,18 @@ ${t.focus}: ${phaseInfo.focus}
 /**
  * Generate AI-powered weekly insight based on training data
  */
-function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals) {
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals) {
   const language = USER_SETTINGS.LANGUAGE || 'en';
+
+  // Calculate changes
+  const ctlChange = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
+  const tsbChange = fitnessMetrics.tsb - (prevFitnessMetrics.tsb || 0);
+  const eftpChange = (currentEftp && prevWeekEftp) ? currentEftp - prevWeekEftp : null;
+
+  const prevAvg = prevWellnessSummary && prevWellnessSummary.available ? prevWellnessSummary.averages : {};
+  const currAvg = wellnessSummary && wellnessSummary.available ? wellnessSummary.averages : {};
+  const sleepChange = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
+  const hrvChange = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
 
   const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's weekly training.
 
@@ -3040,16 +3051,17 @@ PREVIOUS WEEK:
 - Activities: ${prevWeekData.totalActivities}
 - Total TSS: ${prevWeekData.totalTss.toFixed(0)}
 
-FITNESS METRICS:
-- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
+FITNESS METRICS (current → change vs last week):
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)} (${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)})
 - ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
-- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)} (${tsbChange >= 0 ? '+' : ''}${tsbChange.toFixed(1)})
 - Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}
+- eFTP: ${currentEftp || 'N/A'}W${eftpChange !== null ? ' (' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W)' : ''}
 
-WELLNESS (7-day averages):
-- Sleep: ${wellnessSummary.available && wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
-- HRV: ${wellnessSummary.available && wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
-- Resting HR: ${wellnessSummary.available && wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+WELLNESS (7-day averages → change vs last week):
+- Sleep: ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange !== null ? ' (' + (sleepChange >= 0 ? '+' : '') + sleepChange.toFixed(1) + 'h)' : ''}
+- HRV: ${currAvg.hrv ? currAvg.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange !== null ? ' (' + (hrvChange >= 0 ? '+' : '') + hrvChange.toFixed(0) + ')' : ''}
+- Resting HR: ${currAvg.restingHR ? currAvg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
 
 TRAINING PHASE: ${phaseInfo.phaseName}
 GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
@@ -3059,8 +3071,8 @@ Write a brief, personalized weekly summary (3-4 sentences max) in ${language ===
 
 Include:
 1. Acknowledge their training effort this week
-2. Note any significant changes from last week (TSS, volume)
-3. One insight about fitness/recovery trends
+2. Comment on significant changes: fitness (CTL/eFTP trends), form (TSB), or recovery (HRV/sleep)
+3. One actionable insight based on the data trends
 4. Brief encouragement for the upcoming week based on their phase
 
 Keep it conversational, supportive, and concise. Do not use bullet points or headers. Just write natural sentences.`;
