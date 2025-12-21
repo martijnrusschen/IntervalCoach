@@ -2890,9 +2890,8 @@ function sendWeeklySummaryEmail() {
   const prevWellnessRecords = fetchWellnessData(14, 7); // 14 days back to 7 days back
   const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
 
-  // Fetch power profile for eFTP and previous week's eFTP for comparison
+  // Fetch power profile (eFTP now comes from fitnessMetrics via wellness API)
   const powerProfile = fetchPowerCurve();
-  const prevWeekEftp = fetchHistoricalEftp(prevWeekDate);
 
   // Fetch goals for context
   const goals = fetchUpcomingGoals();
@@ -2908,9 +2907,8 @@ function sendWeeklySummaryEmail() {
 
   const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI weekly insight with comparison data
-  const currentEftp = powerProfile && powerProfile.available ? (powerProfile.currentEftp || powerProfile.ftp) : null;
-  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals);
+  // Generate AI weekly insight with comparison data (eFTP now comes from fitnessMetrics)
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp, prevFitnessMetrics.eftp, phaseInfo, goals);
 
   let body = `${t.weekly_greeting}\n\n`;
 
@@ -2961,12 +2959,15 @@ ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}${atlChange}
 TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}${tsbChange}
 ${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
 
-  // Add eFTP if available with week-over-week comparison
-  if (powerProfile && powerProfile.available) {
-    const currentEftp = powerProfile.currentEftp || powerProfile.ftp;
-    const eftpChange = formatChange(currentEftp, prevWeekEftp, 0, 'W');
+  // Add eFTP if available with week-over-week comparison (from wellness/sportInfo)
+  if (fitnessMetrics.eftp) {
+    const eftpChange = formatChange(fitnessMetrics.eftp, prevFitnessMetrics.eftp, 0, 'W');
     body += `
-eFTP: ${currentEftp || 'N/A'}W${eftpChange}`;
+eFTP: ${fitnessMetrics.eftp}W${eftpChange}`;
+  } else if (powerProfile && powerProfile.available) {
+    // Fallback to power curve if wellness doesn't have eFTP
+    body += `
+eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
   }
 
   // Health & Recovery Section with week-over-week comparison
@@ -3416,18 +3417,29 @@ function fetchFitnessMetrics(date) {
 
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
+
+      // Extract eFTP from sportInfo array (for Ride type)
+      let eftp = null;
+      if (data.sportInfo && Array.isArray(data.sportInfo)) {
+        const rideInfo = data.sportInfo.find(function(s) { return s.type === "Ride"; });
+        if (rideInfo && rideInfo.eftp) {
+          eftp = Math.round(rideInfo.eftp);
+        }
+      }
+
       return {
         ctl: data.ctl || 0,
         atl: data.atl || 0,
         tsb: (data.ctl || 0) - (data.atl || 0),
-        rampRate: data.rampRate || 0
+        rampRate: data.rampRate || 0,
+        eftp: eftp
       };
     }
   } catch (e) {
     Logger.log("Error fetching fitness metrics: " + e.toString());
   }
 
-  return { ctl: 0, atl: 0, tsb: 0, rampRate: 0 };
+  return { ctl: 0, atl: 0, tsb: 0, rampRate: 0, eftp: null };
 }
 
 /**
