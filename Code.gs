@@ -3136,10 +3136,12 @@ function fetchMonthlyProgressData(monthOffset = 0) {
       weekEnd.setTime(monthEnd.getTime());
     }
 
-    // Fetch activities for this week
-    const daysBack = Math.ceil((today - weekStart) / (1000 * 60 * 60 * 24));
-    const daysBackEnd = Math.ceil((today - weekEnd) / (1000 * 60 * 60 * 24));
-    const activities = fetchWeeklyActivities(daysBack, daysBackEnd);
+    // Calculate days for fetchWeeklyActivities:
+    // - daysInPeriod: number of days in this week (1-7)
+    // - daysOffset: how many days before today the week ends
+    const daysInPeriod = Math.ceil((weekEnd - weekStart) / (1000 * 60 * 60 * 24)) + 1;
+    const daysOffset = Math.ceil((today - weekEnd) / (1000 * 60 * 60 * 24));
+    const activities = fetchWeeklyActivities(daysInPeriod, daysOffset);
 
     // Fetch fitness metrics for the end of this week
     const fitnessMetrics = fetchFitnessMetrics(weekEnd);
