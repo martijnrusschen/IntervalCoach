@@ -3320,46 +3320,47 @@ function debugHistoricalEftp() {
   const powerCurve = fetchPowerCurve();
   Logger.log("Current eFTP (from powerCurve): " + (powerCurve.currentEftp || powerCurve.ftp || 'N/A') + "W");
 
-  // Fetch fitness-model-events
-  const url = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
+  // Check what the wellness endpoint returns (it might have eFTP)
+  const today = new Date();
+  const todayStr = formatDateISO(today);
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoStr = formatDateISO(weekAgo);
+
+  Logger.log("\n=== WELLNESS ENDPOINT (today) ===");
+  const urlToday = "https://intervals.icu/api/v1/athlete/0/wellness/" + todayStr;
   try {
-    const response = UrlFetchApp.fetch(url, {
+    const resp = UrlFetchApp.fetch(urlToday, {
       headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
-
-    if (response.getResponseCode() === 200) {
-      const events = JSON.parse(response.getContentText());
-      Logger.log("Total fitness-model-events: " + events.length);
-
-      // Find SET_EFTP events
-      const eftpEvents = events.filter(function(e) { return e.category === "SET_EFTP"; });
-      Logger.log("SET_EFTP events found: " + eftpEvents.length);
-
-      if (eftpEvents.length > 0) {
-        // Show last 5 events
-        const recent = eftpEvents.slice(-5);
-        Logger.log("Recent SET_EFTP events:");
-        recent.forEach(function(e) {
-          Logger.log("  " + e.start_date + ": " + JSON.stringify(e));
-        });
-      }
-
-      // Show all unique categories
-      const categories = [...new Set(events.map(function(e) { return e.category; }))];
-      Logger.log("All event categories: " + categories.join(", "));
+    if (resp.getResponseCode() === 200) {
+      const data = JSON.parse(resp.getContentText());
+      Logger.log("All fields: " + Object.keys(data).join(", "));
+      Logger.log("eFTP field: " + (data.eftp || data.eFtp || data.ftp || 'not found'));
+      Logger.log("sportInfo: " + JSON.stringify(data.sportInfo || 'not found'));
+      // Log full response to see all available data
+      Logger.log("Full response: " + JSON.stringify(data).substring(0, 1000));
     }
   } catch (e) {
     Logger.log("Error: " + e.toString());
   }
 
-  // Test fetchHistoricalEftp for today and 7 days ago
-  const today = new Date();
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-
-  Logger.log("fetchHistoricalEftp(today): " + fetchHistoricalEftp(today));
-  Logger.log("fetchHistoricalEftp(7 days ago): " + fetchHistoricalEftp(weekAgo));
+  Logger.log("\n=== WELLNESS ENDPOINT (7 days ago) ===");
+  const urlWeekAgo = "https://intervals.icu/api/v1/athlete/0/wellness/" + weekAgoStr;
+  try {
+    const resp = UrlFetchApp.fetch(urlWeekAgo, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() === 200) {
+      const data = JSON.parse(resp.getContentText());
+      Logger.log("eFTP field: " + (data.eftp || data.eFtp || data.ftp || 'not found'));
+      Logger.log("Full response: " + JSON.stringify(data).substring(0, 1000));
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+  }
 }
 
 /**
