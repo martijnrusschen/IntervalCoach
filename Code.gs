@@ -3311,6 +3311,58 @@ function subtractPace(paceStr, secsToSubtract) {
 }
 
 /**
+ * Debug function to test historical eFTP fetching
+ */
+function debugHistoricalEftp() {
+  Logger.log("=== HISTORICAL eFTP DEBUG ===");
+
+  // Test current eFTP from power curve
+  const powerCurve = fetchPowerCurve();
+  Logger.log("Current eFTP (from powerCurve): " + (powerCurve.currentEftp || powerCurve.ftp || 'N/A') + "W");
+
+  // Fetch fitness-model-events
+  const url = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const events = JSON.parse(response.getContentText());
+      Logger.log("Total fitness-model-events: " + events.length);
+
+      // Find SET_EFTP events
+      const eftpEvents = events.filter(function(e) { return e.category === "SET_EFTP"; });
+      Logger.log("SET_EFTP events found: " + eftpEvents.length);
+
+      if (eftpEvents.length > 0) {
+        // Show last 5 events
+        const recent = eftpEvents.slice(-5);
+        Logger.log("Recent SET_EFTP events:");
+        recent.forEach(function(e) {
+          Logger.log("  " + e.start_date + ": " + JSON.stringify(e));
+        });
+      }
+
+      // Show all unique categories
+      const categories = [...new Set(events.map(function(e) { return e.category; }))];
+      Logger.log("All event categories: " + categories.join(", "));
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+  }
+
+  // Test fetchHistoricalEftp for today and 7 days ago
+  const today = new Date();
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  Logger.log("fetchHistoricalEftp(today): " + fetchHistoricalEftp(today));
+  Logger.log("fetchHistoricalEftp(7 days ago): " + fetchHistoricalEftp(weekAgo));
+}
+
+/**
  * Fetch historical eFTP value for a specific date from fitness-model-events
  * @param {Date} date - The date to get eFTP for (finds most recent SET_EFTP event before this date)
  * @returns {number|null} eFTP value or null if not available
