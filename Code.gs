@@ -167,7 +167,10 @@ const TRANSLATIONS = {
 // =========================================================
 // 5. GLOBAL CONSTANTS & HEADERS
 // =========================================================
-const ICU_AUTH_HEADER = "Basic " + Utilities.base64Encode("API_KEY:" + API_KEYS.ICU_TOKEN);
+// Lazy-evaluated to avoid load-time dependency on config.gs
+function getIcuAuthHeader() {
+  return "Basic " + Utilities.base64Encode("API_KEY:" + API_KEYS.ICU_TOKEN);
+}
 
 const HEADERS_FIXED = [
   "start_date_local","name","type","moving_time","distance",
@@ -197,7 +200,7 @@ function fetchWellnessData(daysBack = 7) {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -342,7 +345,7 @@ function findIntervalCoachPlaceholder(dateStr) {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -524,7 +527,7 @@ function getRecentWorkoutTypes(daysBack = 7) {
 
   try {
     const response = UrlFetchApp.fetch(activitiesUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -555,7 +558,7 @@ function getRecentWorkoutTypes(daysBack = 7) {
 
   try {
     const response = UrlFetchApp.fetch(eventsUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -705,7 +708,7 @@ function fetchUpcomingGoals() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -906,7 +909,7 @@ function debugEvents() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -971,7 +974,7 @@ function debugPaceCurve() {
     Logger.log("--- Trying: " + url + " ---");
     try {
       const response = UrlFetchApp.fetch(url, {
-        headers: { "Authorization": ICU_AUTH_HEADER },
+        headers: { "Authorization": getIcuAuthHeader() },
         muteHttpExceptions: true
       });
       Logger.log("Status: " + response.getResponseCode());
@@ -1013,7 +1016,7 @@ function debugPaceCurve() {
   const athleteUrl = "https://intervals.icu/api/v1/athlete/0";
   try {
     const resp = UrlFetchApp.fetch(athleteUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
     const data = JSON.parse(resp.getContentText());
@@ -1151,7 +1154,7 @@ function debugPowerCurve() {
     Logger.log("--- " + url.split("id=")[1] || "default" + " ---");
     try {
       const resp = UrlFetchApp.fetch(url, {
-        headers: { "Authorization": ICU_AUTH_HEADER },
+        headers: { "Authorization": getIcuAuthHeader() },
         muteHttpExceptions: true
       });
 
@@ -1194,7 +1197,7 @@ function debugPowerCurve() {
   const athleteUrl = "https://intervals.icu/api/v1/athlete/0";
   try {
     const resp = UrlFetchApp.fetch(athleteUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
     Logger.log("=== ATHLETE API ===");
@@ -1231,7 +1234,7 @@ function debugPowerCurve() {
   Logger.log("(All-time power curve)");
   try {
     const resp = UrlFetchApp.fetch(curveUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
     Logger.log("=== POWER CURVE API ===");
@@ -1297,7 +1300,7 @@ function debugPowerCurve() {
     const url = "https://intervals.icu/api/v1/athlete/0/power-curves?type=Ride&id=" + curveId;
     try {
       const resp = UrlFetchApp.fetch(url, {
-        headers: { "Authorization": ICU_AUTH_HEADER },
+        headers: { "Authorization": getIcuAuthHeader() },
         muteHttpExceptions: true
       });
       if (resp.getResponseCode() === 200) {
@@ -1319,7 +1322,7 @@ function debugPowerCurve() {
   const fitnessUrl = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
   try {
     const resp = UrlFetchApp.fetch(fitnessUrl, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
     Logger.log("=== FITNESS MODEL EVENTS API ===");
@@ -1353,7 +1356,7 @@ function fetchRunningData() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -1431,7 +1434,7 @@ function fetchRunningPaceCurve() {
 
   try {
     const response = UrlFetchApp.fetch(url42, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -1495,7 +1498,7 @@ function fetchRunningPaceCurve() {
 
   try {
     const response = UrlFetchApp.fetch(urlSeason, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -1528,7 +1531,7 @@ function fetchAthleteData() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -1628,7 +1631,7 @@ function fetchPowerCurve() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
@@ -1874,7 +1877,7 @@ function fetchAndLogActivities() {
 
   try {
     const response = UrlFetchApp.fetch(url, { 
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
     
@@ -1932,7 +1935,7 @@ function uploadWorkoutToIntervals(name, zwoContent, dateStr, placeholder) {
   const options = {
     method: isUpdate ? "put" : "post",
     headers: {
-      "Authorization": ICU_AUTH_HEADER,
+      "Authorization": getIcuAuthHeader(),
       "Content-Type": "application/json"
     },
     payload: JSON.stringify(payload),
@@ -1985,7 +1988,7 @@ function uploadRunToIntervals(name, description, dateStr, placeholder, duration)
   const options = {
     method: isUpdate ? "put" : "post",
     headers: {
-      "Authorization": ICU_AUTH_HEADER,
+      "Authorization": getIcuAuthHeader(),
       "Content-Type": "application/json"
     },
     payload: JSON.stringify(payload),
@@ -2800,7 +2803,7 @@ function fetchFitnessMetrics() {
 
   try {
     const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": ICU_AUTH_HEADER },
+      headers: { "Authorization": getIcuAuthHeader() },
       muteHttpExceptions: true
     });
 
