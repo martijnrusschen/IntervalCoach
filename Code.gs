@@ -90,7 +90,20 @@ const TRANSLATIONS = {
     target_ctl: "Target CTL",
     weekly_tss_target: "Weekly TSS Target",
     daily_tss_range: "Daily TSS Range",
-    load_advice: "Advice"
+    load_advice: "Advice",
+    // Monthly Progress Report
+    monthly_subject: "[IntervalCoach] Monthly Progress Report",
+    monthly_greeting: "Here is your monthly training progress report.",
+    monthly_period: "Period",
+    monthly_fitness_trend: "Fitness Trend (8 weeks)",
+    monthly_eftp_trend: "eFTP Progression",
+    monthly_volume: "Training Volume",
+    monthly_avg_weekly_tss: "Avg Weekly TSS",
+    monthly_avg_weekly_hours: "Avg Weekly Hours",
+    monthly_total_activities: "Total Activities",
+    monthly_consistency: "Consistency",
+    monthly_weeks_trained: "Weeks Trained",
+    monthly_footer: "Keep building towards your goals!"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -135,7 +148,20 @@ const TRANSLATIONS = {
     target_ctl: "目標CTL",
     weekly_tss_target: "週間TSS目標",
     daily_tss_range: "1日のTSS目安",
-    load_advice: "アドバイス"
+    load_advice: "アドバイス",
+    // Monthly Progress Report
+    monthly_subject: "[IntervalCoach] 月間進捗レポート",
+    monthly_greeting: "月間トレーニング進捗レポートです。",
+    monthly_period: "期間",
+    monthly_fitness_trend: "フィットネス推移（8週間）",
+    monthly_eftp_trend: "eFTP推移",
+    monthly_volume: "トレーニング量",
+    monthly_avg_weekly_tss: "週平均TSS",
+    monthly_avg_weekly_hours: "週平均時間",
+    monthly_total_activities: "総アクティビティ数",
+    monthly_consistency: "継続性",
+    monthly_weeks_trained: "トレーニング週数",
+    monthly_footer: "目標に向けて頑張りましょう！"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -180,7 +206,20 @@ const TRANSLATIONS = {
     target_ctl: "CTL Objetivo",
     weekly_tss_target: "TSS Semanal Objetivo",
     daily_tss_range: "Rango TSS Diario",
-    load_advice: "Consejo"
+    load_advice: "Consejo",
+    // Monthly Progress Report
+    monthly_subject: "[IntervalCoach] Informe Mensual",
+    monthly_greeting: "Aquí está tu informe mensual de progreso.",
+    monthly_period: "Período",
+    monthly_fitness_trend: "Tendencia Fitness (8 semanas)",
+    monthly_eftp_trend: "Progresión eFTP",
+    monthly_volume: "Volumen de Entrenamiento",
+    monthly_avg_weekly_tss: "TSS Semanal Promedio",
+    monthly_avg_weekly_hours: "Horas Semanales Promedio",
+    monthly_total_activities: "Total Actividades",
+    monthly_consistency: "Consistencia",
+    monthly_weeks_trained: "Semanas Entrenadas",
+    monthly_footer: "¡Sigue construyendo hacia tus metas!"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -231,7 +270,20 @@ const TRANSLATIONS = {
     target_ctl: "CTL Cible",
     weekly_tss_target: "TSS Hebdo Cible",
     daily_tss_range: "Plage TSS Quotidien",
-    load_advice: "Conseil"
+    load_advice: "Conseil",
+    // Monthly Progress Report
+    monthly_subject: "[IntervalCoach] Rapport Mensuel",
+    monthly_greeting: "Voici votre rapport de progression mensuel.",
+    monthly_period: "Période",
+    monthly_fitness_trend: "Tendance Fitness (8 semaines)",
+    monthly_eftp_trend: "Progression eFTP",
+    monthly_volume: "Volume d'Entraînement",
+    monthly_avg_weekly_tss: "TSS Hebdo Moyen",
+    monthly_avg_weekly_hours: "Heures Hebdo Moyennes",
+    monthly_total_activities: "Total Activités",
+    monthly_consistency: "Régularité",
+    monthly_weeks_trained: "Semaines Entraînées",
+    monthly_footer: "Continuez à progresser vers vos objectifs!"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -283,7 +335,20 @@ const TRANSLATIONS = {
     target_ctl: "Doel CTL",
     weekly_tss_target: "Wekelijks TSS Doel",
     daily_tss_range: "Dagelijks TSS Bereik",
-    load_advice: "Advies"
+    load_advice: "Advies",
+    // Monthly Progress Report
+    monthly_subject: "[IntervalCoach] Maandelijks Voortgangsrapport",
+    monthly_greeting: "Hier is je maandelijkse voortgangsrapport.",
+    monthly_period: "Periode",
+    monthly_fitness_trend: "Fitness Trend (8 weken)",
+    monthly_eftp_trend: "eFTP Progressie",
+    monthly_volume: "Trainingsvolume",
+    monthly_avg_weekly_tss: "Gem. Wekelijks TSS",
+    monthly_avg_weekly_hours: "Gem. Wekelijkse Uren",
+    monthly_total_activities: "Totaal Activiteiten",
+    monthly_consistency: "Consistentie",
+    monthly_weeks_trained: "Weken Getraind",
+    monthly_footer: "Blijf bouwen aan je doelen!"
   }
 };
 
@@ -3022,6 +3087,298 @@ ${t.focus}: ${phaseInfo.focus}
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
   Logger.log("Weekly summary email sent successfully.");
+}
+
+// =========================================================
+// MONTHLY PROGRESS REPORT
+// =========================================================
+
+/**
+ * Fetch monthly progress data (8 weeks of weekly summaries)
+ * @param {number} weeks - Number of weeks to fetch (default 8)
+ * @returns {object} Monthly progress data with weekly breakdowns
+ */
+function fetchMonthlyProgressData(weeks = 8) {
+  const today = new Date();
+  const weeklyData = [];
+
+  // Fetch data for each week
+  for (let w = 0; w < weeks; w++) {
+    const weekEnd = new Date(today);
+    weekEnd.setDate(today.getDate() - (w * 7));
+    const weekStart = new Date(weekEnd);
+    weekStart.setDate(weekEnd.getDate() - 6);
+
+    // Fetch activities for this week
+    const daysBack = (w * 7) + 7;
+    const daysBackEnd = w * 7;
+    const activities = fetchWeeklyActivities(daysBack, daysBackEnd);
+
+    // Fetch fitness metrics for the end of this week
+    const fitnessMetrics = fetchFitnessMetrics(weekEnd);
+
+    weeklyData.push({
+      weekNumber: weeks - w,
+      weekEnd: formatDateISO(weekEnd),
+      weekStart: formatDateISO(weekStart),
+      activities: activities.totalActivities,
+      rides: activities.rides,
+      runs: activities.runs,
+      totalTime: activities.totalTime,
+      totalTss: activities.totalTss,
+      totalDistance: activities.totalDistance,
+      ctl: fitnessMetrics.ctl,
+      atl: fitnessMetrics.atl,
+      tsb: fitnessMetrics.tsb,
+      eftp: fitnessMetrics.eftp
+    });
+  }
+
+  // Reverse so week 1 is oldest, week 8 is most recent
+  weeklyData.reverse();
+
+  // Calculate aggregates
+  const totalActivities = weeklyData.reduce((sum, w) => sum + w.activities, 0);
+  const totalTss = weeklyData.reduce((sum, w) => sum + w.totalTss, 0);
+  const totalTime = weeklyData.reduce((sum, w) => sum + w.totalTime, 0);
+  const weeksWithTraining = weeklyData.filter(w => w.activities > 0).length;
+
+  // CTL progression (first week vs last week)
+  const ctlStart = weeklyData[0].ctl;
+  const ctlEnd = weeklyData[weeks - 1].ctl;
+  const ctlChange = ctlEnd - ctlStart;
+
+  // eFTP progression
+  const eftpValues = weeklyData.map(w => w.eftp).filter(e => e != null);
+  const eftpStart = eftpValues.length > 0 ? eftpValues[0] : null;
+  const eftpEnd = eftpValues.length > 0 ? eftpValues[eftpValues.length - 1] : null;
+  const eftpChange = (eftpStart && eftpEnd) ? eftpEnd - eftpStart : null;
+
+  return {
+    weeks: weeks,
+    periodStart: weeklyData[0].weekStart,
+    periodEnd: weeklyData[weeks - 1].weekEnd,
+    weeklyData: weeklyData,
+    totals: {
+      activities: totalActivities,
+      tss: totalTss,
+      time: totalTime,
+      avgWeeklyTss: totalTss / weeks,
+      avgWeeklyTime: totalTime / weeks
+    },
+    fitness: {
+      ctlStart: ctlStart,
+      ctlEnd: ctlEnd,
+      ctlChange: ctlChange,
+      eftpStart: eftpStart,
+      eftpEnd: eftpEnd,
+      eftpChange: eftpChange
+    },
+    consistency: {
+      weeksWithTraining: weeksWithTraining,
+      consistencyPercent: Math.round((weeksWithTraining / weeks) * 100)
+    }
+  };
+}
+
+/**
+ * Send monthly progress report email
+ * Set up a monthly trigger (e.g., 1st of each month) to call this function
+ */
+function sendMonthlyProgressEmail() {
+  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  // Fetch 8 weeks of data
+  const monthlyData = fetchMonthlyProgressData(8);
+
+  // Fetch current goals for context
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals.available && goals.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  // Generate AI insight for monthly trends
+  const aiInsight = generateMonthlyInsight(monthlyData, phaseInfo, goals);
+
+  const today = new Date();
+  const subject = t.monthly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MMM yyyy") + ")";
+
+  let body = `${t.monthly_greeting}\n\n`;
+
+  // AI-Generated Monthly Insight
+  if (aiInsight) {
+    body += `${aiInsight}\n\n`;
+  }
+
+  // Period Overview
+  body += `===================================
+${t.monthly_period}: ${monthlyData.periodStart} - ${monthlyData.periodEnd}
+===================================\n`;
+
+  // Fitness Trend Section
+  const ctlTrend = monthlyData.fitness.ctlChange >= 0 ? '↑' : '↓';
+  body += `
+-----------------------------------
+${t.monthly_fitness_trend}
+-----------------------------------
+CTL: ${monthlyData.fitness.ctlStart.toFixed(1)} → ${monthlyData.fitness.ctlEnd.toFixed(1)} (${ctlTrend}${Math.abs(monthlyData.fitness.ctlChange).toFixed(1)})
+`;
+
+  // Weekly CTL breakdown (sparkline-like)
+  body += `\n  Week:  `;
+  monthlyData.weeklyData.forEach((w, i) => {
+    body += `${i + 1}`.padStart(5);
+  });
+  body += `\n  CTL:   `;
+  monthlyData.weeklyData.forEach(w => {
+    body += `${w.ctl.toFixed(0)}`.padStart(5);
+  });
+  body += `\n`;
+
+  // eFTP Trend
+  if (monthlyData.fitness.eftpStart && monthlyData.fitness.eftpEnd) {
+    const eftpTrend = monthlyData.fitness.eftpChange >= 0 ? '↑' : '↓';
+    body += `
+-----------------------------------
+${t.monthly_eftp_trend}
+-----------------------------------
+eFTP: ${monthlyData.fitness.eftpStart}W → ${monthlyData.fitness.eftpEnd}W (${eftpTrend}${Math.abs(monthlyData.fitness.eftpChange)}W)
+`;
+
+    // Weekly eFTP breakdown
+    body += `\n  Week:  `;
+    monthlyData.weeklyData.forEach((w, i) => {
+      body += `${i + 1}`.padStart(5);
+    });
+    body += `\n  eFTP:  `;
+    monthlyData.weeklyData.forEach(w => {
+      body += `${w.eftp || '-'}`.toString().padStart(5);
+    });
+    body += `\n`;
+  }
+
+  // Volume Section
+  body += `
+-----------------------------------
+${t.monthly_volume}
+-----------------------------------
+${t.monthly_total_activities}: ${monthlyData.totals.activities}
+${t.monthly_avg_weekly_tss}: ${monthlyData.totals.avgWeeklyTss.toFixed(0)}
+${t.monthly_avg_weekly_hours}: ${formatDuration(monthlyData.totals.avgWeeklyTime)}
+`;
+
+  // Weekly TSS breakdown
+  body += `\n  Week:  `;
+  monthlyData.weeklyData.forEach((w, i) => {
+    body += `${i + 1}`.padStart(5);
+  });
+  body += `\n  TSS:   `;
+  monthlyData.weeklyData.forEach(w => {
+    body += `${w.totalTss.toFixed(0)}`.padStart(5);
+  });
+  body += `\n`;
+
+  // Consistency Section
+  body += `
+-----------------------------------
+${t.monthly_consistency}
+-----------------------------------
+${t.monthly_weeks_trained}: ${monthlyData.consistency.weeksWithTraining}/${monthlyData.weeks} (${monthlyData.consistency.consistencyPercent}%)
+`;
+
+  // Goal Section
+  if (goals.available && goals.primaryGoal) {
+    body += `
+-----------------------------------
+${t.phase_title}: ${phaseInfo.phaseName}
+-----------------------------------
+${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
+${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+`;
+  }
+
+  body += `\n${t.monthly_footer}`;
+
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Monthly progress report sent successfully.");
+}
+
+/**
+ * Generate AI-powered monthly insight based on training trends
+ */
+function generateMonthlyInsight(monthlyData, phaseInfo, goals) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+
+  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's 8-week training progress.
+
+8-WEEK TRAINING SUMMARY:
+- Total Activities: ${monthlyData.totals.activities}
+- Average Weekly TSS: ${monthlyData.totals.avgWeeklyTss.toFixed(0)}
+- Average Weekly Training Time: ${Math.round(monthlyData.totals.avgWeeklyTime / 60)} minutes
+- Consistency: ${monthlyData.consistency.weeksWithTraining}/${monthlyData.weeks} weeks trained (${monthlyData.consistency.consistencyPercent}%)
+
+FITNESS PROGRESSION:
+- CTL (Fitness): ${monthlyData.fitness.ctlStart.toFixed(1)} → ${monthlyData.fitness.ctlEnd.toFixed(1)} (${monthlyData.fitness.ctlChange >= 0 ? '+' : ''}${monthlyData.fitness.ctlChange.toFixed(1)})
+- eFTP: ${monthlyData.fitness.eftpStart || 'N/A'}W → ${monthlyData.fitness.eftpEnd || 'N/A'}W${monthlyData.fitness.eftpChange != null ? ' (' + (monthlyData.fitness.eftpChange >= 0 ? '+' : '') + monthlyData.fitness.eftpChange + 'W)' : ''}
+
+WEEKLY BREAKDOWN (TSS per week):
+${monthlyData.weeklyData.map((w, i) => `Week ${i + 1}: ${w.totalTss.toFixed(0)} TSS, CTL ${w.ctl.toFixed(0)}`).join('\n')}
+
+TRAINING PHASE: ${phaseInfo.phaseName}
+GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+WEEKS TO GOAL: ${phaseInfo.weeksOut}
+
+Write a personalized monthly progress summary (4-5 sentences) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
+
+Include:
+1. Overall assessment of the 8-week training block
+2. Comment on fitness progression (CTL trend, eFTP changes)
+3. Note training consistency and any patterns (increasing/decreasing volume)
+4. One key recommendation for the next training block
+5. Encouragement based on progress toward their goal
+
+Keep it conversational, insightful, and motivating. Focus on the bigger picture trends rather than week-to-week details.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("Error generating monthly insight: " + e.toString());
+  }
+
+  return null;
+}
+
+/**
+ * Test function for monthly progress report
+ */
+function testMonthlyProgress() {
+  Logger.log("=== MONTHLY PROGRESS TEST ===");
+
+  const monthlyData = fetchMonthlyProgressData(8);
+
+  Logger.log("\nPeriod: " + monthlyData.periodStart + " to " + monthlyData.periodEnd);
+
+  Logger.log("\n--- Fitness Trend ---");
+  Logger.log("CTL: " + monthlyData.fitness.ctlStart.toFixed(1) + " → " + monthlyData.fitness.ctlEnd.toFixed(1) + " (" + (monthlyData.fitness.ctlChange >= 0 ? '+' : '') + monthlyData.fitness.ctlChange.toFixed(1) + ")");
+  if (monthlyData.fitness.eftpStart) {
+    Logger.log("eFTP: " + monthlyData.fitness.eftpStart + "W → " + monthlyData.fitness.eftpEnd + "W (" + (monthlyData.fitness.eftpChange >= 0 ? '+' : '') + monthlyData.fitness.eftpChange + "W)");
+  }
+
+  Logger.log("\n--- Weekly Breakdown ---");
+  monthlyData.weeklyData.forEach((w, i) => {
+    Logger.log("Week " + (i + 1) + ": " + w.activities + " activities, " + w.totalTss.toFixed(0) + " TSS, CTL " + w.ctl.toFixed(1) + ", eFTP " + (w.eftp || 'N/A'));
+  });
+
+  Logger.log("\n--- Totals ---");
+  Logger.log("Total Activities: " + monthlyData.totals.activities);
+  Logger.log("Avg Weekly TSS: " + monthlyData.totals.avgWeeklyTss.toFixed(0));
+  Logger.log("Avg Weekly Time: " + formatDuration(monthlyData.totals.avgWeeklyTime));
+
+  Logger.log("\n--- Consistency ---");
+  Logger.log("Weeks Trained: " + monthlyData.consistency.weeksWithTraining + "/" + monthlyData.weeks + " (" + monthlyData.consistency.consistencyPercent + "%)");
 }
 
 /**
