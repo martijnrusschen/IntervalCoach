@@ -3342,7 +3342,12 @@ Keep it conversational, insightful, and motivating. Focus on the bigger picture 
   try {
     const response = callGeminiAPIText(prompt);
     if (response) {
-      return response.trim();
+      // Remove surrounding quotes if present
+      let text = response.trim();
+      if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.slice(1, -1);
+      }
+      return text;
     }
   } catch (e) {
     Logger.log("Error generating monthly insight: " + e.toString());
