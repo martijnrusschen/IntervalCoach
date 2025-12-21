@@ -3032,11 +3032,22 @@ function callGeminiAPIText(prompt) {
       muteHttpExceptions: true
     });
 
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (responseCode === 200) {
+      const data = JSON.parse(responseText);
+      if (data.candidates &&
+          data.candidates[0] &&
+          data.candidates[0].content &&
+          data.candidates[0].content.parts &&
+          data.candidates[0].content.parts[0]) {
         return data.candidates[0].content.parts[0].text;
+      } else {
+        Logger.log("Gemini API: Unexpected response structure: " + JSON.stringify(data).substring(0, 500));
       }
+    } else {
+      Logger.log("Gemini API error " + responseCode + ": " + responseText.substring(0, 500));
     }
   } catch (e) {
     Logger.log("Error calling Gemini API for text: " + e.toString());
