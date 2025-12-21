@@ -24,6 +24,16 @@ const API_KEYS = {
 };
 
 // =========================================================
+// AI MODEL SETTINGS
+// =========================================================
+const AI_SETTINGS = {
+  // Gemini model to use for workout generation
+  // Options: "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash", etc.
+  // See: ai.google.dev/models for available models
+  GEMINI_MODEL: "gemini-3-pro-preview"
+};
+
+// =========================================================
 // USER SETTINGS
 // =========================================================
 const USER_SETTINGS = {
