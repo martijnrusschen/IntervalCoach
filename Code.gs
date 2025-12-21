@@ -2337,6 +2337,17 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
   Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
 
+  // Get adaptive training context (RPE/Feel feedback from recent workouts)
+  const adaptiveContext = getAdaptiveTrainingContext();
+  if (adaptiveContext.available) {
+    Logger.log("Adaptive Training: " + adaptiveContext.adaptation.recommendation.toUpperCase() +
+      " (Feel: " + (adaptiveContext.feedback.avgFeel ? adaptiveContext.feedback.avgFeel.toFixed(1) : 'N/A') + "/5" +
+      ", RPE: " + (adaptiveContext.feedback.avgRpe ? adaptiveContext.feedback.avgRpe.toFixed(1) : 'N/A') + "/10" +
+      ", Adjustment: " + (adaptiveContext.adaptation.intensityAdjustment > 0 ? '+' : '') + adaptiveContext.adaptation.intensityAdjustment + "%)");
+  } else {
+    Logger.log("Adaptive Training: Insufficient feedback data (log RPE/Feel in Intervals.icu)");
+  }
+
   // Select workout types based on recovery and variety
   const typeSelection = selectWorkoutTypes(wellness, recentTypes, activityType);
   Logger.log("Type selection: " + typeSelection.reason);
@@ -2356,8 +2367,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
 
   const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile);
+    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext)
+    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext);
 
   const result = callGeminiAPI(prompt);
 
@@ -2544,7 +2555,7 @@ function callGeminiAPI(prompt) {
 // =========================================================
 // 12. HELPER: Prompt Construction
 // =========================================================
-function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile) {
+function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext) {
   const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
   const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
 
@@ -2654,6 +2665,21 @@ ${w.mood ? `- **Mood:** ${w.mood}/5` : ''}
 `;
   }
 
+  // Build adaptive training context (RPE/Feel feedback)
+  let adaptiveTrainingContext = "";
+  if (adaptiveContext && adaptiveContext.available) {
+    adaptiveTrainingContext = `
+**1d. Adaptive Training (Athlete Feedback Analysis):**
+${adaptiveContext.promptContext}
+**ADAPTIVE TRAINING RULES:**
+- If recommendation is EASIER: Reduce interval intensity by ${Math.abs(adaptiveContext.adaptation.intensityAdjustment)}%. Favor endurance/tempo over threshold/VO2max.
+- If recommendation is HARDER: Athlete is handling load well. Can push intensity slightly higher.
+- If recommendation is MAINTAIN: Current approach is appropriate. Continue as planned.
+- Recent Feel scores indicate how the athlete is responding to training load. Low feel = accumulated fatigue.
+- High RPE relative to workout type suggests the athlete may need more recovery.
+`;
+  }
+
   return `
 You are an expert cycling coach using the logic of Coggan, Friel, and Seiler.
 Generate a Zwift workout (.zwo) and evaluate its suitability.
@@ -2665,7 +2691,7 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB:** ${summary.tsb_current.toFixed(1)}
 - **Recent Load (Z5+):** ${summary.z5_recent_total > 1500 ? "High" : "Normal"}
-${wellnessContext}${powerContext}
+${wellnessContext}${powerContext}${adaptiveTrainingContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
 - **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
@@ -2700,7 +2726,7 @@ ${wellnessContext}${powerContext}
 // =========================================================
 // 12b. HELPER: Run Prompt Construction
 // =========================================================
-function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData) {
+function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext) {
   const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
   const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
 
@@ -2795,6 +2821,20 @@ ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 `;
   }
 
+  // Build adaptive training context (RPE/Feel feedback)
+  let adaptiveTrainingContext = "";
+  if (adaptiveContext && adaptiveContext.available) {
+    adaptiveTrainingContext = `
+**1d. Adaptive Training (Athlete Feedback Analysis):**
+${adaptiveContext.promptContext}
+**ADAPTIVE TRAINING RULES:**
+- If recommendation is EASIER: Reduce intensity. Favor easy/recovery runs over intervals.
+- If recommendation is HARDER: Athlete is handling load well. Can push pace slightly.
+- If recommendation is MAINTAIN: Current approach is appropriate.
+- Running has higher injury risk - be MORE conservative than cycling when feel is low.
+`;
+  }
+
   return `
 You are an expert running coach using principles from Daniels, Pfitzinger, and modern training science.
 Generate a running workout and evaluate its suitability.
@@ -2806,7 +2846,7 @@ Generate a running workout and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB (Training Stress Balance):** ${summary.tsb_current.toFixed(1)}
 - **Note:** This is a RUNNING workout to complement cycling training.
-${wellnessContext}${runContext}
+${wellnessContext}${runContext}${adaptiveTrainingContext}
 **2. Assignment: Design a "${type}" Running Workout**
 - **Duration:** ${durationStr}. Total workout time including warm-up and cool-down.
 - **Type Guidance:**
@@ -3703,7 +3743,327 @@ function testWeeklySummary() {
 }
 
 // =========================================================
-// 12. DATA PROCESSING & UTILITIES
+// 12. ADAPTIVE TRAINING
+// =========================================================
+
+/**
+ * Fetch recent activities with RPE and Feel feedback
+ * @param {number} days - Number of days to look back (default 14)
+ * @returns {object} Activities with feedback data
+ */
+function fetchRecentActivityFeedback(days = 14) {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - days);
+
+  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+
+  const result = {
+    activities: [],
+    summary: {
+      totalWithFeedback: 0,
+      avgRpe: null,
+      avgFeel: null,
+      rpeDistribution: { easy: 0, moderate: 0, hard: 0, veryHard: 0 },
+      feelDistribution: { bad: 0, poor: 0, okay: 0, good: 0, great: 0 }
+    }
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const activities = JSON.parse(response.getContentText());
+
+      let totalRpe = 0;
+      let rpeCount = 0;
+      let totalFeel = 0;
+      let feelCount = 0;
+
+      activities.forEach(function(a) {
+        // Only include cycling and running activities
+        if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
+          const activity = {
+            date: a.start_date_local,
+            name: a.name,
+            type: a.type,
+            duration: a.moving_time,
+            tss: a.icu_training_load || 0,
+            intensity: a.icu_intensity || null,
+            rpe: a.icu_rpe || null,
+            feel: a.feel || null
+          };
+
+          result.activities.push(activity);
+
+          // Track RPE (1-10 scale)
+          if (a.icu_rpe != null) {
+            totalRpe += a.icu_rpe;
+            rpeCount++;
+            if (a.icu_rpe <= 4) result.summary.rpeDistribution.easy++;
+            else if (a.icu_rpe <= 6) result.summary.rpeDistribution.moderate++;
+            else if (a.icu_rpe <= 8) result.summary.rpeDistribution.hard++;
+            else result.summary.rpeDistribution.veryHard++;
+          }
+
+          // Track Feel (1-5 scale: 1=Bad, 2=Poor, 3=Okay, 4=Good, 5=Great)
+          if (a.feel != null) {
+            totalFeel += a.feel;
+            feelCount++;
+            if (a.feel === 1) result.summary.feelDistribution.bad++;
+            else if (a.feel === 2) result.summary.feelDistribution.poor++;
+            else if (a.feel === 3) result.summary.feelDistribution.okay++;
+            else if (a.feel === 4) result.summary.feelDistribution.good++;
+            else if (a.feel === 5) result.summary.feelDistribution.great++;
+          }
+        }
+      });
+
+      result.summary.totalWithFeedback = Math.max(rpeCount, feelCount);
+      result.summary.avgRpe = rpeCount > 0 ? totalRpe / rpeCount : null;
+      result.summary.avgFeel = feelCount > 0 ? totalFeel / feelCount : null;
+    }
+  } catch (e) {
+    Logger.log("Error fetching activity feedback: " + e.toString());
+  }
+
+  return result;
+}
+
+/**
+ * Analyze recent feedback to determine training adaptation recommendation
+ * @param {object} feedback - Result from fetchRecentActivityFeedback
+ * @returns {object} Adaptive training recommendation
+ */
+function analyzeTrainingAdaptation(feedback) {
+  const result = {
+    recommendation: "maintain", // "easier", "maintain", "harder"
+    confidenceLevel: "low",     // "low", "medium", "high"
+    intensityAdjustment: 0,     // -10 to +10 (percentage adjustment)
+    reasoning: [],
+    feedbackQuality: "insufficient"
+  };
+
+  // Need at least 3 activities with feedback for meaningful analysis
+  if (feedback.summary.totalWithFeedback < 3) {
+    result.reasoning.push("Insufficient feedback data (< 3 activities with RPE/Feel)");
+    return result;
+  }
+
+  result.feedbackQuality = feedback.summary.totalWithFeedback >= 7 ? "good" : "moderate";
+  result.confidenceLevel = feedback.summary.totalWithFeedback >= 7 ? "high" : "medium";
+
+  const avgRpe = feedback.summary.avgRpe;
+  const avgFeel = feedback.summary.avgFeel;
+  const feelDist = feedback.summary.feelDistribution;
+  const rpeDist = feedback.summary.rpeDistribution;
+
+  // Analyze Feel distribution
+  const negativeFeels = feelDist.bad + feelDist.poor;
+  const positiveFeels = feelDist.good + feelDist.great;
+  const totalFeels = negativeFeels + feelDist.okay + positiveFeels;
+
+  // Analyze RPE distribution
+  const hardWorkouts = rpeDist.hard + rpeDist.veryHard;
+  const easyWorkouts = rpeDist.easy;
+  const totalRpe = easyWorkouts + rpeDist.moderate + hardWorkouts;
+
+  // Decision logic
+  let adjustmentScore = 0;
+
+  // Factor 1: Average Feel (target: 3.5-4.0)
+  if (avgFeel != null) {
+    if (avgFeel < 2.5) {
+      adjustmentScore -= 2;
+      result.reasoning.push(`Low average feel (${avgFeel.toFixed(1)}/5) suggests overreaching`);
+    } else if (avgFeel < 3.0) {
+      adjustmentScore -= 1;
+      result.reasoning.push(`Below-target feel (${avgFeel.toFixed(1)}/5) suggests accumulated fatigue`);
+    } else if (avgFeel > 4.0) {
+      adjustmentScore += 1;
+      result.reasoning.push(`High feel scores (${avgFeel.toFixed(1)}/5) indicate good recovery`);
+    } else {
+      result.reasoning.push(`Feel scores are in target range (${avgFeel.toFixed(1)}/5)`);
+    }
+  }
+
+  // Factor 2: Average RPE relative to workout intent
+  if (avgRpe != null) {
+    if (avgRpe > 8.0) {
+      adjustmentScore -= 1;
+      result.reasoning.push(`High average RPE (${avgRpe.toFixed(1)}/10) suggests workouts feel harder than intended`);
+    } else if (avgRpe < 5.0) {
+      adjustmentScore += 1;
+      result.reasoning.push(`Low average RPE (${avgRpe.toFixed(1)}/10) suggests capacity for more intensity`);
+    }
+  }
+
+  // Factor 3: Proportion of negative feels
+  if (totalFeels > 0 && negativeFeels / totalFeels > 0.4) {
+    adjustmentScore -= 1;
+    result.reasoning.push(`High proportion of negative feels (${Math.round(negativeFeels/totalFeels*100)}%)`);
+  }
+
+  // Factor 4: Recent trend (look at last 3 activities)
+  const recentActivities = feedback.activities.slice(0, 3);
+  const recentWithFeel = recentActivities.filter(a => a.feel != null);
+  if (recentWithFeel.length >= 2) {
+    const recentAvgFeel = recentWithFeel.reduce((sum, a) => sum + a.feel, 0) / recentWithFeel.length;
+    if (recentAvgFeel < 2.5) {
+      adjustmentScore -= 1;
+      result.reasoning.push(`Recent workouts trending negative (last ${recentWithFeel.length} avg: ${recentAvgFeel.toFixed(1)})`);
+    } else if (recentAvgFeel > 4.0 && avgFeel != null && recentAvgFeel > avgFeel) {
+      adjustmentScore += 0.5;
+      result.reasoning.push(`Recent workouts trending positive`);
+    }
+  }
+
+  // Convert score to recommendation
+  if (adjustmentScore <= -2) {
+    result.recommendation = "easier";
+    result.intensityAdjustment = -10;
+  } else if (adjustmentScore <= -1) {
+    result.recommendation = "easier";
+    result.intensityAdjustment = -5;
+  } else if (adjustmentScore >= 2) {
+    result.recommendation = "harder";
+    result.intensityAdjustment = 5;
+  } else if (adjustmentScore >= 1) {
+    result.recommendation = "harder";
+    result.intensityAdjustment = 3;
+  } else {
+    result.recommendation = "maintain";
+    result.intensityAdjustment = 0;
+  }
+
+  return result;
+}
+
+/**
+ * Get adaptive training context for workout generation
+ * @returns {object} Adaptive context with recommendation and summary
+ */
+function getAdaptiveTrainingContext() {
+  const feedback = fetchRecentActivityFeedback(14);
+  const adaptation = analyzeTrainingAdaptation(feedback);
+
+  return {
+    available: feedback.summary.totalWithFeedback >= 3,
+    feedback: {
+      activitiesAnalyzed: feedback.activities.length,
+      activitiesWithFeedback: feedback.summary.totalWithFeedback,
+      avgRpe: feedback.summary.avgRpe,
+      avgFeel: feedback.summary.avgFeel,
+      feelDistribution: feedback.summary.feelDistribution,
+      rpeDistribution: feedback.summary.rpeDistribution
+    },
+    adaptation: adaptation,
+    // Generate a text summary for the AI prompt
+    promptContext: generateAdaptivePromptContext(feedback, adaptation)
+  };
+}
+
+/**
+ * Generate text context for AI workout generation prompt
+ */
+function generateAdaptivePromptContext(feedback, adaptation) {
+  if (feedback.summary.totalWithFeedback < 3) {
+    return "No recent workout feedback available (RPE/Feel not logged).";
+  }
+
+  const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
+  let context = `RECENT WORKOUT FEEDBACK (last 14 days, ${feedback.summary.totalWithFeedback} workouts with data):\n`;
+
+  if (feedback.summary.avgFeel != null) {
+    context += `- Average Feel: ${feedback.summary.avgFeel.toFixed(1)}/5 (${feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A'})\n`;
+  }
+  if (feedback.summary.avgRpe != null) {
+    context += `- Average RPE: ${feedback.summary.avgRpe.toFixed(1)}/10\n`;
+  }
+
+  // Feel distribution
+  const fd = feedback.summary.feelDistribution;
+  context += `- Feel distribution: ${fd.great} Great, ${fd.good} Good, ${fd.okay} Okay, ${fd.poor} Poor, ${fd.bad} Bad\n`;
+
+  // Adaptation recommendation
+  context += `\nADAPTIVE RECOMMENDATION: ${adaptation.recommendation.toUpperCase()}\n`;
+  context += `- Confidence: ${adaptation.confidenceLevel}\n`;
+  if (adaptation.intensityAdjustment !== 0) {
+    context += `- Suggested intensity adjustment: ${adaptation.intensityAdjustment > 0 ? '+' : ''}${adaptation.intensityAdjustment}%\n`;
+  }
+  context += `- Reasoning:\n`;
+  adaptation.reasoning.forEach(r => {
+    context += `  • ${r}\n`;
+  });
+
+  return context;
+}
+
+/**
+ * Test function for adaptive training
+ */
+function testAdaptiveTraining() {
+  Logger.log("=== ADAPTIVE TRAINING TEST ===");
+
+  const feedback = fetchRecentActivityFeedback(14);
+
+  Logger.log("\n--- Recent Activities with Feedback ---");
+  Logger.log("Total activities: " + feedback.activities.length);
+  Logger.log("Activities with feedback: " + feedback.summary.totalWithFeedback);
+
+  if (feedback.summary.avgRpe != null) {
+    Logger.log("Average RPE: " + feedback.summary.avgRpe.toFixed(1) + "/10");
+  }
+  if (feedback.summary.avgFeel != null) {
+    const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
+    Logger.log("Average Feel: " + feedback.summary.avgFeel.toFixed(1) + "/5 (" + (feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A') + ")");
+  }
+
+  Logger.log("\n--- Feel Distribution ---");
+  const fd = feedback.summary.feelDistribution;
+  Logger.log("Great (5): " + fd.great);
+  Logger.log("Good (4): " + fd.good);
+  Logger.log("Okay (3): " + fd.okay);
+  Logger.log("Poor (2): " + fd.poor);
+  Logger.log("Bad (1): " + fd.bad);
+
+  Logger.log("\n--- RPE Distribution ---");
+  const rd = feedback.summary.rpeDistribution;
+  Logger.log("Easy (1-4): " + rd.easy);
+  Logger.log("Moderate (5-6): " + rd.moderate);
+  Logger.log("Hard (7-8): " + rd.hard);
+  Logger.log("Very Hard (9-10): " + rd.veryHard);
+
+  Logger.log("\n--- Recent Activities Detail ---");
+  feedback.activities.slice(0, 5).forEach((a, i) => {
+    Logger.log((i + 1) + ". " + a.date.substring(0, 10) + " - " + a.name);
+    Logger.log("   Type: " + a.type + ", TSS: " + (a.tss || 'N/A'));
+    Logger.log("   RPE: " + (a.rpe || 'N/A') + ", Feel: " + (a.feel || 'N/A'));
+  });
+
+  const adaptation = analyzeTrainingAdaptation(feedback);
+
+  Logger.log("\n--- Adaptation Analysis ---");
+  Logger.log("Recommendation: " + adaptation.recommendation.toUpperCase());
+  Logger.log("Confidence: " + adaptation.confidenceLevel);
+  Logger.log("Intensity adjustment: " + (adaptation.intensityAdjustment > 0 ? '+' : '') + adaptation.intensityAdjustment + "%");
+  Logger.log("Feedback quality: " + adaptation.feedbackQuality);
+
+  Logger.log("\nReasoning:");
+  adaptation.reasoning.forEach(r => {
+    Logger.log("  - " + r);
+  });
+
+  Logger.log("\n--- Prompt Context for AI ---");
+  const context = getAdaptiveTrainingContext();
+  Logger.log(context.promptContext);
+}
+
+// =========================================================
+// 13. DATA PROCESSING & UTILITIES
 // =========================================================
 
 /**
