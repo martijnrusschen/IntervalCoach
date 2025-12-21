@@ -47,36 +47,46 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     INTERVALS.ICU                                │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
-│  │ Calendar │  │ Wellness│  │  Power  │  │  Pace   │            │
-│  │ (A/B    │  │ (Whoop/ │  │  Curve  │  │  Curve  │            │
-│  │  Races) │  │ Garmin) │  │(Cycling)│  │(Running)│            │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘            │
-└───────┼────────────┼────────────┼────────────┼──────────────────┘
-        │            │            │            │
-        ▼            ▼            ▼            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               IntervalCoach (Google Apps Script)                │
-│                                                                  │
-│  1. Fetch dynamic goals (A/B races)                             │
-│  2. Calculate training phase                                     │
-│  3. Analyze recovery/wellness                                    │
-│  4. Fetch power/pace curves                                      │
-│  5. Select workout type based on phase + recovery + variety      │
-│  6. Generate workout via Gemini AI                               │
-│  7. Upload to Intervals.icu + save to Drive                     │
-│  8. Send email summary                                           │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           INTERVALS.ICU                                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ Calendar │ │ Wellness │ │  Power   │ │   Pace   │ │Activities│      │
+│  │  (A/B/C  │ │ (Whoop/  │ │  Curve   │ │  Curve   │ │ (History │      │
+│  │  Races)  │ │  Garmin) │ │(Cycling) │ │(Running) │ │  & TSS)  │      │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘      │
+└───────┼────────────┼────────────┼────────────┼────────────┼─────────────┘
+        │            │            │            │            │
+        ▼            ▼            ▼            ▼            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                 IntervalCoach (Google Apps Script)                       │
+│                                                                          │
+│  DAILY WORKOUT GENERATION:                                               │
+│  1. Fetch dynamic goals (A/B/C races from calendar)                      │
+│  2. Calculate training phase (Base → Build → Peak → Taper)               │
+│  3. Analyze recovery/wellness (HRV, sleep, recovery scores)              │
+│  4. Fetch power/pace curves for current fitness                          │
+│  5. Select workout type based on phase + recovery + variety              │
+│  6. Generate personalized workout via Gemini AI                          │
+│  7. Upload to Intervals.icu + save .zwo to Drive                         │
+│                                                                          │
+│  WEEKLY SUMMARY (week-over-week comparison):                             │
+│  • Training totals, fitness metrics, health averages                     │
+│  • Training load advisor with target CTL recommendations                 │
+│                                                                          │
+│  MONTHLY PROGRESS (month-over-month comparison):                         │
+│  • Calendar month trends (Dec vs Nov, etc.)                              │
+│  • CTL/eFTP progression, volume patterns, consistency                    │
+└─────────────────────────────────────────────────────────────────────────┘
         │
         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  OUTPUT                                                          │
-│  ├── Zwift .zwo file (cycling) → syncs to Zwift                 │
-│  ├── Run workout → uploaded to Intervals.icu                    │
-│  └── Email summary with workout details                         │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  OUTPUT                                                                  │
+│  ├── Zwift .zwo file (cycling) → syncs to Zwift automatically           │
+│  ├── Run workout → uploaded to Intervals.icu                            │
+│  ├── Daily email with workout details + AI coaching notes               │
+│  ├── Weekly summary email with progress vs previous week                │
+│  └── Monthly report with trends and month-over-month comparison         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
