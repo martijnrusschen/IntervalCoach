@@ -2348,6 +2348,16 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Adaptive Training: Insufficient feedback data (log RPE/Feel in Intervals.icu)");
   }
 
+  // Get cross-training context (strength, walks, swimming, etc.)
+  const crossTrainingContext = getCrossTrainingContext();
+  if (crossTrainingContext.available) {
+    Logger.log("Cross-Training: " + crossTrainingContext.data.summary.totalActivities + " activities in last 5 days" +
+      " | Impact: " + crossTrainingContext.impact.impactLevel.toUpperCase() +
+      " | Intensity modifier: " + Math.round(crossTrainingContext.impact.intensityModifier * 100) + "%");
+  } else {
+    Logger.log("Cross-Training: No recent cross-training activities");
+  }
+
   // Select workout types based on recovery and variety
   const typeSelection = selectWorkoutTypes(wellness, recentTypes, activityType);
   Logger.log("Type selection: " + typeSelection.reason);
@@ -2367,8 +2377,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
 
   const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext);
+    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossTrainingContext)
+    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossTrainingContext);
 
   const result = callGeminiAPI(prompt);
 
@@ -2555,7 +2565,7 @@ function callGeminiAPI(prompt) {
 // =========================================================
 // 12. HELPER: Prompt Construction
 // =========================================================
-function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext) {
+function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossTrainingContext) {
   const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
   const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
 
@@ -2680,6 +2690,12 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build cross-training context (strength, walks, swimming, etc.)
+  let crossTrainingPromptContext = "";
+  if (crossTrainingContext && crossTrainingContext.available) {
+    crossTrainingPromptContext = crossTrainingContext.promptContext;
+  }
+
   return `
 You are an expert cycling coach using the logic of Coggan, Friel, and Seiler.
 Generate a Zwift workout (.zwo) and evaluate its suitability.
@@ -2691,7 +2707,7 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB:** ${summary.tsb_current.toFixed(1)}
 - **Recent Load (Z5+):** ${summary.z5_recent_total > 1500 ? "High" : "Normal"}
-${wellnessContext}${powerContext}${adaptiveTrainingContext}
+${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossTrainingPromptContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
 - **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
@@ -2726,7 +2742,7 @@ ${wellnessContext}${powerContext}${adaptiveTrainingContext}
 // =========================================================
 // 12b. HELPER: Run Prompt Construction
 // =========================================================
-function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext) {
+function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossTrainingContext) {
   const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
   const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
 
@@ -2835,6 +2851,12 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build cross-training context (strength, walks, swimming, etc.)
+  let crossTrainingPromptContext = "";
+  if (crossTrainingContext && crossTrainingContext.available) {
+    crossTrainingPromptContext = crossTrainingContext.promptContext;
+  }
+
   return `
 You are an expert running coach using principles from Daniels, Pfitzinger, and modern training science.
 Generate a running workout and evaluate its suitability.
@@ -2846,7 +2868,7 @@ Generate a running workout and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB (Training Stress Balance):** ${summary.tsb_current.toFixed(1)}
 - **Note:** This is a RUNNING workout to complement cycling training.
-${wellnessContext}${runContext}${adaptiveTrainingContext}
+${wellnessContext}${runContext}${adaptiveTrainingContext}${crossTrainingPromptContext}
 **2. Assignment: Design a "${type}" Running Workout**
 - **Duration:** ${durationStr}. Total workout time including warm-up and cool-down.
 - **Type Guidance:**
@@ -4060,6 +4082,381 @@ function testAdaptiveTraining() {
   Logger.log("\n--- Prompt Context for AI ---");
   const context = getAdaptiveTrainingContext();
   Logger.log(context.promptContext);
+}
+
+// =========================================================
+// 12b. CROSS-TRAINING INTEGRATION (Strength, Walks, Other Activities)
+// =========================================================
+
+/**
+ * Activity type categories for cross-training impact
+ */
+const CROSS_TRAINING_CATEGORIES = {
+  strength: {
+    types: ['WeightTraining', 'Crossfit'],
+    keywords: ['strength', 'weight', 'gym', 'krachttraining', 'crossfit', 'lifting'],
+    impactFactor: 1.0,  // Full impact on cycling
+    description: 'Strength Training'
+  },
+  walking: {
+    types: ['Walk', 'Hike'],
+    keywords: ['walk', 'wandelen', 'hike', 'hiking'],
+    impactFactor: 0.3,  // Lower impact - mostly recovery
+    description: 'Walking/Hiking'
+  },
+  swimming: {
+    types: ['Swim'],
+    keywords: ['swim', 'zwemmen', 'pool'],
+    impactFactor: 0.5,  // Moderate - good cross-training, low leg impact
+    description: 'Swimming'
+  },
+  yoga: {
+    types: ['Yoga'],
+    keywords: ['yoga', 'stretching', 'pilates'],
+    impactFactor: 0.2,  // Low impact - mostly recovery
+    description: 'Yoga/Stretching'
+  },
+  other: {
+    types: ['Workout', 'Other'],
+    keywords: [],
+    impactFactor: 0.5,  // Default moderate impact
+    description: 'Other Activity'
+  }
+};
+
+/**
+ * Categorize an activity by type
+ */
+function categorizeActivity(activity) {
+  const type = activity.type || '';
+  const name = (activity.name || '').toLowerCase();
+
+  for (const [category, config] of Object.entries(CROSS_TRAINING_CATEGORIES)) {
+    // Check by activity type
+    if (config.types.includes(type)) {
+      return { category, ...config };
+    }
+    // Check by name keywords
+    for (const keyword of config.keywords) {
+      if (name.includes(keyword)) {
+        return { category, ...config };
+      }
+    }
+  }
+
+  return null;  // Not a cross-training activity
+}
+
+/**
+ * Fetch recent cross-training activities (non-cycling, non-running)
+ * @param {number} days - Number of days to look back (default 5)
+ * @returns {object} Cross-training data with impact assessment
+ */
+function fetchRecentCrossTraining(days = 5) {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - days);
+
+  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+
+  const result = {
+    activities: [],
+    byCategory: {
+      strength: [],
+      walking: [],
+      swimming: [],
+      yoga: [],
+      other: []
+    },
+    summary: {
+      totalActivities: 0,
+      totalLoad: 0,
+      recentLoad: 0,  // Load from last 48h
+      lastActivityDate: null,
+      daysSinceLastActivity: null
+    }
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const activities = JSON.parse(response.getContentText());
+
+      activities.forEach(function(a) {
+        // Skip cycling and running - those are handled separately
+        if (a.type === 'Ride' || a.type === 'VirtualRide' ||
+            a.type === 'Run' || a.type === 'VirtualRun') {
+          return;
+        }
+
+        const categoryInfo = categorizeActivity(a);
+        if (!categoryInfo) return;  // Unknown activity type
+
+        const activityDate = new Date(a.start_date_local);
+        const daysAgo = Math.floor((today - activityDate) / (1000 * 60 * 60 * 24));
+
+        const baseLoad = a.icu_training_load || estimateCrossTrainingLoad(a.moving_time || a.elapsed_time || 0, categoryInfo.category);
+        const weightedLoad = baseLoad * categoryInfo.impactFactor;
+
+        const activity = {
+          date: a.start_date_local,
+          name: a.name,
+          type: a.type,
+          category: categoryInfo.category,
+          categoryDescription: categoryInfo.description,
+          duration: a.moving_time || a.elapsed_time || 0,
+          baseLoad: baseLoad,
+          weightedLoad: weightedLoad,
+          impactFactor: categoryInfo.impactFactor,
+          daysAgo: daysAgo,
+          rpe: a.icu_rpe || null,
+          feel: a.feel || null
+        };
+
+        result.activities.push(activity);
+        result.byCategory[categoryInfo.category].push(activity);
+        result.summary.totalActivities++;
+        result.summary.totalLoad += weightedLoad;
+
+        // Track load from last 48 hours
+        if (daysAgo <= 2) {
+          result.summary.recentLoad += weightedLoad;
+        }
+
+        // Track most recent activity
+        if (!result.summary.lastActivityDate || activityDate > new Date(result.summary.lastActivityDate)) {
+          result.summary.lastActivityDate = a.start_date_local;
+          result.summary.daysSinceLastActivity = daysAgo;
+        }
+      });
+
+      // Sort by date (most recent first)
+      result.activities.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+  } catch (e) {
+    Logger.log("Error fetching cross-training: " + e.toString());
+  }
+
+  return result;
+}
+
+/**
+ * Estimate training load for cross-training sessions without TSS
+ * @param {number} durationSeconds - Duration in seconds
+ * @param {string} category - Activity category
+ * @returns {number} Estimated load
+ */
+function estimateCrossTrainingLoad(durationSeconds, category) {
+  const minutes = durationSeconds / 60;
+
+  // Different load estimates by activity type
+  const loadPerMinute = {
+    strength: 0.8,   // Higher stress per minute
+    walking: 0.3,    // Low stress
+    swimming: 0.6,   // Moderate
+    yoga: 0.2,       // Very low
+    other: 0.5       // Default moderate
+  };
+
+  return Math.round(minutes * (loadPerMinute[category] || 0.5));
+}
+
+/**
+ * Analyze cross-training impact on today's workout
+ * @param {object} crossTrainingData - Result from fetchRecentCrossTraining
+ * @returns {object} Impact assessment
+ */
+function analyzeCrossTrainingImpact(crossTrainingData) {
+  const result = {
+    hasImpact: false,
+    impactLevel: "none",  // "none", "low", "moderate", "high"
+    intensityModifier: 1.0,
+    reasoning: []
+  };
+
+  if (crossTrainingData.summary.totalActivities === 0) {
+    return result;
+  }
+
+  const strengthSessions = crossTrainingData.byCategory.strength;
+  const recentLoad = crossTrainingData.summary.recentLoad;
+
+  // Check for recent strength training (highest impact)
+  if (strengthSessions.length > 0) {
+    const lastStrength = strengthSessions.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+    if (lastStrength.daysAgo === 0) {
+      result.hasImpact = true;
+      result.impactLevel = "high";
+      result.intensityModifier = 0.85;
+      result.reasoning.push(`Strength training today (${lastStrength.name}) - reduce cycling intensity`);
+    } else if (lastStrength.daysAgo === 1) {
+      result.hasImpact = true;
+      result.impactLevel = "moderate";
+      result.intensityModifier = 0.90;
+      result.reasoning.push(`Strength training yesterday - legs may be fatigued`);
+
+      if (lastStrength.rpe && lastStrength.rpe >= 7) {
+        result.impactLevel = "high";
+        result.intensityModifier = 0.85;
+        result.reasoning.push(`High RPE (${lastStrength.rpe}/10) suggests heavy session`);
+      }
+    } else if (lastStrength.daysAgo === 2) {
+      result.hasImpact = true;
+      result.impactLevel = "moderate";
+      result.intensityModifier = 0.92;
+      result.reasoning.push(`Strength training 2 days ago - potential DOMS`);
+    } else if (lastStrength.daysAgo <= 4) {
+      result.hasImpact = true;
+      result.impactLevel = "low";
+      result.intensityModifier = 0.97;
+      result.reasoning.push(`Strength training ${lastStrength.daysAgo} days ago - minimal residual fatigue`);
+    }
+  }
+
+  // Check for other cross-training activities
+  const otherActivities = crossTrainingData.activities.filter(a => a.category !== 'strength');
+  const recentOther = otherActivities.filter(a => a.daysAgo <= 1);
+
+  if (recentOther.length > 0) {
+    const categories = [...new Set(recentOther.map(a => a.categoryDescription))];
+    result.reasoning.push(`Other recent activities: ${categories.join(', ')}`);
+
+    // Additional fatigue from accumulated cross-training
+    if (recentOther.reduce((sum, a) => sum + a.weightedLoad, 0) > 30) {
+      result.intensityModifier *= 0.97;
+      result.reasoning.push(`Accumulated cross-training load in last 48h`);
+      if (!result.hasImpact) {
+        result.hasImpact = true;
+        result.impactLevel = "low";
+      }
+    }
+  }
+
+  // Overall accumulated load check
+  if (recentLoad > 80) {
+    if (result.impactLevel === "low") result.impactLevel = "moderate";
+    result.intensityModifier *= 0.95;
+    result.reasoning.push(`High total cross-training load (${Math.round(recentLoad)} weighted TSS) in last 48h`);
+  }
+
+  return result;
+}
+
+/**
+ * Get cross-training context for workout generation
+ * @returns {object} Context with cross-training data and recommendations
+ */
+function getCrossTrainingContext() {
+  const crossTrainingData = fetchRecentCrossTraining(5);
+  const impact = analyzeCrossTrainingImpact(crossTrainingData);
+
+  return {
+    available: crossTrainingData.summary.totalActivities > 0,
+    data: crossTrainingData,
+    impact: impact,
+    promptContext: generateCrossTrainingPromptContext(crossTrainingData, impact)
+  };
+}
+
+/**
+ * Generate text context for AI workout generation prompt
+ */
+function generateCrossTrainingPromptContext(crossTrainingData, impact) {
+  if (crossTrainingData.summary.totalActivities === 0) {
+    return "";  // No cross-training, no context needed
+  }
+
+  let context = `\n**1e. Recent Cross-Training (non-cycling/running):**\n`;
+  context += `- Activities in last 5 days: ${crossTrainingData.summary.totalActivities}\n`;
+
+  // Group by category
+  const categoryGroups = {};
+  crossTrainingData.activities.forEach(a => {
+    if (!categoryGroups[a.categoryDescription]) {
+      categoryGroups[a.categoryDescription] = [];
+    }
+    categoryGroups[a.categoryDescription].push(a);
+  });
+
+  for (const [category, activities] of Object.entries(categoryGroups)) {
+    const recent = activities.filter(a => a.daysAgo <= 2);
+    if (recent.length > 0) {
+      const daysAgoText = recent[0].daysAgo === 0 ? "today" :
+                          recent[0].daysAgo === 1 ? "yesterday" :
+                          `${recent[0].daysAgo} days ago`;
+      context += `- ${category}: ${recent.length} session(s), most recent ${daysAgoText}\n`;
+    }
+  }
+
+  if (impact.hasImpact) {
+    context += `\n**CROSS-TRAINING IMPACT:** ${impact.impactLevel.toUpperCase()}\n`;
+    context += `- Recommended intensity modifier: ${Math.round(impact.intensityModifier * 100)}%\n`;
+    context += `- Reasoning:\n`;
+    impact.reasoning.forEach(r => {
+      context += `  • ${r}\n`;
+    });
+    context += `\n**CROSS-TRAINING RULES:**\n`;
+    context += `- After strength training: reduce high-intensity leg work, favor high-cadence/low-resistance\n`;
+    context += `- After long walks/hikes: legs may be tired, reduce volume if needed\n`;
+    context += `- Swimming/yoga: generally complementary, minimal adjustment needed\n`;
+  }
+
+  return context;
+}
+
+/**
+ * Test function for cross-training integration
+ */
+function testCrossTraining() {
+  Logger.log("=== CROSS-TRAINING TEST ===");
+
+  const crossTrainingData = fetchRecentCrossTraining(5);
+
+  Logger.log("\n--- Recent Cross-Training Activities ---");
+  Logger.log("Total activities (last 5 days): " + crossTrainingData.summary.totalActivities);
+
+  if (crossTrainingData.summary.totalActivities > 0) {
+    Logger.log("Total weighted load: " + Math.round(crossTrainingData.summary.totalLoad));
+    Logger.log("Recent weighted load (48h): " + Math.round(crossTrainingData.summary.recentLoad));
+
+    Logger.log("\n--- By Category ---");
+    for (const [category, activities] of Object.entries(crossTrainingData.byCategory)) {
+      if (activities.length > 0) {
+        Logger.log(category.toUpperCase() + ": " + activities.length + " session(s)");
+      }
+    }
+
+    Logger.log("\n--- Activity Details ---");
+    crossTrainingData.activities.forEach((a, i) => {
+      Logger.log((i + 1) + ". " + a.date.substring(0, 10) + " - " + a.name);
+      Logger.log("   Category: " + a.categoryDescription + ", Duration: " + Math.round(a.duration / 60) + " min");
+      Logger.log("   Base Load: " + a.baseLoad + ", Weighted: " + Math.round(a.weightedLoad) + " (factor: " + a.impactFactor + ")");
+      Logger.log("   Days ago: " + a.daysAgo + ", RPE: " + (a.rpe || 'N/A') + ", Feel: " + (a.feel || 'N/A'));
+    });
+
+    const impact = analyzeCrossTrainingImpact(crossTrainingData);
+
+    Logger.log("\n--- Impact Analysis ---");
+    Logger.log("Has impact: " + impact.hasImpact);
+    Logger.log("Impact level: " + impact.impactLevel.toUpperCase());
+    Logger.log("Intensity modifier: " + Math.round(impact.intensityModifier * 100) + "%");
+
+    Logger.log("\nReasoning:");
+    impact.reasoning.forEach(r => {
+      Logger.log("  - " + r);
+    });
+
+    Logger.log("\n--- Prompt Context for AI ---");
+    const context = getCrossTrainingContext();
+    Logger.log(context.promptContext);
+  } else {
+    Logger.log("No cross-training found in the last 5 days");
+  }
 }
 
 // =========================================================
