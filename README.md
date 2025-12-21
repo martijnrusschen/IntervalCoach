@@ -15,7 +15,7 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 ## Features
 
 ### Smart Training
-- **Dynamic Goal Detection:** Automatically detects A and B priority races from your Intervals.icu calendar
+- **Dynamic Goal Detection:** Automatically detects A, B, and C priority races from your Intervals.icu calendar (C races serve as stepping stones toward A/B goals)
 - **Periodization:** Calculates training phase (Base → Build → Specialty → Peak → Taper) based on your next A-race
 - **Recovery-Aware:** Integrates with Whoop, Garmin, Oura via Intervals.icu to adjust intensity based on HRV, sleep, and recovery scores
 - **Variety Tracking:** Analyzes recent workouts to ensure training variety and prevent staleness
@@ -132,6 +132,10 @@ const API_KEYS = {
   GEMINI_API_KEY: "paste-your-gemini-api-key-here"
 };
 
+const AI_SETTINGS = {
+  GEMINI_MODEL: "gemini-3-pro-preview"  // Or "gemini-2.0-flash", "gemini-1.5-pro"
+};
+
 const USER_SETTINGS = {
   LANGUAGE: "en",              // Options: "en", "nl", "ja", "es", "fr"
   EMAIL_TO: "your@email.com",  // Where to send daily workout summaries
@@ -232,6 +236,13 @@ Once everything works, set up automatic triggers:
 - Type: Day timer
 - Time: 6:00 AM - 7:00 AM
 
+**Trigger 3: Weekly Summary (Optional)**
+- Function: `sendWeeklySummaryEmail`
+- Event source: Time-driven
+- Type: Week timer
+- Day: Sunday
+- Time: 8:00 PM - 9:00 PM
+
 Click **Save** for each trigger.
 
 ## Troubleshooting
@@ -248,15 +259,17 @@ Click **Save** for each trigger.
 
 | Function | What it tests |
 |----------|---------------|
-| `testGoals()` | A/B race detection from calendar |
+| `testGoals()` | A/B/C race detection from calendar |
 | `testEftp()` | Power profile (eFTP, W', VO2max, peaks) |
 | `testRunningData()` | Running data (CS, D', pace zones) |
+| `testWeeklySummary()` | Weekly activity aggregation |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
 
 ## Email Summary
 
+### Daily Workout Email
 IntervalCoach sends a daily email with:
 - Current training phase and weeks to goal
 - Recovery status (if Whoop/Garmin connected)
@@ -264,6 +277,15 @@ IntervalCoach sends a daily email with:
 - Recommended workout with explanation
 - Workout details (for running)
 - Attached .zwo file (for cycling)
+
+### Weekly Summary Email
+A weekly recap email (set up via trigger) includes:
+- AI-generated personalized weekly insights
+- Training totals (activities, time, TSS, distance)
+- Week-over-week comparison
+- Fitness progress (CTL, ATL, TSB, eFTP, ramp rate)
+- Health & recovery averages (sleep, HRV, resting HR)
+- Training phase and goal progress
 
 ## Recovery Integration
 

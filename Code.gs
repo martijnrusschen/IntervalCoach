@@ -65,7 +65,26 @@ const TRANSLATIONS = {
     peak_powers: "Peak Powers",
     strengths: "Strengths",
     focus_areas: "Focus Areas",
-    workout_details: "Workout Details"
+    workout_details: "Workout Details",
+    // Weekly summary
+    weekly_subject: "[IntervalCoach] Weekly Summary",
+    weekly_greeting: "Here is your weekly training summary.",
+    weekly_overview: "Week Overview",
+    total_activities: "Total Activities",
+    total_time: "Total Time",
+    total_tss: "Total TSS",
+    total_distance: "Total Distance",
+    rides: "Rides",
+    runs: "Runs",
+    weekly_fitness: "Fitness Progress",
+    weekly_comparison: "vs Previous Week",
+    weekly_health: "Health & Recovery",
+    avg_sleep: "Avg Sleep",
+    avg_hrv: "Avg HRV",
+    avg_rhr: "Avg Resting HR",
+    avg_recovery: "Avg Recovery",
+    ramp_rate: "Ramp Rate",
+    weekly_footer: "Keep up the great work!"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -85,7 +104,26 @@ const TRANSLATIONS = {
     why_title: "【選定理由】",
     strategy_title: "【内容・攻略法】",
     other_options: "その他の選択肢",
-    footer: "※Googleドライブ(IntervalCoach_Workouts)に保存されました。Zwiftへの同期をお待ちください。"
+    footer: "※Googleドライブ(IntervalCoach_Workouts)に保存されました。Zwiftへの同期をお待ちください。",
+    // Weekly summary
+    weekly_subject: "[IntervalCoach] 週間サマリー",
+    weekly_greeting: "今週のトレーニングサマリーです。",
+    weekly_overview: "週間概要",
+    total_activities: "総アクティビティ数",
+    total_time: "総時間",
+    total_tss: "総TSS",
+    total_distance: "総距離",
+    rides: "ライド",
+    runs: "ラン",
+    weekly_fitness: "フィットネス推移",
+    weekly_comparison: "前週比",
+    weekly_health: "健康とリカバリー",
+    avg_sleep: "平均睡眠",
+    avg_hrv: "平均HRV",
+    avg_rhr: "平均安静時心拍",
+    avg_recovery: "平均リカバリー",
+    ramp_rate: "ランプレート",
+    weekly_footer: "今週もお疲れ様でした！"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -105,7 +143,26 @@ const TRANSLATIONS = {
     why_title: "【Razón】",
     strategy_title: "【Estrategia】",
     other_options: "Otras opciones",
-    footer: "*Guardado en Google Drive. Espera la sincronización."
+    footer: "*Guardado en Google Drive. Espera la sincronización.",
+    // Weekly summary
+    weekly_subject: "[IntervalCoach] Resumen Semanal",
+    weekly_greeting: "Aquí tienes tu resumen de entrenamiento semanal.",
+    weekly_overview: "Resumen de la Semana",
+    total_activities: "Actividades Totales",
+    total_time: "Tiempo Total",
+    total_tss: "TSS Total",
+    total_distance: "Distancia Total",
+    rides: "Ciclismo",
+    runs: "Carrera",
+    weekly_fitness: "Progreso de Forma",
+    weekly_comparison: "vs Semana Anterior",
+    weekly_health: "Salud y Recuperación",
+    avg_sleep: "Sueño Promedio",
+    avg_hrv: "VFC Promedio",
+    avg_rhr: "FC Reposo Promedio",
+    avg_recovery: "Recuperación Promedio",
+    ramp_rate: "Tasa de Rampa",
+    weekly_footer: "¡Sigue así!"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -131,7 +188,26 @@ const TRANSLATIONS = {
     all_time: "Record absolu",
     peak_powers: "Pics de Puissance",
     strengths: "Points Forts",
-    focus_areas: "Axes d'amélioration"
+    focus_areas: "Axes d'amélioration",
+    // Weekly summary
+    weekly_subject: "[IntervalCoach] Résumé Hebdomadaire",
+    weekly_greeting: "Voici votre résumé d'entraînement hebdomadaire.",
+    weekly_overview: "Aperçu de la Semaine",
+    total_activities: "Activités Totales",
+    total_time: "Temps Total",
+    total_tss: "TSS Total",
+    total_distance: "Distance Totale",
+    rides: "Vélo",
+    runs: "Course",
+    weekly_fitness: "Progression Forme",
+    weekly_comparison: "vs Semaine Précédente",
+    weekly_health: "Santé et Récupération",
+    avg_sleep: "Sommeil Moyen",
+    avg_hrv: "VFC Moyenne",
+    avg_rhr: "FC Repos Moyenne",
+    avg_recovery: "Récupération Moyenne",
+    ramp_rate: "Taux de Rampe",
+    weekly_footer: "Continuez comme ça!"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -158,7 +234,26 @@ const TRANSLATIONS = {
     peak_powers: "Piekvermogens",
     strengths: "Sterke punten",
     focus_areas: "Verbeterpunten",
-    workout_details: "Workout Details"
+    workout_details: "Workout Details",
+    // Weekly summary
+    weekly_subject: "[IntervalCoach] Weekoverzicht",
+    weekly_greeting: "Hier is je wekelijkse trainingsoverzicht.",
+    weekly_overview: "Weekoverzicht",
+    total_activities: "Totaal Activiteiten",
+    total_time: "Totale Tijd",
+    total_tss: "Totaal TSS",
+    total_distance: "Totale Afstand",
+    rides: "Fietsen",
+    runs: "Hardlopen",
+    weekly_fitness: "Fitness Voortgang",
+    weekly_comparison: "vs Vorige Week",
+    weekly_health: "Gezondheid & Herstel",
+    avg_sleep: "Gem. Slaap",
+    avg_hrv: "Gem. HRV",
+    avg_rhr: "Gem. Rustpols",
+    avg_recovery: "Gem. Herstel",
+    ramp_rate: "Ramp Rate",
+    weekly_footer: "Goed bezig, ga zo door!"
   }
 };
 
@@ -2731,8 +2826,337 @@ ${workout.workoutDescription}
 
   body += `\n${t.footer}`;
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { attachments: [workout.blob] });
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach", attachments: [workout.blob] });
   Logger.log("Email sent successfully.");
+}
+
+// =========================================================
+// 11b. WEEKLY SUMMARY EMAIL
+// =========================================================
+
+/**
+ * Send weekly training summary email
+ * Aggregates the past 7 days of activities and sends a summary
+ * Set up a weekly trigger (e.g., Sunday evening) to call this function
+ */
+function sendWeeklySummaryEmail() {
+  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  // Fetch activities from the last 7 days
+  const weekData = fetchWeeklyActivities(7);
+  const prevWeekData = fetchWeeklyActivities(14, 7); // Previous week for comparison
+
+  // Fetch current fitness metrics
+  const fitnessMetrics = fetchFitnessMetrics();
+
+  // Fetch wellness/health data for the week
+  const wellnessRecords = fetchWellnessData(7);
+  const wellnessSummary = createWellnessSummary(wellnessRecords);
+
+  // Fetch power profile for eFTP
+  const powerProfile = fetchPowerCurve();
+
+  // Fetch goals for context
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals.available && goals.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  // Build email
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - 6);
+  const dateRange = formatDateISO(weekStart) + " to " + formatDateISO(today);
+
+  const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+
+  // Generate AI weekly insight
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals);
+
+  let body = `${t.weekly_greeting}\n\n`;
+
+  // AI-Generated Weekly Insight
+  if (aiInsight) {
+    body += `${aiInsight}\n\n`;
+  }
+
+  // Week Overview
+  body += `===================================
+${t.weekly_overview} (${dateRange})
+===================================
+${t.total_activities}: ${weekData.totalActivities}
+  - ${t.rides}: ${weekData.rides}
+  - ${t.runs}: ${weekData.runs}
+${t.total_time}: ${formatDuration(weekData.totalTime)}
+${t.total_tss}: ${weekData.totalTss.toFixed(0)}
+${t.total_distance}: ${(weekData.totalDistance / 1000).toFixed(1)} km
+`;
+
+  // Comparison with previous week
+  if (prevWeekData.totalActivities > 0) {
+    const tssDiff = weekData.totalTss - prevWeekData.totalTss;
+    const timeDiff = weekData.totalTime - prevWeekData.totalTime;
+    const tssSign = tssDiff >= 0 ? "+" : "";
+    const timeSign = timeDiff >= 0 ? "+" : "";
+
+    body += `
+-----------------------------------
+${t.weekly_comparison}
+-----------------------------------
+TSS: ${tssSign}${tssDiff.toFixed(0)} (${prevWeekData.totalTss.toFixed(0)} → ${weekData.totalTss.toFixed(0)})
+${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
+`;
+  }
+
+  // Fitness Progress
+  body += `
+-----------------------------------
+${t.weekly_fitness}
+-----------------------------------
+CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
+ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
+TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
+
+  // Add eFTP if available
+  if (powerProfile && powerProfile.available) {
+    body += `
+eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
+  }
+
+  // Health & Recovery Section
+  if (wellnessSummary.available) {
+    body += `
+
+-----------------------------------
+${t.weekly_health}
+-----------------------------------
+${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
+${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
+${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}`;
+  }
+
+  // Phase & Goal info
+  if (goals.available && goals.primaryGoal) {
+    body += `
+-----------------------------------
+${t.phase_title}: ${phaseInfo.phaseName}
+-----------------------------------
+${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
+${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+${t.focus}: ${phaseInfo.focus}
+`;
+  }
+
+  body += `\n${t.weekly_footer}`;
+
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Weekly summary email sent successfully.");
+}
+
+/**
+ * Generate AI-powered weekly insight based on training data
+ */
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+
+  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's weekly training.
+
+ATHLETE'S WEEK DATA:
+- Activities: ${weekData.totalActivities} (${weekData.rides} rides, ${weekData.runs} runs)
+- Total Time: ${Math.round(weekData.totalTime / 60)} minutes
+- Total TSS: ${weekData.totalTss.toFixed(0)}
+- Total Distance: ${(weekData.totalDistance / 1000).toFixed(1)} km
+
+PREVIOUS WEEK:
+- Activities: ${prevWeekData.totalActivities}
+- Total TSS: ${prevWeekData.totalTss.toFixed(0)}
+
+FITNESS METRICS:
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
+- ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
+- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+- Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}
+
+WELLNESS (7-day averages):
+- Sleep: ${wellnessSummary.available && wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${wellnessSummary.available && wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
+- Resting HR: ${wellnessSummary.available && wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+
+TRAINING PHASE: ${phaseInfo.phaseName}
+GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+WEEKS TO GOAL: ${phaseInfo.weeksOut}
+
+Write a brief, personalized weekly summary (3-4 sentences max) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
+
+Include:
+1. Acknowledge their training effort this week
+2. Note any significant changes from last week (TSS, volume)
+3. One insight about fitness/recovery trends
+4. Brief encouragement for the upcoming week based on their phase
+
+Keep it conversational, supportive, and concise. Do not use bullet points or headers. Just write natural sentences.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("Error generating weekly insight: " + e.toString());
+  }
+
+  return null;
+}
+
+/**
+ * Call Gemini API for text response (not JSON)
+ */
+function callGeminiAPIText(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_SETTINGS.GEMINI_MODEL}:generateContent?key=${API_KEYS.GEMINI_API_KEY}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048
+    }
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (responseCode === 200) {
+      const data = JSON.parse(responseText);
+      if (data.candidates &&
+          data.candidates[0] &&
+          data.candidates[0].content &&
+          data.candidates[0].content.parts &&
+          data.candidates[0].content.parts[0]) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        Logger.log("Gemini API: Unexpected response structure: " + JSON.stringify(data).substring(0, 500));
+      }
+    } else {
+      Logger.log("Gemini API error " + responseCode + ": " + responseText.substring(0, 500));
+    }
+  } catch (e) {
+    Logger.log("Error calling Gemini API for text: " + e.toString());
+  }
+
+  return null;
+}
+
+/**
+ * Fetch activities for a given period
+ * @param {number} daysBack - How many days back to start
+ * @param {number} daysOffset - Offset from today (default 0)
+ * @returns {object} Aggregated activity data
+ */
+function fetchWeeklyActivities(daysBack, daysOffset = 0) {
+  const today = new Date();
+  const to = new Date(today);
+  to.setDate(today.getDate() - daysOffset);
+  const from = new Date(to);
+  from.setDate(to.getDate() - daysBack + 1);
+
+  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
+
+  const result = {
+    totalActivities: 0,
+    rides: 0,
+    runs: 0,
+    totalTime: 0,      // in seconds
+    totalTss: 0,
+    totalDistance: 0,  // in meters
+    activities: []
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const activities = JSON.parse(response.getContentText());
+
+      activities.forEach(function(a) {
+        result.totalActivities++;
+        result.totalTime += a.moving_time || 0;
+        result.totalTss += a.icu_training_load || 0;
+        result.totalDistance += a.distance || 0;
+
+        if (a.type === 'Ride' || a.type === 'VirtualRide') {
+          result.rides++;
+        } else if (a.type === 'Run' || a.type === 'VirtualRun') {
+          result.runs++;
+        }
+
+        result.activities.push({
+          date: a.start_date_local,
+          name: a.name,
+          type: a.type,
+          duration: a.moving_time,
+          tss: a.icu_training_load,
+          distance: a.distance
+        });
+      });
+    }
+  } catch (e) {
+    Logger.log("Error fetching weekly activities: " + e.toString());
+  }
+
+  return result;
+}
+
+/**
+ * Format duration in seconds to human readable string
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted duration (e.g., "5h 30m")
+ */
+function formatDuration(seconds) {
+  if (seconds === 0) return "0m";
+  const hours = Math.floor(Math.abs(seconds) / 3600);
+  const minutes = Math.floor((Math.abs(seconds) % 3600) / 60);
+  const sign = seconds < 0 ? "-" : "";
+
+  if (hours > 0) {
+    return `${sign}${hours}h ${minutes}m`;
+  }
+  return `${sign}${minutes}m`;
+}
+
+/**
+ * Test function for weekly summary
+ */
+function testWeeklySummary() {
+  Logger.log("=== WEEKLY SUMMARY TEST ===");
+
+  const weekData = fetchWeeklyActivities(7);
+  Logger.log("This Week:");
+  Logger.log("  Activities: " + weekData.totalActivities);
+  Logger.log("  Rides: " + weekData.rides);
+  Logger.log("  Runs: " + weekData.runs);
+  Logger.log("  Total Time: " + formatDuration(weekData.totalTime));
+  Logger.log("  Total TSS: " + weekData.totalTss.toFixed(0));
+  Logger.log("  Total Distance: " + (weekData.totalDistance / 1000).toFixed(1) + " km");
+
+  const prevWeekData = fetchWeeklyActivities(14, 7);
+  Logger.log("\nPrevious Week:");
+  Logger.log("  Activities: " + prevWeekData.totalActivities);
+  Logger.log("  Total TSS: " + prevWeekData.totalTss.toFixed(0));
+
+  Logger.log("\nTo send the actual email, run sendWeeklySummaryEmail()");
 }
 
 // =========================================================
