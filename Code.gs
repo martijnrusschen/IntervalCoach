@@ -4486,7 +4486,16 @@ function debugAllActivities() {
 
       activities.forEach((a, i) => {
         const date = a.start_date_local ? a.start_date_local.substring(0, 10) : 'N/A';
-        Logger.log((i + 1) + ". " + date + " | Type: '" + a.type + "' | Name: '" + a.name + "'");
+        // Show key fields that might contain activity info
+        Logger.log((i + 1) + ". " + date);
+        Logger.log("   type: '" + a.type + "' | name: '" + a.name + "'");
+        Logger.log("   activity_type: '" + a.activity_type + "' | sport_type: '" + a.sport_type + "'");
+        Logger.log("   icu_training_load: " + a.icu_training_load + " | moving_time: " + a.moving_time);
+
+        // For unknown types, show all keys
+        if (!a.type || a.type === 'undefined') {
+          Logger.log("   ALL KEYS: " + Object.keys(a).join(", "));
+        }
       });
 
       // Show unique types
