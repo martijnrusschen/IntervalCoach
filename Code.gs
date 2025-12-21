@@ -681,8 +681,9 @@ function selectWorkoutTypes(wellness, recentTypes, activityType) {
  * Debug function to explore pace curve API response
  */
 /**
- * Fetch upcoming goal events (A and B priority races) from Intervals.icu
- * Returns the next A-race as primary target, plus all upcoming B-races
+ * Fetch upcoming goal events (A, B, and C priority races) from Intervals.icu
+ * Returns the next A-race as primary target, B-races as secondary goals,
+ * and C-races as subgoals (stepping stones toward A/B goals)
  */
 function fetchUpcomingGoals() {
   const today = new Date();
@@ -698,7 +699,8 @@ function fetchUpcomingGoals() {
     available: false,
     primaryGoal: null,      // Next A-race
     secondaryGoals: [],     // B-races
-    allGoals: []            // All A and B races
+    subGoals: [],           // C-races (stepping stones toward A/B goals)
+    allGoals: []            // All A, B, and C races
   };
 
   try {
@@ -710,9 +712,9 @@ function fetchUpcomingGoals() {
     if (response.getResponseCode() === 200) {
       const events = JSON.parse(response.getContentText());
 
-      // Filter for A and B priority races
+      // Filter for A, B, and C priority races
       const goalEvents = events.filter(function(e) {
-        return e.category === 'RACE_A' || e.category === 'RACE_B';
+        return e.category === 'RACE_A' || e.category === 'RACE_B' || e.category === 'RACE_C';
       });
 
       // Sort by date
@@ -723,10 +725,13 @@ function fetchUpcomingGoals() {
       if (goalEvents.length > 0) {
         result.available = true;
         result.allGoals = goalEvents.map(function(e) {
+          let priority = 'C';
+          if (e.category === 'RACE_A') priority = 'A';
+          else if (e.category === 'RACE_B') priority = 'B';
           return {
             name: e.name,
             date: e.start_date_local.split('T')[0],
-            priority: e.category === 'RACE_A' ? 'A' : 'B',
+            priority: priority,
             type: e.type,
             description: e.description || ''
           };
@@ -755,6 +760,17 @@ function fetchUpcomingGoals() {
         // Collect B-races
         result.secondaryGoals = goalEvents
           .filter(function(e) { return e.category === 'RACE_B'; })
+          .map(function(e) {
+            return {
+              name: e.name,
+              date: e.start_date_local.split('T')[0],
+              type: e.type
+            };
+          });
+
+        // Collect C-races (subgoals/stepping stones)
+        result.subGoals = goalEvents
+          .filter(function(e) { return e.category === 'RACE_C'; })
           .map(function(e) {
             return {
               name: e.name,
@@ -811,6 +827,18 @@ function buildGoalDescription(goals) {
     }
   }
 
+  // Add C-races as stepping stones toward main goal
+  if (goals.subGoals && goals.subGoals.length > 0) {
+    const steppingStones = goals.subGoals
+      .filter(function(g) { return g.date !== primary.date; })
+      .slice(0, 3)
+      .map(function(g) { return g.name + " (" + g.date + ")"; });
+
+    if (steppingStones.length > 0) {
+      description += " Stepping stones: " + steppingStones.join(", ") + ".";
+    }
+  }
+
   // Add peak form indicator
   description += ". Peak form indicator: eFTP should reach or exceed FTP.";
 
@@ -835,6 +863,11 @@ function testGoals() {
       Logger.log("  - " + g.name + " (" + g.date + ")");
     });
 
+    Logger.log("Subgoals (C-races): " + goals.subGoals.length);
+    goals.subGoals.forEach(function(g) {
+      Logger.log("  - " + g.name + " (" + g.date + ")");
+    });
+
     Logger.log("All Goals:");
     goals.allGoals.forEach(function(g) {
       Logger.log("  [" + g.priority + "] " + g.name + " - " + g.date);
@@ -848,7 +881,7 @@ function testGoals() {
     Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
     Logger.log("Focus: " + phaseInfo.focus);
   } else {
-    Logger.log("No A/B race goals found in calendar");
+    Logger.log("No A/B/C race goals found in calendar");
     Logger.log("Falling back to manual TARGET_DATE: " + USER_SETTINGS.TARGET_DATE);
   }
 }
@@ -2003,7 +2036,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   // Create Athlete Summary
   const summary = createAthleteSummary(data);
 
-  // Fetch dynamic goals from calendar (A/B races)
+  // Fetch dynamic goals from calendar (A/B/C races)
   const goals = fetchUpcomingGoals();
   let targetDate = USER_SETTINGS.TARGET_DATE; // Fallback
   let goalDescription = USER_SETTINGS.GOAL_DESCRIPTION; // Fallback
@@ -2013,7 +2046,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     goalDescription = buildGoalDescription(goals);
     Logger.log("Dynamic Goal: " + goals.primaryGoal.name + " (" + targetDate + ")");
   } else {
-    Logger.log("No A/B races found, using manual TARGET_DATE: " + targetDate);
+    Logger.log("No A/B/C races found, using manual TARGET_DATE: " + targetDate);
   }
 
   // Calculate Periodization Phase based on goal
