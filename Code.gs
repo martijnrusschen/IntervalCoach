@@ -23,14 +23,12 @@
 // =========================================================
 // SYSTEM SETTINGS (Advanced)
 // =========================================================
+// AI_SETTINGS.GEMINI_MODEL is defined in config.gs
 const SYSTEM_SETTINGS = {
-  // Model ID (Ensure you use a model that supports JSON mode and high reasoning)
-  GEMINI_MODEL: "gemini-3-pro-preview", 
-  
   TIMEZONE: Session.getScriptTimeZone(),
   MAX_RETRIES: 3,
   RETRY_DELAY_MS: 5000,
-  
+
   GENERATION_CONFIG: {
     temperature: 0.3, // Slight creativity for workout variety
     maxOutputTokens: 8192,
@@ -2321,7 +2319,7 @@ function calculateTrainingPhase(targetDateStr) {
 // 9. HELPER: Gemini API Call
 // =========================================================
 function callGeminiAPI(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${SYSTEM_SETTINGS.GEMINI_MODEL}:generateContent?key=${API_KEYS.GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_SETTINGS.GEMINI_MODEL}:generateContent?key=${API_KEYS.GEMINI_API_KEY}`;
   
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
