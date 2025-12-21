@@ -84,7 +84,13 @@ const TRANSLATIONS = {
     avg_rhr: "Avg Resting HR",
     avg_recovery: "Avg Recovery",
     ramp_rate: "Ramp Rate",
-    weekly_footer: "Keep up the great work!"
+    weekly_footer: "Keep up the great work!",
+    // Training Load Advisor
+    training_load_title: "Training Load Advice",
+    target_ctl: "Target CTL",
+    weekly_tss_target: "Weekly TSS Target",
+    daily_tss_range: "Daily TSS Range",
+    load_advice: "Advice"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -123,7 +129,13 @@ const TRANSLATIONS = {
     avg_rhr: "平均安静時心拍",
     avg_recovery: "平均リカバリー",
     ramp_rate: "ランプレート",
-    weekly_footer: "今週もお疲れ様でした！"
+    weekly_footer: "今週もお疲れ様でした！",
+    // Training Load Advisor
+    training_load_title: "トレーニング負荷アドバイス",
+    target_ctl: "目標CTL",
+    weekly_tss_target: "週間TSS目標",
+    daily_tss_range: "1日のTSS目安",
+    load_advice: "アドバイス"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -162,7 +174,13 @@ const TRANSLATIONS = {
     avg_rhr: "FC Reposo Promedio",
     avg_recovery: "Recuperación Promedio",
     ramp_rate: "Tasa de Rampa",
-    weekly_footer: "¡Sigue así!"
+    weekly_footer: "¡Sigue así!",
+    // Training Load Advisor
+    training_load_title: "Consejo de Carga",
+    target_ctl: "CTL Objetivo",
+    weekly_tss_target: "TSS Semanal Objetivo",
+    daily_tss_range: "Rango TSS Diario",
+    load_advice: "Consejo"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -207,7 +225,13 @@ const TRANSLATIONS = {
     avg_rhr: "FC Repos Moyenne",
     avg_recovery: "Récupération Moyenne",
     ramp_rate: "Taux de Rampe",
-    weekly_footer: "Continuez comme ça!"
+    weekly_footer: "Continuez comme ça!",
+    // Training Load Advisor
+    training_load_title: "Conseil de Charge",
+    target_ctl: "CTL Cible",
+    weekly_tss_target: "TSS Hebdo Cible",
+    daily_tss_range: "Plage TSS Quotidien",
+    load_advice: "Conseil"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -253,7 +277,13 @@ const TRANSLATIONS = {
     avg_rhr: "Gem. Rustpols",
     avg_recovery: "Gem. Herstel",
     ramp_rate: "Ramp Rate",
-    weekly_footer: "Goed bezig, ga zo door!"
+    weekly_footer: "Goed bezig, ga zo door!",
+    // Training Load Advisor
+    training_load_title: "Trainingsbelasting Advies",
+    target_ctl: "Doel CTL",
+    weekly_tss_target: "Wekelijks TSS Doel",
+    daily_tss_range: "Dagelijks TSS Bereik",
+    load_advice: "Advies"
   }
 };
 
@@ -2937,6 +2967,23 @@ ${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.re
 ${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}`;
   }
 
+  // Training Load Advice Section
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+  body += `
+
+-----------------------------------
+${t.training_load_title}
+-----------------------------------
+${t.target_ctl}: ${loadAdvice.currentCTL.toFixed(0)} → ${loadAdvice.targetCTL} (${loadAdvice.weeksToGoal} ${t.weeks_unit})
+${t.weekly_tss_target}: ${loadAdvice.tssRange.min}-${loadAdvice.tssRange.max}
+${t.daily_tss_range}: ${loadAdvice.dailyTSSRange.min}-${loadAdvice.dailyTSSRange.max}
+${t.load_advice}: ${loadAdvice.loadAdvice}`;
+
+  if (loadAdvice.warning) {
+    body += `
+⚠️ ${loadAdvice.warning}`;
+  }
+
   // Phase & Goal info
   if (goals.available && goals.primaryGoal) {
     body += `
@@ -3243,6 +3290,161 @@ function fetchFitnessMetrics() {
   }
 
   return { ctl: 0, atl: 0, tsb: 0, rampRate: 0 };
+}
+
+/**
+ * Calculate training load recommendations based on current fitness and goals
+ * @param {object} fitnessMetrics - Current CTL, ATL, TSB, rampRate
+ * @param {object} phaseInfo - Training phase info (weeksOut, phaseName)
+ * @param {object} goals - Goal information
+ * @returns {object} Training load advice
+ */
+function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals) {
+  const currentCTL = fitnessMetrics.ctl || 0;
+  const currentATL = fitnessMetrics.atl || 0;
+  const currentTSB = fitnessMetrics.tsb || 0;
+  const currentRampRate = fitnessMetrics.rampRate || 0;
+  const weeksOut = phaseInfo.weeksOut || 12;
+
+  // Target CTL based on current fitness and time to goal
+  // Aim to peak 5-15% above current CTL for A race
+  let targetCTL = currentCTL;
+  let targetTSBAtRace = 0; // Slightly positive for race day
+
+  if (weeksOut > 3) {
+    // We have time to build - aim for meaningful improvement
+    const maxGain = Math.min(weeksOut * 5, 40); // Max ~5 CTL/week, cap at 40 total
+    targetCTL = currentCTL + Math.min(maxGain, currentCTL * 0.25); // Or 25% improvement
+    targetCTL = Math.max(targetCTL, currentCTL + 10); // At least try for +10 CTL
+  }
+
+  // Calculate required weekly CTL increase
+  const ctlGapToTarget = targetCTL - currentCTL;
+  const buildWeeks = Math.max(weeksOut - 2, 1); // Leave 2 weeks for taper
+  const requiredWeeklyIncrease = ctlGapToTarget / buildWeeks;
+
+  // Define safe ramp rate limits
+  const SAFE_RAMP_MIN = 3;
+  const SAFE_RAMP_MAX = 5;
+  const AGGRESSIVE_RAMP_MAX = 7;
+  const MAX_SUSTAINABLE_RAMP = 8;
+
+  // Calculate recommended weekly TSS
+  // TSS per week ≈ CTL × 7 (simplified, since CTL is ~42 day average)
+  let recommendedWeeklyTSS;
+  let rampRateAdvice;
+  let loadAdvice;
+  let warning = null;
+
+  // Phase-based adjustments
+  if (phaseInfo.phaseName.includes("Taper") || phaseInfo.phaseName.includes("Race Week")) {
+    // Taper: reduce volume significantly
+    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.5); // 50% reduction
+    rampRateAdvice = "Reduce";
+    loadAdvice = "Focus on freshness. Reduce volume by 40-50%, keep some intensity for sharpness.";
+  } else if (phaseInfo.phaseName.includes("Peak")) {
+    // Peak/late taper: moderate reduction
+    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.7); // 30% reduction
+    rampRateAdvice = "Reduce";
+    loadAdvice = "Begin tapering. Reduce volume by 20-30%, maintain intensity.";
+  } else if (phaseInfo.phaseName.includes("Transition")) {
+    // Off-season: easy recovery
+    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.4);
+    rampRateAdvice = "Recovery";
+    loadAdvice = "Off-season recovery. Keep active but prioritize rest and fun.";
+  } else {
+    // Building phases (Base, Build, Specialty)
+    const targetWeeklyIncrease = Math.min(requiredWeeklyIncrease, SAFE_RAMP_MAX);
+    const targetCTLThisWeek = currentCTL + targetWeeklyIncrease;
+    recommendedWeeklyTSS = Math.round(targetCTLThisWeek * 7);
+
+    // Determine ramp rate advice
+    if (requiredWeeklyIncrease <= SAFE_RAMP_MIN) {
+      rampRateAdvice = "Maintain";
+      loadAdvice = "On track. Maintain current load with slight progression.";
+    } else if (requiredWeeklyIncrease <= SAFE_RAMP_MAX) {
+      rampRateAdvice = "Build";
+      loadAdvice = "Good progression rate. Increase load steadily.";
+    } else if (requiredWeeklyIncrease <= AGGRESSIVE_RAMP_MAX) {
+      rampRateAdvice = "Aggressive";
+      loadAdvice = "Aggressive build needed. Monitor fatigue closely.";
+      warning = "High ramp rate - ensure adequate recovery.";
+    } else {
+      rampRateAdvice = "Caution";
+      loadAdvice = "Goal may be ambitious. Consider adjusting target or extending timeline.";
+      warning = "Required ramp rate exceeds safe limits. Risk of overtraining.";
+    }
+
+    // Check current fatigue state
+    if (currentTSB < -25) {
+      warning = "High fatigue detected (TSB: " + currentTSB.toFixed(0) + "). Consider a recovery week.";
+      recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.6); // Suggest recovery
+      loadAdvice = "Recovery week recommended due to accumulated fatigue.";
+      rampRateAdvice = "Recover";
+    } else if (currentTSB < -15) {
+      loadAdvice += " Monitor fatigue - approaching limit.";
+    }
+
+    // Check if current ramp rate is already high
+    if (currentRampRate > AGGRESSIVE_RAMP_MAX) {
+      warning = "Current ramp rate (" + currentRampRate.toFixed(1) + ") is high. Be cautious with further increases.";
+    }
+  }
+
+  // Calculate TSS range (±10%)
+  const tssMin = Math.round(recommendedWeeklyTSS * 0.9);
+  const tssMax = Math.round(recommendedWeeklyTSS * 1.1);
+
+  // Estimate daily TSS (assuming 5-6 training days)
+  const dailyTSSMin = Math.round(recommendedWeeklyTSS / 6);
+  const dailyTSSMax = Math.round(recommendedWeeklyTSS / 5);
+
+  return {
+    currentCTL: currentCTL,
+    targetCTL: Math.round(targetCTL),
+    weeksToGoal: weeksOut,
+    recommendedWeeklyTSS: recommendedWeeklyTSS,
+    tssRange: { min: tssMin, max: tssMax },
+    dailyTSSRange: { min: dailyTSSMin, max: dailyTSSMax },
+    rampRateAdvice: rampRateAdvice,
+    loadAdvice: loadAdvice,
+    warning: warning,
+    requiredWeeklyIncrease: Math.round(requiredWeeklyIncrease * 10) / 10
+  };
+}
+
+/**
+ * Test function for training load advisor
+ */
+function testTrainingLoadAdvisor() {
+  Logger.log("=== TRAINING LOAD ADVISOR TEST ===");
+
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("Current Fitness:");
+  Logger.log("  CTL: " + fitnessMetrics.ctl.toFixed(1));
+  Logger.log("  ATL: " + fitnessMetrics.atl.toFixed(1));
+  Logger.log("  TSB: " + fitnessMetrics.tsb.toFixed(1));
+  Logger.log("  Ramp Rate: " + (fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'));
+
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals.available && goals.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  Logger.log("\nTraining Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+
+  const advice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+
+  Logger.log("\n=== RECOMMENDATIONS ===");
+  Logger.log("Target CTL: " + advice.targetCTL);
+  Logger.log("Weekly TSS Target: " + advice.recommendedWeeklyTSS + " (" + advice.tssRange.min + "-" + advice.tssRange.max + ")");
+  Logger.log("Daily TSS Range: " + advice.dailyTSSRange.min + "-" + advice.dailyTSSRange.max);
+  Logger.log("Ramp Rate Advice: " + advice.rampRateAdvice);
+  Logger.log("Advice: " + advice.loadAdvice);
+  if (advice.warning) {
+    Logger.log("⚠️ Warning: " + advice.warning);
+  }
 }
 
 function createAthleteSummary(data) {

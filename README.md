@@ -263,6 +263,7 @@ Click **Save** for each trigger.
 | `testEftp()` | Power profile (eFTP, W', VO2max, peaks) |
 | `testRunningData()` | Running data (CS, D', pace zones) |
 | `testWeeklySummary()` | Weekly activity aggregation |
+| `testTrainingLoadAdvisor()` | Training load recommendations |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
@@ -285,6 +286,7 @@ A weekly recap email (set up via trigger) includes:
 - Week-over-week comparison
 - Fitness progress (CTL, ATL, TSB, eFTP, ramp rate)
 - Health & recovery averages (sleep, HRV, resting HR)
+- Training load advice (target CTL, weekly/daily TSS recommendations)
 - Training phase and goal progress
 
 ## Recovery Integration
@@ -306,6 +308,27 @@ If you have Whoop, Garmin, or Oura connected to Intervals.icu:
 | 3-8 | Specialty | Race specificity, VO2max, Anaerobic |
 | 1-3 | Peak/Taper | Reduce volume, maintain intensity |
 | 0-1 | Race Week | Sharpness, short openers |
+
+## Training Load Advisor
+
+The weekly email includes personalized training load recommendations:
+
+| Metric | Description |
+|--------|-------------|
+| Target CTL | Current → target fitness level based on goal date |
+| Weekly TSS | Recommended TSS range for the upcoming week |
+| Daily TSS | Suggested TSS per training day (assuming 5-6 days/week) |
+| Load Advice | Phase-specific guidance (build, maintain, taper, recover) |
+
+Ramp rate limits are applied to prevent overtraining:
+- **Safe**: 3-5 CTL/week - sustainable progression
+- **Aggressive**: 5-7 CTL/week - monitor fatigue closely
+- **Maximum**: 8 CTL/week - risk of overtraining
+
+Warnings are displayed when:
+- TSB drops below -25 (high fatigue, recovery recommended)
+- Current ramp rate exceeds safe limits
+- Required ramp rate to meet goal is unsustainable
 
 ## Supported Languages
 
