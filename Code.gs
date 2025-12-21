@@ -2337,15 +2337,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
   Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
 
-  // Get adaptive training context (RPE/Feel feedback from recent workouts)
-  const adaptiveContext = getAdaptiveTrainingContext();
+  // Get adaptive training context (RPE/Feel feedback + training gap analysis)
+  const adaptiveContext = getAdaptiveTrainingContext(wellness);
   if (adaptiveContext.available) {
-    Logger.log("Adaptive Training: " + adaptiveContext.adaptation.recommendation.toUpperCase() +
-      " (Feel: " + (adaptiveContext.feedback.avgFeel ? adaptiveContext.feedback.avgFeel.toFixed(1) : 'N/A') + "/5" +
-      ", RPE: " + (adaptiveContext.feedback.avgRpe ? adaptiveContext.feedback.avgRpe.toFixed(1) : 'N/A') + "/10" +
-      ", Adjustment: " + (adaptiveContext.adaptation.intensityAdjustment > 0 ? '+' : '') + adaptiveContext.adaptation.intensityAdjustment + "%)");
+    let adaptiveLog = "Adaptive Training: " + adaptiveContext.adaptation.recommendation.toUpperCase();
+    if (adaptiveContext.feedback.avgFeel) {
+      adaptiveLog += " | Feel: " + adaptiveContext.feedback.avgFeel.toFixed(1) + "/5";
+    }
+    if (adaptiveContext.feedback.avgRpe) {
+      adaptiveLog += " | RPE: " + adaptiveContext.feedback.avgRpe.toFixed(1) + "/10";
+    }
+    if (adaptiveContext.gap.hasSignificantGap) {
+      adaptiveLog += " | Gap: " + adaptiveContext.gap.daysSinceLastWorkout + " days (" + adaptiveContext.gap.interpretation + ")";
+    }
+    adaptiveLog += " | Adjustment: " + (adaptiveContext.adaptation.intensityAdjustment > 0 ? '+' : '') + adaptiveContext.adaptation.intensityAdjustment + "%";
+    Logger.log(adaptiveLog);
   } else {
-    Logger.log("Adaptive Training: Insufficient feedback data (log RPE/Feel in Intervals.icu)");
+    Logger.log("Adaptive Training: " + (adaptiveContext.gap.daysSinceLastWorkout || 0) + " days since last workout, no feedback data");
   }
 
   // Select workout types based on recovery and variety
@@ -3944,14 +3952,28 @@ function analyzeTrainingAdaptation(feedback) {
 
 /**
  * Get adaptive training context for workout generation
+ * Combines RPE/Feel feedback with training gap analysis
+ * @param {object} wellness - Wellness data for gap interpretation (optional)
  * @returns {object} Adaptive context with recommendation and summary
  */
-function getAdaptiveTrainingContext() {
+function getAdaptiveTrainingContext(wellness) {
   const feedback = fetchRecentActivityFeedback(14);
   const adaptation = analyzeTrainingAdaptation(feedback);
 
+  // Get training gap data
+  const gapData = getDaysSinceLastWorkout();
+  const gapAnalysis = analyzeTrainingGap(gapData, wellness);
+
+  // Combine intensity modifiers
+  let combinedIntensityAdjustment = adaptation.intensityAdjustment;
+  if (gapAnalysis.hasSignificantGap && gapAnalysis.intensityModifier < 1.0) {
+    // Convert modifier to percentage adjustment (e.g., 0.7 → -30%)
+    const gapAdjustment = Math.round((gapAnalysis.intensityModifier - 1.0) * 100);
+    combinedIntensityAdjustment = Math.min(combinedIntensityAdjustment, gapAdjustment);
+  }
+
   return {
-    available: feedback.summary.totalWithFeedback >= 3,
+    available: feedback.summary.totalWithFeedback >= 3 || gapAnalysis.hasSignificantGap,
     feedback: {
       activitiesAnalyzed: feedback.activities.length,
       activitiesWithFeedback: feedback.summary.totalWithFeedback,
@@ -3960,36 +3982,69 @@ function getAdaptiveTrainingContext() {
       feelDistribution: feedback.summary.feelDistribution,
       rpeDistribution: feedback.summary.rpeDistribution
     },
-    adaptation: adaptation,
+    adaptation: {
+      ...adaptation,
+      intensityAdjustment: combinedIntensityAdjustment
+    },
+    gap: {
+      daysSinceLastWorkout: gapData.daysSinceLastWorkout,
+      hasSignificantGap: gapAnalysis.hasSignificantGap,
+      interpretation: gapAnalysis.interpretation,
+      lastActivity: gapData.lastActivity
+    },
     // Generate a text summary for the AI prompt
-    promptContext: generateAdaptivePromptContext(feedback, adaptation)
+    promptContext: generateAdaptivePromptContext(feedback, adaptation, gapData, gapAnalysis)
   };
 }
 
 /**
  * Generate text context for AI workout generation prompt
  */
-function generateAdaptivePromptContext(feedback, adaptation) {
-  if (feedback.summary.totalWithFeedback < 3) {
+function generateAdaptivePromptContext(feedback, adaptation, gapData, gapAnalysis) {
+  let context = "";
+  let hasContent = false;
+
+  // Training gap section (if significant)
+  if (gapAnalysis && gapAnalysis.hasSignificantGap) {
+    hasContent = true;
+    context += `TRAINING GAP DETECTED:\n`;
+    context += `- Days since last workout: ${gapData.daysSinceLastWorkout}\n`;
+    if (gapData.lastActivity) {
+      context += `- Last activity: ${gapData.lastActivity.type} on ${gapData.lastActivity.date.substring(0, 10)}\n`;
+    }
+    context += `- Status: ${gapAnalysis.interpretation.toUpperCase()}\n`;
+    context += `- ${gapAnalysis.recommendation}\n`;
+    gapAnalysis.reasoning.forEach(r => {
+      context += `  • ${r}\n`;
+    });
+    context += `\n`;
+  }
+
+  // RPE/Feel feedback section
+  if (feedback.summary.totalWithFeedback >= 3) {
+    hasContent = true;
+    const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
+    context += `RECENT WORKOUT FEEDBACK (last 14 days, ${feedback.summary.totalWithFeedback} workouts with data):\n`;
+
+    if (feedback.summary.avgFeel != null) {
+      context += `- Average Feel: ${feedback.summary.avgFeel.toFixed(1)}/5 (${feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A'})\n`;
+    }
+    if (feedback.summary.avgRpe != null) {
+      context += `- Average RPE: ${feedback.summary.avgRpe.toFixed(1)}/10\n`;
+    }
+
+    // Feel distribution
+    const fd = feedback.summary.feelDistribution;
+    context += `- Feel distribution: ${fd.great} Great, ${fd.good} Good, ${fd.okay} Okay, ${fd.poor} Poor, ${fd.bad} Bad\n`;
+    context += `\n`;
+  }
+
+  if (!hasContent) {
     return "No recent workout feedback available (RPE/Feel not logged).";
   }
 
-  const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
-  let context = `RECENT WORKOUT FEEDBACK (last 14 days, ${feedback.summary.totalWithFeedback} workouts with data):\n`;
-
-  if (feedback.summary.avgFeel != null) {
-    context += `- Average Feel: ${feedback.summary.avgFeel.toFixed(1)}/5 (${feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A'})\n`;
-  }
-  if (feedback.summary.avgRpe != null) {
-    context += `- Average RPE: ${feedback.summary.avgRpe.toFixed(1)}/10\n`;
-  }
-
-  // Feel distribution
-  const fd = feedback.summary.feelDistribution;
-  context += `- Feel distribution: ${fd.great} Great, ${fd.good} Good, ${fd.okay} Okay, ${fd.poor} Poor, ${fd.bad} Bad\n`;
-
-  // Adaptation recommendation
-  context += `\nADAPTIVE RECOMMENDATION: ${adaptation.recommendation.toUpperCase()}\n`;
+  // Combined adaptation recommendation
+  context += `ADAPTIVE RECOMMENDATION: ${adaptation.recommendation.toUpperCase()}\n`;
   context += `- Confidence: ${adaptation.confidenceLevel}\n`;
   if (adaptation.intensityAdjustment !== 0) {
     context += `- Suggested intensity adjustment: ${adaptation.intensityAdjustment > 0 ? '+' : ''}${adaptation.intensityAdjustment}%\n`;
@@ -4057,9 +4112,173 @@ function testAdaptiveTraining() {
     Logger.log("  - " + r);
   });
 
+  // Get wellness for full context
+  Logger.log("\n--- Training Gap Analysis ---");
+  const wellness = getWellnessData();
+  const context = getAdaptiveTrainingContext(wellness);
+
+  Logger.log("Days since last workout: " + (context.gap.daysSinceLastWorkout || 0));
+  if (context.gap.lastActivity) {
+    Logger.log("Last activity: " + context.gap.lastActivity.type + " on " + context.gap.lastActivity.date.substring(0, 10));
+  }
+  Logger.log("Has significant gap (4+ days): " + context.gap.hasSignificantGap);
+  if (context.gap.hasSignificantGap) {
+    Logger.log("Gap interpretation: " + context.gap.interpretation.toUpperCase());
+    if (wellness.available) {
+      Logger.log("Recovery status: " + wellness.recoveryStatus);
+    }
+  }
+
+  Logger.log("\n--- Combined Intensity Adjustment ---");
+  Logger.log("Final adjustment: " + (context.adaptation.intensityAdjustment > 0 ? '+' : '') + context.adaptation.intensityAdjustment + "%");
+
   Logger.log("\n--- Prompt Context for AI ---");
-  const context = getAdaptiveTrainingContext();
   Logger.log(context.promptContext);
+}
+
+// =========================================================
+// 12b. TRAINING GAP DETECTION
+// =========================================================
+
+/**
+ * Get days since last cycling or running workout
+ * @returns {object} Gap information including days and last activity details
+ */
+function getDaysSinceLastWorkout() {
+  const today = new Date();
+  const lookbackDays = 30; // Look back up to 30 days
+  const from = new Date(today);
+  from.setDate(today.getDate() - lookbackDays);
+
+  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+
+  const result = {
+    daysSinceLastWorkout: null,
+    lastActivity: null,
+    hasRecentActivity: false
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const activities = JSON.parse(response.getContentText());
+
+      // Filter to cycling and running only
+      const relevantActivities = activities.filter(a =>
+        a.type === 'Ride' || a.type === 'VirtualRide' ||
+        a.type === 'Run' || a.type === 'VirtualRun'
+      );
+
+      if (relevantActivities.length > 0) {
+        // Sort by date descending (most recent first)
+        relevantActivities.sort((a, b) =>
+          new Date(b.start_date_local) - new Date(a.start_date_local)
+        );
+
+        const lastActivity = relevantActivities[0];
+        const lastDate = new Date(lastActivity.start_date_local);
+        const diffTime = today - lastDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        result.daysSinceLastWorkout = diffDays;
+        result.lastActivity = {
+          date: lastActivity.start_date_local,
+          name: lastActivity.name,
+          type: lastActivity.type,
+          load: lastActivity.icu_training_load || 0
+        };
+        result.hasRecentActivity = diffDays <= 3;
+      } else {
+        result.daysSinceLastWorkout = lookbackDays; // No activity found in lookback period
+      }
+    }
+  } catch (e) {
+    Logger.log("Error fetching activities for gap detection: " + e.message);
+  }
+
+  return result;
+}
+
+/**
+ * Analyze training gap combined with wellness data
+ * @param {object} gapData - From getDaysSinceLastWorkout()
+ * @param {object} wellness - Wellness data with recovery status
+ * @returns {object} Interpretation and recommendations
+ */
+function analyzeTrainingGap(gapData, wellness) {
+  const days = gapData.daysSinceLastWorkout;
+
+  const result = {
+    hasSignificantGap: days >= 4,
+    gapDays: days,
+    interpretation: 'normal',
+    intensityModifier: 1.0,
+    recommendation: '',
+    reasoning: []
+  };
+
+  // No significant gap
+  if (days === null || days < 4) {
+    result.interpretation = 'normal';
+    result.recommendation = 'Continue with planned training';
+    result.reasoning.push(`${days || 0} days since last workout - normal training rhythm`);
+    return result;
+  }
+
+  // Significant gap (4+ days) - interpret based on recovery status
+  result.hasSignificantGap = true;
+
+  if (wellness && wellness.available) {
+    const recovery = wellness.recoveryStatus || '';
+
+    if (recovery.includes('Green') || recovery.includes('Primed') || recovery.includes('Well Recovered')) {
+      // Good recovery + gap = planned rest, athlete is fresh
+      result.interpretation = 'fresh';
+      result.intensityModifier = 1.0;
+      result.recommendation = 'Athlete is fresh after rest period. Full intensity appropriate.';
+      result.reasoning.push(`${days} days off with good recovery status`);
+      result.reasoning.push('Whoop shows green/primed - this was planned rest');
+      result.reasoning.push('No detraining concerns yet (takes 2+ weeks)');
+
+    } else if (recovery.includes('Red') || recovery.includes('Strained') || recovery.includes('Poor')) {
+      // Poor recovery + gap = likely illness or high stress
+      result.interpretation = 'returning_from_illness';
+      result.intensityModifier = 0.7;
+      result.recommendation = 'Athlete returning from illness/stress. Start easy, monitor response.';
+      result.reasoning.push(`${days} days off with poor recovery status`);
+      result.reasoning.push('Whoop shows red/strained - likely recovering from illness or stress');
+      result.reasoning.push('Prioritize easy endurance to rebuild without setback');
+
+    } else {
+      // Yellow/moderate recovery + gap = uncertain, be cautious
+      result.interpretation = 'cautious_return';
+      result.intensityModifier = 0.85;
+      result.recommendation = 'Moderate return after break. Test the waters with tempo work.';
+      result.reasoning.push(`${days} days off with moderate recovery status`);
+      result.reasoning.push('Whoop shows yellow - recovering but not fully fresh');
+      result.reasoning.push('Start moderate, assess how athlete responds');
+    }
+  } else {
+    // No wellness data - be conservative
+    result.interpretation = 'unknown';
+    result.intensityModifier = 0.8;
+    result.recommendation = 'Extended break without wellness data. Start conservatively.';
+    result.reasoning.push(`${days} days off with no wellness data available`);
+    result.reasoning.push('Without recovery data, assume conservative return');
+    result.reasoning.push('Prefer endurance/tempo over high intensity');
+  }
+
+  // Extra caution for very long gaps (7+ days)
+  if (days >= 7) {
+    result.intensityModifier *= 0.9;
+    result.reasoning.push(`Extended gap (${days} days) - additional intensity reduction applied`);
+  }
+
+  return result;
 }
 
 // =========================================================
