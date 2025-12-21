@@ -310,16 +310,18 @@ const HEADERS_FIXED = [
 // =========================================================
 // 6. WELLNESS DATA: Fetch from Intervals.icu (Whoop/Garmin/Oura)
 // =========================================================
-function fetchWellnessData(daysBack = 7) {
+function fetchWellnessData(daysBack = 7, daysBackEnd = 0) {
   const today = new Date();
+  const newest = new Date(today);
+  newest.setDate(today.getDate() - daysBackEnd);
   const oldest = new Date(today);
   oldest.setDate(today.getDate() - daysBack);
 
-  const todayStr = formatDateISO(today);
+  const newestStr = formatDateISO(newest);
   const oldestStr = formatDateISO(oldest);
 
   // Use date range endpoint (more reliable, returns fresh data)
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + todayStr;
+  const url = "https://intervals.icu/api/v1/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + newestStr;
 
   try {
     const response = UrlFetchApp.fetch(url, {
@@ -2876,14 +2878,19 @@ function sendWeeklySummaryEmail() {
   const weekData = fetchWeeklyActivities(7);
   const prevWeekData = fetchWeeklyActivities(14, 7); // Previous week for comparison
 
-  // Fetch current fitness metrics
+  // Fetch current and previous week fitness metrics
   const fitnessMetrics = fetchFitnessMetrics();
+  const prevWeekDate = new Date();
+  prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+  const prevFitnessMetrics = fetchFitnessMetrics(prevWeekDate);
 
-  // Fetch wellness/health data for the week
+  // Fetch wellness/health data for current and previous week
   const wellnessRecords = fetchWellnessData(7);
   const wellnessSummary = createWellnessSummary(wellnessRecords);
+  const prevWellnessRecords = fetchWellnessData(14, 7); // 14 days back to 7 days back
+  const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
 
-  // Fetch power profile for eFTP
+  // Fetch power profile (eFTP now comes from fitnessMetrics via wellness API)
   const powerProfile = fetchPowerCurve();
 
   // Fetch goals for context
@@ -2900,8 +2907,8 @@ function sendWeeklySummaryEmail() {
 
   const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI weekly insight
-  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals);
+  // Generate AI weekly insight with comparison data (eFTP now comes from fitnessMetrics)
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp, prevFitnessMetrics.eftp, phaseInfo, goals);
 
   let body = `${t.weekly_greeting}\n\n`;
 
@@ -2938,33 +2945,48 @@ ${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
 `;
   }
 
-  // Fitness Progress
+  // Fitness Progress with week-over-week comparison
+  const ctlChange = formatChange(fitnessMetrics.ctl, prevFitnessMetrics.ctl, 1);
+  const atlChange = formatChange(fitnessMetrics.atl, prevFitnessMetrics.atl, 1);
+  const tsbChange = formatChange(fitnessMetrics.tsb, prevFitnessMetrics.tsb, 1);
+
   body += `
 -----------------------------------
 ${t.weekly_fitness}
 -----------------------------------
-CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
-ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
-TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}${ctlChange}
+ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}${atlChange}
+TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}${tsbChange}
 ${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
 
-  // Add eFTP if available
-  if (powerProfile && powerProfile.available) {
+  // Add eFTP if available with week-over-week comparison (from wellness/sportInfo)
+  if (fitnessMetrics.eftp) {
+    const eftpChange = formatChange(fitnessMetrics.eftp, prevFitnessMetrics.eftp, 0, 'W');
+    body += `
+eFTP: ${fitnessMetrics.eftp}W${eftpChange}`;
+  } else if (powerProfile && powerProfile.available) {
+    // Fallback to power curve if wellness doesn't have eFTP
     body += `
 eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
   }
 
-  // Health & Recovery Section
+  // Health & Recovery Section with week-over-week comparison
   if (wellnessSummary.available) {
+    const prevAvg = prevWellnessSummary.available ? prevWellnessSummary.averages : {};
+    const sleepChange = formatChange(wellnessSummary.averages.sleep, prevAvg.sleep, 1, 'h');
+    const hrvChange = formatChange(wellnessSummary.averages.hrv, prevAvg.hrv, 0);
+    const rhrChange = formatChange(wellnessSummary.averages.restingHR, prevAvg.restingHR, 0);
+    const recoveryChange = formatChange(wellnessSummary.averages.recovery, prevAvg.recovery, 0, '%');
+
     body += `
 
 -----------------------------------
 ${t.weekly_health}
 -----------------------------------
-${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
-${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
-${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
-${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}`;
+${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange}
+${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange}
+${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}${rhrChange}
+${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}${recoveryChange}`;
   }
 
   // Training Load Advice Section
@@ -3005,8 +3027,18 @@ ${t.focus}: ${phaseInfo.focus}
 /**
  * Generate AI-powered weekly insight based on training data
  */
-function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, wellnessSummary, phaseInfo, goals) {
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals) {
   const language = USER_SETTINGS.LANGUAGE || 'en';
+
+  // Calculate changes
+  const ctlChange = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
+  const tsbChange = fitnessMetrics.tsb - (prevFitnessMetrics.tsb || 0);
+  const eftpChange = (currentEftp && prevWeekEftp) ? currentEftp - prevWeekEftp : null;
+
+  const prevAvg = prevWellnessSummary && prevWellnessSummary.available ? prevWellnessSummary.averages : {};
+  const currAvg = wellnessSummary && wellnessSummary.available ? wellnessSummary.averages : {};
+  const sleepChange = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
+  const hrvChange = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
 
   const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's weekly training.
 
@@ -3020,16 +3052,17 @@ PREVIOUS WEEK:
 - Activities: ${prevWeekData.totalActivities}
 - Total TSS: ${prevWeekData.totalTss.toFixed(0)}
 
-FITNESS METRICS:
-- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}
+FITNESS METRICS (current → change vs last week):
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)} (${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)})
 - ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
-- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}
+- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)} (${tsbChange >= 0 ? '+' : ''}${tsbChange.toFixed(1)})
 - Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}
+- eFTP: ${currentEftp || 'N/A'}W${eftpChange !== null ? ' (' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W)' : ''}
 
-WELLNESS (7-day averages):
-- Sleep: ${wellnessSummary.available && wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}
-- HRV: ${wellnessSummary.available && wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}
-- Resting HR: ${wellnessSummary.available && wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+WELLNESS (7-day averages → change vs last week):
+- Sleep: ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange !== null ? ' (' + (sleepChange >= 0 ? '+' : '') + sleepChange.toFixed(1) + 'h)' : ''}
+- HRV: ${currAvg.hrv ? currAvg.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange !== null ? ' (' + (hrvChange >= 0 ? '+' : '') + hrvChange.toFixed(0) + ')' : ''}
+- Resting HR: ${currAvg.restingHR ? currAvg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
 
 TRAINING PHASE: ${phaseInfo.phaseName}
 GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
@@ -3039,8 +3072,8 @@ Write a brief, personalized weekly summary (3-4 sentences max) in ${language ===
 
 Include:
 1. Acknowledge their training effort this week
-2. Note any significant changes from last week (TSS, volume)
-3. One insight about fitness/recovery trends
+2. Comment on significant changes: fitness (CTL/eFTP trends), form (TSB), or recovery (HRV/sleep)
+3. One actionable insight based on the data trends
 4. Brief encouragement for the upcoming week based on their phase
 
 Keep it conversational, supportive, and concise. Do not use bullet points or headers. Just write natural sentences.`;
@@ -3184,6 +3217,21 @@ function formatDuration(seconds) {
 }
 
 /**
+ * Format a change value with sign and optional unit
+ * @param {number} current - Current value
+ * @param {number} previous - Previous value
+ * @param {number} decimals - Number of decimal places
+ * @param {string} unit - Unit to append (e.g., "h", "ms", "%")
+ * @returns {string} Formatted change (e.g., "+2.1" or "↑ 2.1")
+ */
+function formatChange(current, previous, decimals = 1, unit = '') {
+  if (previous == null || current == null) return '';
+  const diff = current - previous;
+  const sign = diff >= 0 ? '+' : '';
+  return ` (${sign}${diff.toFixed(decimals)}${unit})`;
+}
+
+/**
  * Test function for weekly summary
  */
 function testWeeklySummary() {
@@ -3264,11 +3312,102 @@ function subtractPace(paceStr, secsToSubtract) {
 }
 
 /**
+ * Debug function to test historical eFTP fetching
+ */
+function debugHistoricalEftp() {
+  Logger.log("=== HISTORICAL eFTP DEBUG ===");
+
+  // Test current eFTP from power curve
+  const powerCurve = fetchPowerCurve();
+  Logger.log("Current eFTP (from powerCurve): " + (powerCurve.currentEftp || powerCurve.ftp || 'N/A') + "W");
+
+  // Check what the wellness endpoint returns (it might have eFTP)
+  const today = new Date();
+  const todayStr = formatDateISO(today);
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoStr = formatDateISO(weekAgo);
+
+  Logger.log("\n=== WELLNESS ENDPOINT (today) ===");
+  const urlToday = "https://intervals.icu/api/v1/athlete/0/wellness/" + todayStr;
+  try {
+    const resp = UrlFetchApp.fetch(urlToday, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() === 200) {
+      const data = JSON.parse(resp.getContentText());
+      Logger.log("All fields: " + Object.keys(data).join(", "));
+      Logger.log("eFTP field: " + (data.eftp || data.eFtp || data.ftp || 'not found'));
+      Logger.log("sportInfo: " + JSON.stringify(data.sportInfo || 'not found'));
+      // Log full response to see all available data
+      Logger.log("Full response: " + JSON.stringify(data).substring(0, 1000));
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+  }
+
+  Logger.log("\n=== WELLNESS ENDPOINT (7 days ago) ===");
+  const urlWeekAgo = "https://intervals.icu/api/v1/athlete/0/wellness/" + weekAgoStr;
+  try {
+    const resp = UrlFetchApp.fetch(urlWeekAgo, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() === 200) {
+      const data = JSON.parse(resp.getContentText());
+      Logger.log("eFTP field: " + (data.eftp || data.eFtp || data.ftp || 'not found'));
+      Logger.log("Full response: " + JSON.stringify(data).substring(0, 1000));
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+  }
+}
+
+/**
+ * Fetch historical eFTP value for a specific date from fitness-model-events
+ * @param {Date} date - The date to get eFTP for (finds most recent SET_EFTP event before this date)
+ * @returns {number|null} eFTP value or null if not available
+ */
+function fetchHistoricalEftp(date) {
+  const targetDate = date || new Date();
+  const targetDateStr = formatDateISO(targetDate);
+
+  const url = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
+
+  try {
+    const response = UrlFetchApp.fetch(url, {
+      headers: { "Authorization": getIcuAuthHeader() },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() === 200) {
+      const events = JSON.parse(response.getContentText());
+
+      // Filter SET_EFTP events and find the most recent one on or before the target date
+      const eftpEvents = events
+        .filter(function(e) { return e.category === "SET_EFTP" && e.start_date <= targetDateStr; })
+        .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
+
+      if (eftpEvents.length > 0) {
+        // The value is stored in the event data
+        return eftpEvents[0].value || null;
+      }
+    }
+  } catch (e) {
+    Logger.log("Error fetching historical eFTP: " + e.toString());
+  }
+
+  return null;
+}
+
+/**
  * Fetch current fitness metrics (CTL, ATL, TSB) from Intervals.icu
  */
-function fetchFitnessMetrics() {
-  const todayStr = formatDateISO(new Date());
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness/" + todayStr;
+function fetchFitnessMetrics(date) {
+  const targetDate = date || new Date();
+  const dateStr = formatDateISO(targetDate);
+  const url = "https://intervals.icu/api/v1/athlete/0/wellness/" + dateStr;
 
   try {
     const response = UrlFetchApp.fetch(url, {
@@ -3278,18 +3417,29 @@ function fetchFitnessMetrics() {
 
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
+
+      // Extract eFTP from sportInfo array (for Ride type)
+      let eftp = null;
+      if (data.sportInfo && Array.isArray(data.sportInfo)) {
+        const rideInfo = data.sportInfo.find(function(s) { return s.type === "Ride"; });
+        if (rideInfo && rideInfo.eftp) {
+          eftp = Math.round(rideInfo.eftp);
+        }
+      }
+
       return {
         ctl: data.ctl || 0,
         atl: data.atl || 0,
         tsb: (data.ctl || 0) - (data.atl || 0),
-        rampRate: data.rampRate || 0
+        rampRate: data.rampRate || 0,
+        eftp: eftp
       };
     }
   } catch (e) {
     Logger.log("Error fetching fitness metrics: " + e.toString());
   }
 
-  return { ctl: 0, atl: 0, tsb: 0, rampRate: 0 };
+  return { ctl: 0, atl: 0, tsb: 0, rampRate: 0, eftp: null };
 }
 
 /**

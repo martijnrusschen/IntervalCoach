@@ -283,9 +283,9 @@ IntervalCoach sends a daily email with:
 A weekly recap email (set up via trigger) includes:
 - AI-generated personalized weekly insights
 - Training totals (activities, time, TSS, distance)
-- Week-over-week comparison
-- Fitness progress (CTL, ATL, TSB, eFTP, ramp rate)
-- Health & recovery averages (sleep, HRV, resting HR)
+- Week-over-week comparison for all metrics
+- Fitness progress (CTL, ATL, TSB, eFTP, ramp rate) with changes vs previous week
+- Health & recovery averages (sleep, HRV, resting HR) with changes vs previous week
 - Training load advice (target CTL, weekly/daily TSS recommendations)
 - Training phase and goal progress
 
