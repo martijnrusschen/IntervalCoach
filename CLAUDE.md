@@ -52,6 +52,7 @@ This is a Google Apps Script project - no traditional build system, package.json
 
 **Git Workflow:**
 - For every new feature, create a branch and open a pull request before merging to main.
+- Always test features in Google Apps Script before committing and pushing.
 - Always update README.md when adding new features, functions, or configuration options.
 
 **Deployment:**
