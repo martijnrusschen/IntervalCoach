@@ -368,6 +368,22 @@ Warnings are displayed when:
 - Spanish (es)
 - French (fr)
 
+## Credits
+
+IntervalCoach is a fork of [Aixle](https://github.com/kuukuu/Aixle) by [kaa](https://github.com/kuukuu), an AI-powered Zwift workout generator.
+
+This project extends the original with:
+- Running workout support (pace-based workouts, Critical Speed analysis)
+- Training phase periodization (Base → Build → Peak → Taper)
+- A/B/C race goal detection from Intervals.icu calendar
+- Adaptive training based on RPE/Feel feedback
+- Training gap detection with wellness-based interpretation
+- Weekly and monthly progress reports
+- Training load advisor with CTL recommendations
+- Multi-language support
+
+Thank you to the original author for the foundation that made this project possible.
+
 ## License
 
 MIT License
