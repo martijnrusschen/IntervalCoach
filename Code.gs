@@ -28,6 +28,7 @@ const SYSTEM_SETTINGS = {
   TIMEZONE: Session.getScriptTimeZone(),
   MAX_RETRIES: 3,
   RETRY_DELAY_MS: 5000,
+  API_DELAY_MS: 100, // Delay between API calls to avoid rate limiting
 
   GENERATION_CONFIG: {
     temperature: 0.3, // Slight creativity for workout variety
@@ -35,6 +36,305 @@ const SYSTEM_SETTINGS = {
     responseMimeType: "application/json"
   }
 };
+
+// =========================================================
+// TRAINING CONSTANTS
+// =========================================================
+const TRAINING_CONSTANTS = {
+  // Recovery zones (Whoop-style: 0-100 scale)
+  RECOVERY: {
+    RED_THRESHOLD: 34,      // Below this = strained, rest day
+    YELLOW_THRESHOLD: 50,   // Below this = recovering, reduced intensity
+    GREEN_THRESHOLD: 66     // Above this = primed, full intensity
+  },
+
+  // Intensity modifiers based on recovery
+  INTENSITY: {
+    RED_MODIFIER: 0.75,     // Strained: 75% intensity
+    YELLOW_MODIFIER: 0.85,  // Recovering: 85% intensity
+    GREEN_MODIFIER: 1.0     // Primed: full intensity
+  },
+
+  // HRV deviation threshold (5% deviation from baseline is significant)
+  HRV_DEVIATION_THRESHOLD: 0.05,
+
+  // Power calculation factors
+  POWER: {
+    FTP_FROM_20MIN: 0.95,   // FTP = 20min power * 0.95
+    W_PRIME_LOW: 0.85,      // W' ratio below this = weak anaerobic
+    W_PRIME_HIGH: 0.95      // W' ratio above this = strong anaerobic
+  },
+
+  // Lookback periods (days)
+  LOOKBACK: {
+    WELLNESS_DEFAULT: 7,
+    ACTIVITIES_DEFAULT: 90,
+    RECENT_WORKOUTS: 7,
+    THREE_WEEKS: 21
+  },
+
+  // Training phase thresholds (weeks out from race)
+  PHASE: {
+    BASE_START: 16,         // 16+ weeks = Base phase
+    BUILD_START: 8,         // 8-16 weeks = Build phase
+    SPECIALTY_START: 3,     // 3-8 weeks = Specialty phase
+    TAPER_START: 1          // 1-3 weeks = Taper phase
+  },
+
+  // Training load limits
+  LOAD: {
+    SAFE_RAMP_RATE: 5,      // CTL/week - sustainable
+    AGGRESSIVE_RAMP_RATE: 7, // CTL/week - monitor closely
+    MAX_RAMP_RATE: 8,       // CTL/week - risk of overtraining
+    TSB_WARNING: -25        // TSB below this = high fatigue
+  }
+};
+
+// =========================================================
+// CONFIGURATION VALIDATION
+// =========================================================
+
+/**
+ * Validate that all required configuration is present
+ * Call this at the start of main functions to fail fast with clear errors
+ * @returns {object} { valid: boolean, errors: string[] }
+ */
+function validateConfig() {
+  const errors = [];
+
+  // Check API keys
+  if (!API_KEYS || typeof API_KEYS !== 'object') {
+    errors.push("API_KEYS object is missing - check config.gs exists");
+  } else {
+    if (!API_KEYS.ICU_TOKEN || API_KEYS.ICU_TOKEN === "your-intervals-icu-api-key-here") {
+      errors.push("API_KEYS.ICU_TOKEN is missing or not configured");
+    }
+    if (!API_KEYS.GEMINI_API_KEY || API_KEYS.GEMINI_API_KEY === "your-gemini-api-key-here") {
+      errors.push("API_KEYS.GEMINI_API_KEY is missing or not configured");
+    }
+  }
+
+  // Check AI settings
+  if (!AI_SETTINGS || typeof AI_SETTINGS !== 'object') {
+    errors.push("AI_SETTINGS object is missing - check config.gs exists");
+  } else {
+    if (!AI_SETTINGS.GEMINI_MODEL) {
+      errors.push("AI_SETTINGS.GEMINI_MODEL is missing");
+    }
+  }
+
+  // Check user settings
+  if (!USER_SETTINGS || typeof USER_SETTINGS !== 'object') {
+    errors.push("USER_SETTINGS object is missing - check config.gs exists");
+  } else {
+    if (!USER_SETTINGS.EMAIL_TO || !USER_SETTINGS.EMAIL_TO.includes("@")) {
+      errors.push("USER_SETTINGS.EMAIL_TO is missing or invalid");
+    }
+
+    const validLanguages = ["en", "nl", "ja", "es", "fr"];
+    if (!USER_SETTINGS.LANGUAGE || !validLanguages.includes(USER_SETTINGS.LANGUAGE)) {
+      errors.push("USER_SETTINGS.LANGUAGE must be one of: " + validLanguages.join(", "));
+    }
+
+    if (!USER_SETTINGS.PLACEHOLDER_RIDE) {
+      errors.push("USER_SETTINGS.PLACEHOLDER_RIDE is missing");
+    }
+    if (!USER_SETTINGS.PLACEHOLDER_RUN) {
+      errors.push("USER_SETTINGS.PLACEHOLDER_RUN is missing");
+    }
+    if (!USER_SETTINGS.WORKOUT_FOLDER) {
+      errors.push("USER_SETTINGS.WORKOUT_FOLDER is missing");
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors
+  };
+}
+
+/**
+ * Validate config and throw error if invalid
+ * Use this at the start of main entry points
+ */
+function requireValidConfig() {
+  const result = validateConfig();
+  if (!result.valid) {
+    const errorMsg = "Configuration errors:\n- " + result.errors.join("\n- ");
+    Logger.log("ERROR: " + errorMsg);
+    throw new Error(errorMsg);
+  }
+}
+
+// =========================================================
+// API UTILITIES
+// =========================================================
+
+/**
+ * Simple delay function for rate limiting
+ * @param {number} ms - Milliseconds to delay
+ */
+function delay(ms) {
+  Utilities.sleep(ms);
+}
+
+/**
+ * Fetch URL with retry logic and rate limiting
+ * Centralized API call handler with exponential backoff
+ *
+ * @param {string} url - The URL to fetch
+ * @param {object} options - UrlFetchApp options
+ * @param {object} config - Optional config override
+ * @param {number} config.maxRetries - Max retry attempts (default: SYSTEM_SETTINGS.MAX_RETRIES)
+ * @param {number} config.retryDelay - Base delay between retries in ms (default: SYSTEM_SETTINGS.RETRY_DELAY_MS)
+ * @param {number} config.apiDelay - Delay before request for rate limiting (default: SYSTEM_SETTINGS.API_DELAY_MS)
+ * @returns {object} { success: boolean, response: HTTPResponse|null, error: string|null, code: number }
+ */
+function fetchWithRetry(url, options, config) {
+  const maxRetries = config?.maxRetries || SYSTEM_SETTINGS.MAX_RETRIES;
+  const retryDelay = config?.retryDelay || SYSTEM_SETTINGS.RETRY_DELAY_MS;
+  const apiDelay = config?.apiDelay || SYSTEM_SETTINGS.API_DELAY_MS;
+
+  // Ensure muteHttpExceptions is always true for proper error handling
+  options = options || {};
+  options.muteHttpExceptions = true;
+
+  // Rate limiting delay
+  if (apiDelay > 0) {
+    delay(apiDelay);
+  }
+
+  let lastError = null;
+  let lastCode = 0;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(url, options);
+      const code = response.getResponseCode();
+      lastCode = code;
+
+      // Success
+      if (code >= 200 && code < 300) {
+        return { success: true, response: response, error: null, code: code };
+      }
+
+      // Client errors (4xx) - don't retry except for rate limiting
+      if (code >= 400 && code < 500 && code !== 429) {
+        return { success: false, response: response, error: `HTTP ${code}: ${response.getContentText().substring(0, 200)}`, code: code };
+      }
+
+      // Rate limiting (429) or server errors (5xx) - retry with backoff
+      lastError = `HTTP ${code}`;
+      if (attempt < maxRetries) {
+        const backoff = retryDelay * Math.pow(2, attempt - 1); // Exponential backoff
+        Logger.log(`API call failed (attempt ${attempt}/${maxRetries}): ${lastError}. Retrying in ${backoff}ms...`);
+        delay(backoff);
+      }
+    } catch (e) {
+      lastError = e.toString();
+      if (attempt < maxRetries) {
+        const backoff = retryDelay * Math.pow(2, attempt - 1);
+        Logger.log(`API call error (attempt ${attempt}/${maxRetries}): ${lastError}. Retrying in ${backoff}ms...`);
+        delay(backoff);
+      }
+    }
+  }
+
+  Logger.log(`API call failed after ${maxRetries} attempts: ${lastError}`);
+  return { success: false, response: null, error: lastError, code: lastCode };
+}
+
+/**
+ * Fetch from Intervals.icu API with automatic auth and retry handling
+ *
+ * @param {string} endpoint - API endpoint path (e.g., "/athlete/0/wellness")
+ * @param {object} additionalOptions - Additional UrlFetchApp options
+ * @returns {object} { success: boolean, data: any|null, error: string|null }
+ */
+function fetchIcuApi(endpoint, additionalOptions) {
+  const url = "https://intervals.icu/api/v1" + endpoint;
+  const options = Object.assign({}, additionalOptions || {}, {
+    headers: Object.assign({}, additionalOptions?.headers || {}, {
+      "Authorization": getIcuAuthHeader()
+    })
+  });
+
+  const result = fetchWithRetry(url, options);
+
+  if (result.success && result.response) {
+    try {
+      const data = JSON.parse(result.response.getContentText());
+      return { success: true, data: data, error: null };
+    } catch (e) {
+      return { success: false, data: null, error: "JSON parse error: " + e.toString() };
+    }
+  }
+
+  return { success: false, data: null, error: result.error };
+}
+
+/**
+ * Validate ZWO XML structure before upload
+ * Checks for required elements and basic structure
+ *
+ * @param {string} xml - The ZWO XML content
+ * @returns {object} { valid: boolean, errors: string[], warnings: string[] }
+ */
+function validateZwoXml(xml) {
+  const errors = [];
+  const warnings = [];
+
+  if (!xml || typeof xml !== 'string') {
+    return { valid: false, errors: ["XML content is empty or not a string"], warnings: [] };
+  }
+
+  // Required root element
+  if (!xml.includes("<workout_file>")) {
+    errors.push("Missing root <workout_file> tag");
+  }
+  if (!xml.includes("</workout_file>")) {
+    errors.push("Missing closing </workout_file> tag");
+  }
+
+  // Required child elements
+  if (!xml.includes("<workout>") || !xml.includes("</workout>")) {
+    errors.push("Missing <workout> section");
+  }
+
+  // Required metadata
+  if (!xml.includes("<author>")) {
+    warnings.push("Missing <author> tag");
+  }
+  if (!xml.includes("<name>")) {
+    warnings.push("Missing <name> tag");
+  }
+
+  // Check for at least one workout segment
+  const segmentPatterns = ["<SteadyState", "<IntervalsT", "<Warmup", "<Cooldown", "<FreeRide", "<Ramp"];
+  const hasSegment = segmentPatterns.some(pattern => xml.includes(pattern));
+  if (!hasSegment) {
+    errors.push("No workout segments found (expected SteadyState, IntervalsT, Warmup, Cooldown, FreeRide, or Ramp)");
+  }
+
+  // Basic XML structure check (matching tags)
+  const tagBalance = {
+    workout_file: (xml.match(/<workout_file>/g) || []).length - (xml.match(/<\/workout_file>/g) || []).length,
+    workout: (xml.match(/<workout>/g) || []).length - (xml.match(/<\/workout>/g) || []).length
+  };
+
+  if (tagBalance.workout_file !== 0) {
+    errors.push("Unbalanced <workout_file> tags");
+  }
+  if (tagBalance.workout !== 0) {
+    errors.push("Unbalanced <workout> tags");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors,
+    warnings: warnings
+  };
+}
 
 // =========================================================
 // 4. LOCALIZATION (Email Content)
@@ -400,53 +700,48 @@ function fetchWellnessData(daysBack = 7, daysBackEnd = 0) {
   const newestStr = formatDateISO(newest);
   const oldestStr = formatDateISO(oldest);
 
-  // Use date range endpoint (more reliable, returns fresh data)
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + newestStr;
+  const endpoint = "/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + newestStr;
+  const result = fetchIcuApi(endpoint);
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const dataArray = JSON.parse(response.getContentText());
-
-      // Map and sort by date descending (newest first)
-      const wellnessRecords = dataArray.map(function(data) {
-        // Convert sleepSecs to hours (API returns seconds)
-        const sleepHours = data.sleepSecs ? data.sleepSecs / 3600 : 0;
-
-        return {
-          date: data.id,                             // Date is stored as "id"
-          sleep: sleepHours,                         // Converted to hours
-          sleepQuality: data.sleepQuality || null,   // 1-5 scale
-          sleepScore: data.sleepScore || null,       // Whoop sleep score (0-100)
-          restingHR: data.restingHR || null,         // Resting heart rate
-          hrv: data.hrv || null,                     // HRV rMSSD
-          hrvSDNN: data.hrvSDNN || null,             // HRV SDNN (if available)
-          recovery: data.readiness || null,          // Whoop recovery score is stored as "readiness"
-          spO2: data.spO2 || null,                   // Blood oxygen
-          respiration: data.respiration || null,     // Breathing rate
-          soreness: data.soreness || null,           // 1-5 scale
-          fatigue: data.fatigue || null,             // 1-5 scale
-          stress: data.stress || null,               // 1-5 scale
-          mood: data.mood || null                    // 1-5 scale
-        };
-      });
-
-      // Sort by date descending (newest first)
-      wellnessRecords.sort(function(a, b) {
-        return b.date.localeCompare(a.date);
-      });
-
-      return wellnessRecords;
-    }
-  } catch (e) {
-    Logger.log("Failed to fetch wellness data: " + e.toString());
+  if (!result.success) {
+    Logger.log("Failed to fetch wellness data: " + result.error);
+    return [];
   }
 
-  return [];
+  const dataArray = result.data;
+  if (!Array.isArray(dataArray)) {
+    return [];
+  }
+
+  // Map and sort by date descending (newest first)
+  const wellnessRecords = dataArray.map(function(data) {
+    // Convert sleepSecs to hours (API returns seconds)
+    const sleepHours = data.sleepSecs ? data.sleepSecs / 3600 : 0;
+
+    return {
+      date: data.id,                             // Date is stored as "id"
+      sleep: sleepHours,                         // Converted to hours
+      sleepQuality: data.sleepQuality || null,   // 1-5 scale
+      sleepScore: data.sleepScore || null,       // Whoop sleep score (0-100)
+      restingHR: data.restingHR || null,         // Resting heart rate
+      hrv: data.hrv || null,                     // HRV rMSSD
+      hrvSDNN: data.hrvSDNN || null,             // HRV SDNN (if available)
+      recovery: data.readiness || null,          // Whoop recovery score is stored as "readiness"
+      spO2: data.spO2 || null,                   // Blood oxygen
+      respiration: data.respiration || null,     // Breathing rate
+      soreness: data.soreness || null,           // 1-5 scale
+      fatigue: data.fatigue || null,             // 1-5 scale
+      stress: data.stress || null,               // 1-5 scale
+      mood: data.mood || null                    // 1-5 scale
+    };
+  });
+
+  // Sort by date descending (newest first)
+  wellnessRecords.sort(function(a, b) {
+    return b.date.localeCompare(a.date);
+  });
+
+  return wellnessRecords;
 }
 
 function createWellnessSummary(wellnessRecords) {
@@ -470,31 +765,31 @@ function createWellnessSummary(wellnessRecords) {
 
   // Determine recovery status based on latest data with values
   let recoveryStatus = "Unknown";
-  let intensityModifier = 1.0; // Multiplier for workout intensity
+  let intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
 
   if (latestWithData.recovery != null) {
-    if (latestWithData.recovery >= 67) {
+    if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD) {
       recoveryStatus = "Green (Primed)";
-      intensityModifier = 1.0; // Full intensity OK
-    } else if (latestWithData.recovery >= 34) {
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+    } else if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
       recoveryStatus = "Yellow (Recovering)";
-      intensityModifier = 0.85; // Reduce intensity
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
     } else {
       recoveryStatus = "Red (Strained)";
-      intensityModifier = 0.7; // Significantly reduce
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
     }
   } else if (latestWithData.hrv != null && avgHRV > 0) {
     // Fallback: Use HRV trend if no recovery score
     const hrvDeviation = (latestWithData.hrv - avgHRV) / avgHRV;
-    if (hrvDeviation >= 0.05) {
+    if (hrvDeviation >= TRAINING_CONSTANTS.HRV_DEVIATION_THRESHOLD) {
       recoveryStatus = "Above Baseline (Well Recovered)";
-      intensityModifier = 1.0;
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
     } else if (hrvDeviation >= -0.1) {
       recoveryStatus = "Normal";
       intensityModifier = 0.9;
     } else {
       recoveryStatus = "Below Baseline (Fatigued)";
-      intensityModifier = 0.75;
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
     }
   }
 
@@ -646,8 +941,8 @@ function checkAvailability(wellness) {
 
   // Add recovery note if wellness data available
   let recoveryNote = "";
-  if (wellness && wellness.available) {
-    if (wellness.today.recovery != null && wellness.today.recovery < 34) {
+  if (wellness?.available) {
+    if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
       recoveryNote = " | Low recovery (" + wellness.today.recovery + "%)";
     }
   }
@@ -725,68 +1020,51 @@ function getRecentWorkoutTypes(daysBack = 7) {
   const todayStr = formatDateISO(today);
   const oldestStr = formatDateISO(oldest);
 
-  // Fetch actual activities (not just planned workouts)
-  const activitiesUrl = "https://intervals.icu/api/v1/athlete/0/activities?oldest=" + oldestStr + "&newest=" + todayStr;
-
   const result = { rides: [], runs: [], all: [] };
 
-  try {
-    const response = UrlFetchApp.fetch(activitiesUrl, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  // Fetch actual activities (not just planned workouts)
+  const activitiesEndpoint = "/athlete/0/activities?oldest=" + oldestStr + "&newest=" + todayStr;
+  const activitiesResult = fetchIcuApi(activitiesEndpoint);
 
-    if (response.getResponseCode() === 200) {
-      const activities = JSON.parse(response.getContentText());
-
-      // Classify each activity
-      activities.forEach(function(a) {
-        if (a.type === "Ride" || a.type === "VirtualRide" || a.type === "Run" || a.type === "VirtualRun") {
-          const classified = classifyActivityType(a);
-          if (classified) {
-            result.all.push(classified.type);
-            if (classified.sport === "Ride") {
-              result.rides.push(classified.type);
-            } else {
-              result.runs.push(classified.type);
-            }
+  if (activitiesResult.success && Array.isArray(activitiesResult.data)) {
+    activitiesResult.data.forEach(function(a) {
+      if (a.type === "Ride" || a.type === "VirtualRide" || a.type === "Run" || a.type === "VirtualRun") {
+        const classified = classifyActivityType(a);
+        if (classified) {
+          result.all.push(classified.type);
+          if (classified.sport === "Ride") {
+            result.rides.push(classified.type);
+          } else {
+            result.runs.push(classified.type);
           }
         }
-      });
-    }
-  } catch (e) {
-    Logger.log("Error fetching recent activities: " + e.toString());
+      }
+    });
+  } else if (activitiesResult.error) {
+    Logger.log("Error fetching recent activities: " + activitiesResult.error);
   }
 
   // Also check IntervalCoach workouts from events (for planned but not yet executed)
-  const eventsUrl = "https://intervals.icu/api/v1/athlete/0/events?oldest=" + oldestStr + "&newest=" + todayStr;
+  const eventsEndpoint = "/athlete/0/events?oldest=" + oldestStr + "&newest=" + todayStr;
+  const eventsResult = fetchIcuApi(eventsEndpoint);
 
-  try {
-    const response = UrlFetchApp.fetch(eventsUrl, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const events = JSON.parse(response.getContentText());
-
-      events.forEach(function(e) {
-        if (e.name && e.name.startsWith("IntervalCoach_")) {
-          const match = e.name.match(/IntervalCoach_([A-Za-z]+)_/);
-          if (match) {
-            const type = match[1];
-            result.all.push(type);
-            if (type.startsWith("Run")) {
-              result.runs.push(type);
-            } else {
-              result.rides.push(type);
-            }
+  if (eventsResult.success && Array.isArray(eventsResult.data)) {
+    eventsResult.data.forEach(function(e) {
+      if (e.name?.startsWith("IntervalCoach_")) {
+        const match = e.name.match(/IntervalCoach_([A-Za-z]+)_/);
+        if (match) {
+          const type = match[1];
+          result.all.push(type);
+          if (type.startsWith("Run")) {
+            result.runs.push(type);
+          } else {
+            result.rides.push(type);
           }
         }
-      });
-    }
-  } catch (e) {
-    Logger.log("Error fetching recent events: " + e.toString());
+      }
+    });
+  } else if (eventsResult.error) {
+    Logger.log("Error fetching recent events: " + eventsResult.error);
   }
 
   return result;
@@ -806,8 +1084,8 @@ function selectWorkoutTypes(wellness, recentTypes, activityType) {
   const allTypes = activityType === "Run" ? runTypes : rideTypes;
 
   // Check for rest day (Red recovery)
-  if (wellness && wellness.available) {
-    if (wellness.today.recovery != null && wellness.today.recovery < 34) {
+  if (wellness?.available) {
+    if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
       // Red recovery - rest day or easy only
       const easyTypes = activityType === "Run"
         ? ["Run_Recovery", "Run_Easy"]
@@ -819,7 +1097,7 @@ function selectWorkoutTypes(wellness, recentTypes, activityType) {
       };
     }
 
-    if (wellness.today.recovery != null && wellness.today.recovery < 50) {
+    if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.YELLOW_THRESHOLD) {
       // Yellow-ish - avoid high intensity
       const moderateTypes = activityType === "Run"
         ? ["Run_Tempo", "Run_Easy"]
@@ -901,8 +1179,6 @@ function fetchUpcomingGoals() {
   const oldestStr = formatDateISO(today);
   const newestStr = formatDateISO(futureDate);
 
-  const url = "https://intervals.icu/api/v1/athlete/0/events?oldest=" + oldestStr + "&newest=" + newestStr;
-
   const result = {
     available: false,
     primaryGoal: null,      // Next A-race
@@ -911,85 +1187,85 @@ function fetchUpcomingGoals() {
     allGoals: []            // All A, B, and C races
   };
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
+  const endpoint = "/athlete/0/events?oldest=" + oldestStr + "&newest=" + newestStr;
+  const apiResult = fetchIcuApi(endpoint);
+
+  if (!apiResult.success) {
+    Logger.log("Error fetching goals: " + apiResult.error);
+    return result;
+  }
+
+  const events = apiResult.data;
+  if (!Array.isArray(events)) {
+    return result;
+  }
+
+  // Filter for A, B, and C priority races
+  const goalEvents = events.filter(function(e) {
+    return e.category === 'RACE_A' || e.category === 'RACE_B' || e.category === 'RACE_C';
+  });
+
+  // Sort by date
+  goalEvents.sort(function(a, b) {
+    return new Date(a.start_date_local) - new Date(b.start_date_local);
+  });
+
+  if (goalEvents.length > 0) {
+    result.available = true;
+    result.allGoals = goalEvents.map(function(e) {
+      let priority = 'C';
+      if (e.category === 'RACE_A') priority = 'A';
+      else if (e.category === 'RACE_B') priority = 'B';
+      return {
+        name: e.name,
+        date: e.start_date_local.split('T')[0],
+        priority: priority,
+        type: e.type,
+        description: e.description || ''
+      };
     });
 
-    if (response.getResponseCode() === 200) {
-      const events = JSON.parse(response.getContentText());
-
-      // Filter for A, B, and C priority races
-      const goalEvents = events.filter(function(e) {
-        return e.category === 'RACE_A' || e.category === 'RACE_B' || e.category === 'RACE_C';
-      });
-
-      // Sort by date
-      goalEvents.sort(function(a, b) {
-        return new Date(a.start_date_local) - new Date(b.start_date_local);
-      });
-
-      if (goalEvents.length > 0) {
-        result.available = true;
-        result.allGoals = goalEvents.map(function(e) {
-          let priority = 'C';
-          if (e.category === 'RACE_A') priority = 'A';
-          else if (e.category === 'RACE_B') priority = 'B';
-          return {
-            name: e.name,
-            date: e.start_date_local.split('T')[0],
-            priority: priority,
-            type: e.type,
-            description: e.description || ''
-          };
-        });
-
-        // Find the next A-race (primary goal)
-        const nextARace = goalEvents.find(function(e) { return e.category === 'RACE_A'; });
-        if (nextARace) {
-          result.primaryGoal = {
-            name: nextARace.name,
-            date: nextARace.start_date_local.split('T')[0],
-            type: nextARace.type,
-            description: nextARace.description || ''
-          };
-        } else {
-          // If no A-race, use the first B-race
-          const nextBRace = goalEvents[0];
-          result.primaryGoal = {
-            name: nextBRace.name,
-            date: nextBRace.start_date_local.split('T')[0],
-            type: nextBRace.type,
-            description: nextBRace.description || ''
-          };
-        }
-
-        // Collect B-races
-        result.secondaryGoals = goalEvents
-          .filter(function(e) { return e.category === 'RACE_B'; })
-          .map(function(e) {
-            return {
-              name: e.name,
-              date: e.start_date_local.split('T')[0],
-              type: e.type
-            };
-          });
-
-        // Collect C-races (subgoals/stepping stones)
-        result.subGoals = goalEvents
-          .filter(function(e) { return e.category === 'RACE_C'; })
-          .map(function(e) {
-            return {
-              name: e.name,
-              date: e.start_date_local.split('T')[0],
-              type: e.type
-            };
-          });
-      }
+    // Find the next A-race (primary goal)
+    const nextARace = goalEvents.find(function(e) { return e.category === 'RACE_A'; });
+    if (nextARace) {
+      result.primaryGoal = {
+        name: nextARace.name,
+        date: nextARace.start_date_local.split('T')[0],
+        type: nextARace.type,
+        description: nextARace.description || ''
+      };
+    } else {
+      // If no A-race, use the first B-race
+      const nextBRace = goalEvents[0];
+      result.primaryGoal = {
+        name: nextBRace.name,
+        date: nextBRace.start_date_local.split('T')[0],
+        type: nextBRace.type,
+        description: nextBRace.description || ''
+      };
     }
-  } catch (e) {
-    Logger.log("Error fetching goals: " + e.toString());
+
+    // Collect B-races
+    result.secondaryGoals = goalEvents
+      .filter(function(e) { return e.category === 'RACE_B'; })
+      .map(function(e) {
+        return {
+          name: e.name,
+          date: e.start_date_local.split('T')[0],
+          type: e.type
+        };
+      });
+
+    // Collect C-races (subgoals/stepping stones)
+    result.subGoals = goalEvents
+      .filter(function(e) { return e.category === 'RACE_C'; })
+      .map(function(e) {
+        return {
+          name: e.name,
+          date: e.start_date_local.split('T')[0],
+          type: e.type
+        };
+      });
   }
 
   return result;
@@ -1024,7 +1300,7 @@ function buildGoalDescription(goals) {
   }
 
   // Add secondary goals context
-  if (goals.secondaryGoals && goals.secondaryGoals.length > 0) {
+  if (goals.secondaryGoals?.length > 0) {
     const otherEvents = goals.secondaryGoals
       .filter(function(g) { return g.date !== primary.date; })
       .slice(0, 3)
@@ -1036,7 +1312,7 @@ function buildGoalDescription(goals) {
   }
 
   // Add C-races as stepping stones toward main goal
-  if (goals.subGoals && goals.subGoals.length > 0) {
+  if (goals.subGoals?.length > 0) {
     const steppingStones = goals.subGoals
       .filter(function(g) { return g.date !== primary.date; })
       .slice(0, 3)
@@ -1505,7 +1781,7 @@ function fetchPowerCurve() {
 
         // Calculate FTP from 20-min power as fallback
         const peak20min = getPowerAt(1200);
-        const curveFtp = Math.round(peak20min * 0.95);
+        const curveFtp = Math.round(peak20min * TRAINING_CONSTANTS.POWER.FTP_FROM_20MIN);
 
         // Extract eFTP from powerModels for comparison
         const modelEftp = extractEftpFromModels(curve.powerModels);
@@ -1638,10 +1914,10 @@ function analyzePowerProfile(powerCurve) {
   let wPrimeStatus = null;
   if (powerCurve.wPrime && powerCurve.seasonWPrime) {
     const wPrimeRatio = powerCurve.wPrime / powerCurve.seasonWPrime;
-    if (wPrimeRatio < 0.85) {
+    if (wPrimeRatio < TRAINING_CONSTANTS.POWER.W_PRIME_LOW) {
       wPrimeStatus = "Low (needs anaerobic work)";
       recommendations.push("Build W' with hard 30s-2min efforts");
-    } else if (wPrimeRatio > 0.95) {
+    } else if (wPrimeRatio > TRAINING_CONSTANTS.POWER.W_PRIME_HIGH) {
       wPrimeStatus = "Strong";
     } else {
       wPrimeStatus = "Moderate";
@@ -1701,6 +1977,8 @@ function analyzePowerProfile(powerCurve) {
 // 10. MAIN FUNCTION: Fetch Data
 // =========================================================
 function fetchAndLogActivities() {
+  requireValidConfig();
+
   const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
   
   const to = new Date();
@@ -1748,10 +2026,20 @@ function fetchAndLogActivities() {
  * @param {object} placeholder - Optional placeholder event to replace
  */
 function uploadWorkoutToIntervals(name, zwoContent, dateStr, placeholder) {
+  // Validate ZWO structure before upload
+  const validation = validateZwoXml(zwoContent);
+  if (!validation.valid) {
+    Logger.log(" -> ZWO validation failed: " + validation.errors.join(", "));
+    return;
+  }
+  if (validation.warnings.length > 0) {
+    Logger.log(" -> ZWO warnings: " + validation.warnings.join(", "));
+  }
+
   const athleteId = "0"; // "0" works for the API key owner
 
   // If we have a placeholder, update it (PUT); otherwise create new (POST)
-  const isUpdate = placeholder && placeholder.id;
+  const isUpdate = placeholder?.id;
   const url = isUpdate
     ? "https://intervals.icu/api/v1/athlete/" + athleteId + "/events/" + placeholder.id
     : "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
@@ -1801,7 +2089,7 @@ function uploadRunToIntervals(name, description, dateStr, placeholder, duration)
   const athleteId = "0"; // "0" works for the API key owner
 
   // If we have a placeholder, update it (PUT); otherwise create new (POST)
-  const isUpdate = placeholder && placeholder.id;
+  const isUpdate = placeholder?.id;
   const url = isUpdate
     ? "https://intervals.icu/api/v1/athlete/" + athleteId + "/events/" + placeholder.id
     : "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
@@ -1846,6 +2134,8 @@ function uploadRunToIntervals(name, description, dateStr, placeholder, duration)
 // 10. MAIN FUNCTION: Generate Workouts
 // =========================================================
 function generateOptimalZwiftWorkoutsAutoByGemini() {
+  requireValidConfig();
+
   const today = new Date();
 
   // Fetch Wellness Data first (needed for availability check)
@@ -1878,7 +2168,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   let targetDate = USER_SETTINGS.TARGET_DATE; // Fallback
   let goalDescription = USER_SETTINGS.GOAL_DESCRIPTION; // Fallback
 
-  if (goals.available && goals.primaryGoal) {
+  if (goals?.available && goals?.primaryGoal) {
     targetDate = goals.primaryGoal.date;
     goalDescription = buildGoalDescription(goals);
     Logger.log("Dynamic Goal: " + goals.primaryGoal.name + " (" + targetDate + ")");
@@ -2161,7 +2451,12 @@ function callGeminiAPI(prompt) {
           if (!result.xml) throw new Error("Incomplete JSON: missing xml");
 
           let xml = result.xml.replace(/^```xml\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-          if (!xml.includes("<workout_file>")) throw new Error("Invalid XML: missing root tag");
+
+          // Validate ZWO structure
+          const zwoValidation = validateZwoXml(xml);
+          if (!zwoValidation.valid) {
+            throw new Error("Invalid ZWO: " + zwoValidation.errors.join(", "));
+          }
 
           return {
             success: true,
@@ -2629,6 +2924,8 @@ ${workout.workoutDescription}
  * Set up a weekly trigger (e.g., Sunday evening) to call this function
  */
 function sendWeeklySummaryEmail() {
+  requireValidConfig();
+
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
 
   // Fetch activities from the last 7 days
@@ -2652,7 +2949,7 @@ function sendWeeklySummaryEmail() {
 
   // Fetch goals for context
   const goals = fetchUpcomingGoals();
-  const phaseInfo = goals.available && goals.primaryGoal
+  const phaseInfo = goals?.available && goals?.primaryGoal
     ? calculateTrainingPhase(goals.primaryGoal.date)
     : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
 
@@ -2764,7 +3061,7 @@ ${t.load_advice}: ${loadAdvice.loadAdvice}`;
   }
 
   // Phase & Goal info
-  if (goals.available && goals.primaryGoal) {
+  if (goals?.available && goals?.primaryGoal) {
     body += `
 -----------------------------------
 ${t.phase_title}: ${phaseInfo.phaseName}
@@ -2896,6 +3193,8 @@ function fetchMonthlyProgressData(monthOffset = 0) {
  * Compares the previous complete month with the month before that
  */
 function sendMonthlyProgressEmail() {
+  requireValidConfig();
+
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
 
   // Fetch data for previous month (offset 0) and month before that (offset 1)
@@ -2904,7 +3203,7 @@ function sendMonthlyProgressEmail() {
 
   // Fetch current goals for context
   const goals = fetchUpcomingGoals();
-  const phaseInfo = goals.available && goals.primaryGoal
+  const phaseInfo = goals?.available && goals?.primaryGoal
     ? calculateTrainingPhase(goals.primaryGoal.date)
     : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
 
@@ -3017,7 +3316,7 @@ ${t.monthly_weeks_trained}: ${currentMonth.consistency.weeksWithTraining}/${curr
 `;
 
   // Goal Section
-  if (goals.available && goals.primaryGoal) {
+  if (goals?.available && goals?.primaryGoal) {
     body += `
 -----------------------------------
 ${t.phase_title}: ${phaseInfo.phaseName}
@@ -3072,7 +3371,7 @@ WEEKLY BREAKDOWN THIS MONTH (TSS per week):
 ${currentMonth.weeklyData.map((w, i) => `Week ${i + 1}: ${w.totalTss.toFixed(0)} TSS, CTL ${w.ctl.toFixed(0)}`).join('\n')}
 
 TRAINING PHASE: ${phaseInfo.phaseName}
-GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
 WEEKS TO GOAL: ${phaseInfo.weeksOut}
 
 Write a personalized monthly progress summary (3-4 sentences) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
@@ -3190,7 +3489,7 @@ WELLNESS (7-day averages → change vs last week):
 - Resting HR: ${currAvg.restingHR ? currAvg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
 
 TRAINING PHASE: ${phaseInfo.phaseName}
-GOAL: ${goals.available && goals.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
 WEEKS TO GOAL: ${phaseInfo.weeksOut}
 
 Write a brief, personalized weekly summary (3-4 sentences max) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
@@ -3885,7 +4184,7 @@ function analyzeTrainingGap(gapData, wellness) {
     } else {
       // Yellow/moderate recovery + gap = uncertain, be cautious
       result.interpretation = 'cautious_return';
-      result.intensityModifier = 0.85;
+      result.intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
       result.recommendation = 'Moderate return after break. Test the waters with tempo work.';
       result.reasoning.push(`${days} days off with moderate recovery status`);
       result.reasoning.push('Whoop shows yellow - recovering but not fully fresh');
@@ -3894,7 +4193,7 @@ function analyzeTrainingGap(gapData, wellness) {
   } else {
     // No wellness data - be conservative
     result.interpretation = 'unknown';
-    result.intensityModifier = 0.8;
+    result.intensityModifier = 0.8; // Conservative without data
     result.recommendation = 'Extended break without wellness data. Start conservatively.';
     result.reasoning.push(`${days} days off with no wellness data available`);
     result.reasoning.push('Without recovery data, assume conservative return');
@@ -4010,39 +4309,32 @@ function fetchHistoricalEftp(date) {
 function fetchFitnessMetrics(date) {
   const targetDate = date || new Date();
   const dateStr = formatDateISO(targetDate);
-  const url = "https://intervals.icu/api/v1/athlete/0/wellness/" + dateStr;
+  const endpoint = "/athlete/0/wellness/" + dateStr;
+  const result = fetchIcuApi(endpoint);
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-
-      // Extract eFTP from sportInfo array (for Ride type)
-      let eftp = null;
-      if (data.sportInfo && Array.isArray(data.sportInfo)) {
-        const rideInfo = data.sportInfo.find(function(s) { return s.type === "Ride"; });
-        if (rideInfo && rideInfo.eftp) {
-          eftp = Math.round(rideInfo.eftp);
-        }
-      }
-
-      return {
-        ctl: data.ctl || 0,
-        atl: data.atl || 0,
-        tsb: (data.ctl || 0) - (data.atl || 0),
-        rampRate: data.rampRate || 0,
-        eftp: eftp
-      };
-    }
-  } catch (e) {
-    Logger.log("Error fetching fitness metrics: " + e.toString());
+  if (!result.success) {
+    Logger.log("Error fetching fitness metrics: " + result.error);
+    return { ctl: 0, atl: 0, tsb: 0, rampRate: 0, eftp: null };
   }
 
-  return { ctl: 0, atl: 0, tsb: 0, rampRate: 0, eftp: null };
+  const data = result.data;
+
+  // Extract eFTP from sportInfo array (for Ride type)
+  let eftp = null;
+  if (data.sportInfo && Array.isArray(data.sportInfo)) {
+    const rideInfo = data.sportInfo.find(function(s) { return s.type === "Ride"; });
+    if (rideInfo && rideInfo.eftp) {
+      eftp = Math.round(rideInfo.eftp);
+    }
+  }
+
+  return {
+    ctl: data.ctl || 0,
+    atl: data.atl || 0,
+    tsb: (data.ctl || 0) - (data.atl || 0),
+    rampRate: data.rampRate || 0,
+    eftp: eftp
+  };
 }
 
 /**
@@ -4180,7 +4472,7 @@ function testTrainingLoadAdvisor() {
   Logger.log("  Ramp Rate: " + (fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'));
 
   const goals = fetchUpcomingGoals();
-  const phaseInfo = goals.available && goals.primaryGoal
+  const phaseInfo = goals?.available && goals?.primaryGoal
     ? calculateTrainingPhase(goals.primaryGoal.date)
     : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
 
