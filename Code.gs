@@ -3949,7 +3949,8 @@ function testAdaptiveTraining() {
 
   // Get wellness for full context
   Logger.log("\n--- Training Gap Analysis ---");
-  const wellness = getWellnessData();
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
   const context = getAdaptiveTrainingContext(wellness);
 
   Logger.log("Days since last workout: " + (context.gap.daysSinceLastWorkout || 0));
