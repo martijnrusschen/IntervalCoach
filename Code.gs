@@ -366,6 +366,7 @@ const TRANSLATIONS = {
     strengths: "Strengths",
     focus_areas: "Focus Areas",
     workout_details: "Workout Details",
+    coach_note_title: "Coach's Note",
     // Weekly summary
     weekly_subject: "[IntervalCoach] Weekly Summary",
     weekly_greeting: "Here is your weekly training summary.",
@@ -437,6 +438,7 @@ const TRANSLATIONS = {
     strategy_title: "【内容・攻略法】",
     other_options: "その他の選択肢",
     footer: "※Googleドライブ(IntervalCoach_Workouts)に保存されました。Zwiftへの同期をお待ちください。",
+    coach_note_title: "コーチからのメッセージ",
     // Weekly summary
     weekly_subject: "[IntervalCoach] 週間サマリー",
     weekly_greeting: "今週のトレーニングサマリーです。",
@@ -508,6 +510,7 @@ const TRANSLATIONS = {
     strategy_title: "【Estrategia】",
     other_options: "Otras opciones",
     footer: "*Guardado en Google Drive. Espera la sincronización.",
+    coach_note_title: "Nota del Entrenador",
     // Weekly summary
     weekly_subject: "[IntervalCoach] Resumen Semanal",
     weekly_greeting: "Aquí tienes tu resumen de entrenamiento semanal.",
@@ -585,6 +588,7 @@ const TRANSLATIONS = {
     peak_powers: "Pics de Puissance",
     strengths: "Points Forts",
     focus_areas: "Axes d'amélioration",
+    coach_note_title: "Note de l'Entraîneur",
     // Weekly summary
     weekly_subject: "[IntervalCoach] Résumé Hebdomadaire",
     weekly_greeting: "Voici votre résumé d'entraînement hebdomadaire.",
@@ -663,6 +667,7 @@ const TRANSLATIONS = {
     strengths: "Sterke punten",
     focus_areas: "Verbeterpunten",
     workout_details: "Workout Details",
+    coach_note_title: "Bericht van je Coach",
     // Weekly summary
     weekly_subject: "[IntervalCoach] Weekoverzicht",
     weekly_greeting: "Hier is je wekelijkse trainingsoverzicht.",
@@ -2794,7 +2799,74 @@ Include:
 }
 
 // =========================================================
-// 13. HELPER: Send Email (Dynamic Language)
+// 13. HELPER: Generate Personalized Coaching Note
+// =========================================================
+
+/**
+ * Generate a personalized AI coaching note for the workout email
+ * @param {object} summary - Athlete summary (CTL, ATL, TSB)
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} workout - Selected workout details
+ * @param {object} wellness - Wellness/recovery data
+ * @param {object} powerProfile - Power profile (optional, for cycling)
+ * @returns {string} AI-generated personalized coaching note
+ */
+function generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
+  const langName = langMap[language] || 'English';
+
+  const w = wellness?.today || {};
+  const avg = wellness?.averages || {};
+
+  // Build context for the AI
+  let context = `You are an experienced cycling/running coach writing a brief, personalized note to your athlete about today's training.
+
+**Athlete Context:**
+- Training Phase: ${phaseInfo.phaseName} (${phaseInfo.weeksOut} weeks to goal)
+- Phase Focus: ${phaseInfo.focus}
+- Goal: ${phaseInfo.goalDescription || 'General fitness'}
+- Current Fitness: CTL=${summary.ctl_90.toFixed(0)}, TSB=${summary.tsb_current.toFixed(0)} (${summary.tsb_current > 5 ? 'fresh' : summary.tsb_current < -15 ? 'fatigued' : 'balanced'})
+`;
+
+  if (wellness?.available) {
+    context += `
+**Today's Recovery Status:**
+- Recovery: ${wellness.recoveryStatus}${w.recovery != null ? ` (${w.recovery}%)` : ''}
+- Sleep: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'})
+- HRV: ${w.hrv || 'N/A'} ms (avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms)
+- Resting HR: ${w.restingHR || 'N/A'} bpm
+`;
+  }
+
+  if (powerProfile?.available) {
+    context += `
+**Power Profile:**
+- eFTP: ${powerProfile.currentEftp || powerProfile.eFTP || 'N/A'}W
+- Strengths: ${powerProfile.strengths?.join(', ') || 'N/A'}
+- Areas to develop: ${powerProfile.weaknesses?.join(', ') || 'N/A'}
+`;
+  }
+
+  context += `
+**Today's Workout:**
+- Type: ${workout.type}
+- Why chosen: ${workout.recommendationReason || 'Based on training phase and recovery'}
+
+**Instructions:**
+Write a short, personalized coaching note (3-5 sentences) in ${langName} that:
+1. Acknowledges how they're feeling today (based on recovery/sleep data)
+2. Connects today's workout to their bigger goal and current phase
+3. Gives one specific thing to focus on during the workout
+4. Ends with brief encouragement
+
+Be warm but professional. Use "you" to address the athlete directly. Don't repeat data they'll see elsewhere in the email. Be concise and motivating.`;
+
+  return callGeminiAPIText(context);
+}
+
+// =========================================================
+// 13b. HELPER: Send Email (Dynamic Language)
 // =========================================================
 function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfile) {
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
@@ -2814,6 +2886,17 @@ function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfi
   const subject = t.subject_prefix + recoveryTag + workout.type + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
   let body = `${t.greeting}\n\n`;
+
+  // Generate personalized coaching note
+  const coachNote = generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile);
+  if (coachNote) {
+    body += `===================================
+${t.coach_note_title || "Coach's Note"}
+===================================
+${coachNote}
+
+`;
+  }
 
   // Phase & Goal Info
   body += `
@@ -4660,6 +4743,54 @@ function testRestDayEmail() {
   Logger.log("\n--- Test Complete ---");
   Logger.log("To send an actual test email, uncomment the line below:");
   Logger.log("// sendRestDayEmail(wellness, phaseInfo);");
+}
+
+/**
+ * Test personalized coaching note generation
+ * Generates a sample coaching note based on current data
+ */
+function testCoachingNote() {
+  Logger.log("=== COACHING NOTE TEST ===");
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  // Create a mock workout object
+  const mockWorkout = {
+    type: "Tempo_SweetSpot",
+    recommendationReason: "Good recovery status and base phase focus on aerobic development"
+  };
+
+  Logger.log("--- Input Data ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Workout: " + mockWorkout.type);
+
+  Logger.log("\n--- Generated Coaching Note ---");
+  const note = generatePersonalizedCoachingNote(summary, phaseInfo, mockWorkout, wellness, powerProfile);
+
+  if (note) {
+    Logger.log(note);
+  } else {
+    Logger.log("(Failed to generate coaching note)");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
 }
 
 function createAthleteSummary(data) {
