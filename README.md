@@ -284,6 +284,7 @@ Click **Save** for each trigger.
 | `testWeeklySummary()` | Weekly activity aggregation |
 | `testTrainingLoadAdvisor()` | Training load recommendations |
 | `testMonthlyProgress()` | 8-week progress trends (CTL, eFTP, volume) |
+| `testApiUtilities()` | API connectivity, auth, and historical eFTP |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
