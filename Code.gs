@@ -2960,6 +2960,7 @@ function deleteIntervalEvent(event) {
 
 /**
  * Generate AI-powered rest day advice based on wellness data
+ * Uses callGeminiAPIText for consistent API handling
  * @param {object} wellness - Wellness summary
  * @returns {string} AI-generated rest day advice
  */
@@ -2992,33 +2993,8 @@ Write a brief, encouraging rest day message in ${langName}. Include:
 
 Keep the tone supportive, not preachy. Be concise (max 150 words total).`;
 
-  const payload = {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 500
-    }
-  };
-
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + AI_SETTINGS.GEMINI_MODEL + ":generateContent?key=" + API_KEYS.GEMINI_API_KEY;
-
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const jsonResponse = JSON.parse(response.getContentText());
-      return jsonResponse.candidates?.[0]?.content?.parts?.[0]?.text || null;
-    }
-  } catch (e) {
-    Logger.log("Error generating rest day advice: " + e.toString());
-  }
-
-  return null;
+  // Use existing callGeminiAPIText function for consistent API handling
+  return callGeminiAPIText(prompt);
 }
 
 /**
