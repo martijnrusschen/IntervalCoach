@@ -91,6 +91,168 @@ const TRAINING_CONSTANTS = {
 };
 
 // =========================================================
+// WORKOUT TYPE CATALOG
+// =========================================================
+// Comprehensive workout types with metadata for smart selection
+// intensity: 1=recovery, 2=easy, 3=moderate, 4=hard, 5=very hard
+// phases: which training phases this workout is suitable for
+// tsbRange: recommended TSB range [min, max] for this workout
+
+const WORKOUT_TYPES = {
+  // ===== CYCLING WORKOUTS =====
+  ride: {
+    // Recovery & Easy
+    Recovery_Easy: {
+      intensity: 1,
+      zones: "Z1",
+      description: "Very easy spinning, active recovery",
+      phases: ["Base", "Build", "Specialty", "Taper", "Race Week"],
+      tsbRange: [-50, 50],  // Always appropriate
+      minRecovery: 0        // No minimum recovery needed
+    },
+    Endurance_Z2: {
+      intensity: 2,
+      zones: "Z2",
+      description: "Steady aerobic endurance, fat burning",
+      phases: ["Base", "Build", "Specialty", "Taper"],
+      tsbRange: [-30, 50],
+      minRecovery: 20
+    },
+    Endurance_Tempo: {
+      intensity: 3,
+      zones: "Z2-Z3",
+      description: "Endurance with tempo blocks",
+      phases: ["Base", "Build"],
+      tsbRange: [-20, 40],
+      minRecovery: 34
+    },
+    // Moderate intensity
+    SweetSpot: {
+      intensity: 3,
+      zones: "88-94% FTP",
+      description: "Efficient threshold development",
+      phases: ["Base", "Build"],
+      tsbRange: [-15, 30],
+      minRecovery: 40
+    },
+    Tempo_Sustained: {
+      intensity: 3,
+      zones: "Z3",
+      description: "Sustained tempo effort",
+      phases: ["Base", "Build"],
+      tsbRange: [-15, 30],
+      minRecovery: 40
+    },
+    // Hard intensity
+    FTP_Threshold: {
+      intensity: 4,
+      zones: "Z4 (95-105% FTP)",
+      description: "Threshold intervals, FTP development",
+      phases: ["Build", "Specialty"],
+      tsbRange: [-10, 25],
+      minRecovery: 50
+    },
+    Over_Unders: {
+      intensity: 4,
+      zones: "Z4 +/- 5%",
+      description: "Threshold tolerance, lactate clearing",
+      phases: ["Build", "Specialty"],
+      tsbRange: [-10, 25],
+      minRecovery: 50
+    },
+    // Very hard intensity
+    VO2max_Intervals: {
+      intensity: 5,
+      zones: "Z5 (105-120% FTP)",
+      description: "3-5 min hard intervals, VO2max development",
+      phases: ["Specialty", "Build"],
+      tsbRange: [0, 20],
+      minRecovery: 60
+    },
+    Anaerobic_Sprints: {
+      intensity: 5,
+      zones: "Z6-Z7",
+      description: "Short max efforts, neuromuscular power",
+      phases: ["Specialty", "Race Week"],
+      tsbRange: [5, 30],
+      minRecovery: 60
+    }
+  },
+
+  // ===== RUNNING WORKOUTS =====
+  run: {
+    // Recovery & Easy
+    Run_Recovery: {
+      intensity: 1,
+      zones: "Z1",
+      description: "Very easy jog, regeneration",
+      phases: ["Base", "Build", "Specialty", "Taper", "Race Week"],
+      tsbRange: [-50, 50],
+      minRecovery: 0
+    },
+    Run_Easy: {
+      intensity: 2,
+      zones: "Z1-Z2",
+      description: "Easy run, conversational pace",
+      phases: ["Base", "Build", "Specialty", "Taper"],
+      tsbRange: [-30, 50],
+      minRecovery: 20
+    },
+    Run_Long: {
+      intensity: 2,
+      zones: "Z2",
+      description: "Extended easy run, aerobic endurance",
+      phases: ["Base", "Build"],
+      tsbRange: [-20, 40],
+      minRecovery: 34
+    },
+    // Moderate intensity
+    Run_Tempo: {
+      intensity: 3,
+      zones: "Z3",
+      description: "Sustained tempo effort",
+      phases: ["Base", "Build", "Specialty"],
+      tsbRange: [-15, 30],
+      minRecovery: 40
+    },
+    Run_Fartlek: {
+      intensity: 3,
+      zones: "Mixed",
+      description: "Playful speed variations",
+      phases: ["Base", "Build", "Specialty"],
+      tsbRange: [-15, 30],
+      minRecovery: 40
+    },
+    // Hard intensity
+    Run_Threshold: {
+      intensity: 4,
+      zones: "Z4",
+      description: "Lactate threshold pace intervals",
+      phases: ["Build", "Specialty"],
+      tsbRange: [-10, 25],
+      minRecovery: 50
+    },
+    // Very hard intensity
+    Run_Intervals: {
+      intensity: 5,
+      zones: "Z5",
+      description: "VO2max repeats, 400m-1km efforts",
+      phases: ["Specialty", "Build"],
+      tsbRange: [0, 20],
+      minRecovery: 60
+    },
+    Run_Strides: {
+      intensity: 4,
+      zones: "Z5 (short)",
+      description: "Short accelerations after easy run",
+      phases: ["Base", "Build", "Specialty", "Taper"],
+      tsbRange: [-20, 40],
+      minRecovery: 34
+    }
+  }
+};
+
+// =========================================================
 // CONFIGURATION VALIDATION
 // =========================================================
 
@@ -417,7 +579,10 @@ const TRANSLATIONS = {
     rest_day_walk: "Easy walk (20-30 min) - Zone 1 only, no elevation",
     rest_day_strength: "Light strength/mobility (15-20 min) - Core work, stretching, foam rolling",
     rest_day_note: "Listen to your body. Sometimes the best training is no training.",
-    rest_day_footer: "Your scheduled workout has been removed. Rest up!"
+    rest_day_footer: "Your scheduled workout has been removed. Rest up!",
+    // Training proposal (weekly)
+    training_proposal_title: "Suggested Training Plan",
+    training_proposal_no_placeholders: "No workouts scheduled yet. Add placeholders to your Intervals.icu calendar."
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -489,7 +654,10 @@ const TRANSLATIONS = {
     rest_day_walk: "ゆっくり散歩（20-30分） - ゾーン1のみ、平坦なコース",
     rest_day_strength: "軽いストレングス/モビリティ（15-20分） - 体幹、ストレッチ、フォームローリング",
     rest_day_note: "体の声を聞いてください。最高のトレーニングは休息であることもあります。",
-    rest_day_footer: "予定されていたワークアウトは削除されました。ゆっくり休んでください！"
+    rest_day_footer: "予定されていたワークアウトは削除されました。ゆっくり休んでください！",
+    // Training proposal (weekly)
+    training_proposal_title: "提案トレーニングプラン",
+    training_proposal_no_placeholders: "予定されたワークアウトがありません。カレンダーにプレースホルダーを追加してください。"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -561,7 +729,10 @@ const TRANSLATIONS = {
     rest_day_walk: "Caminata fácil (20-30 min) - Solo Zona 1, sin desnivel",
     rest_day_strength: "Fuerza/movilidad ligera (15-20 min) - Core, estiramientos, foam roller",
     rest_day_note: "Escucha a tu cuerpo. A veces el mejor entrenamiento es no entrenar.",
-    rest_day_footer: "Tu entrenamiento programado ha sido eliminado. ¡Descansa!"
+    rest_day_footer: "Tu entrenamiento programado ha sido eliminado. ¡Descansa!",
+    // Training proposal (weekly)
+    training_proposal_title: "Plan de Entrenamiento Sugerido",
+    training_proposal_no_placeholders: "No hay entrenamientos programados. Añade marcadores a tu calendario de Intervals.icu."
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -639,7 +810,10 @@ const TRANSLATIONS = {
     rest_day_walk: "Marche facile (20-30 min) - Zone 1 uniquement, pas de dénivelé",
     rest_day_strength: "Renforcement/mobilité léger (15-20 min) - Gainage, étirements, rouleau",
     rest_day_note: "Écoutez votre corps. Parfois le meilleur entraînement est de ne pas s'entraîner.",
-    rest_day_footer: "Votre entraînement prévu a été supprimé. Reposez-vous!"
+    rest_day_footer: "Votre entraînement prévu a été supprimé. Reposez-vous!",
+    // Training proposal (weekly)
+    training_proposal_title: "Plan d'Entraînement Suggéré",
+    training_proposal_no_placeholders: "Aucun entraînement prévu. Ajoutez des marqueurs à votre calendrier Intervals.icu."
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -718,7 +892,10 @@ const TRANSLATIONS = {
     rest_day_walk: "Rustige wandeling (20-30 min) - Alleen zone 1, vlak terrein",
     rest_day_strength: "Lichte kracht/mobiliteit (15-20 min) - Core, stretching, foam rollen",
     rest_day_note: "Luister naar je lichaam. Soms is de beste training geen training.",
-    rest_day_footer: "Je geplande workout is verwijderd. Rust lekker uit!"
+    rest_day_footer: "Je geplande workout is verwijderd. Rust lekker uit!",
+    // Training proposal (weekly)
+    training_proposal_title: "Voorgesteld Trainingsplan",
+    training_proposal_no_placeholders: "Geen workouts gepland. Voeg placeholders toe aan je Intervals.icu kalender."
   }
 };
 
@@ -1007,6 +1184,136 @@ function checkAvailability(wellness) {
   };
 }
 
+/**
+ * Fetch upcoming workout placeholders for the next N days
+ * Returns array of { date: string, activityType: string, duration: {min, max}, hasEvent: boolean, eventCategory: string }
+ */
+function fetchUpcomingPlaceholders(days = 7) {
+  const upcoming = [];
+  const ridePlaceholder = USER_SETTINGS.PLACEHOLDER_RIDE.toLowerCase();
+  const runPlaceholder = USER_SETTINGS.PLACEHOLDER_RUN.toLowerCase();
+
+  for (let i = 0; i < days; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() + i);
+    const dateStr = formatDateISO(date);
+    const dayName = Utilities.formatDate(date, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+
+    const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
+    const result = fetchIcuApi(endpoint);
+
+    let placeholder = null;
+    let eventCategory = null;
+
+    if (result.success && Array.isArray(result.data)) {
+      // Check for race events
+      for (const e of result.data) {
+        if (e.category === "RACE_A" || e.category === "RACE_B" || e.category === "RACE_C") {
+          eventCategory = e.category.replace("RACE_", "");
+          break;
+        }
+      }
+
+      // Check for workout placeholders
+      placeholder = result.data.find(function(e) {
+        if (!e.name) return false;
+        const nameLower = e.name.toLowerCase();
+        return nameLower.startsWith(ridePlaceholder) ||
+               nameLower.startsWith(runPlaceholder) ||
+               nameLower.startsWith("hardlopen");
+      });
+    }
+
+    if (placeholder || eventCategory) {
+      let activityType = null;
+      let duration = null;
+
+      if (placeholder) {
+        const nameLower = placeholder.name.toLowerCase();
+        const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
+        activityType = isRun ? "Run" : "Ride";
+        duration = parseDurationFromName(placeholder.name, activityType);
+      }
+
+      upcoming.push({
+        date: dateStr,
+        dayName: dayName,
+        activityType: activityType,
+        duration: duration,
+        hasEvent: eventCategory !== null,
+        eventCategory: eventCategory,
+        placeholderName: placeholder ? placeholder.name : null
+      });
+    }
+  }
+
+  return upcoming;
+}
+
+/**
+ * Generate AI-powered training proposal for upcoming week
+ * @param {object} params - Context for generating proposal
+ * @returns {string} Training proposal text
+ */
+function generateWeeklyTrainingProposal(params) {
+  const { upcoming, phaseInfo, fitnessMetrics, goals, wellness, loadAdvice } = params;
+  const lang = USER_SETTINGS.LANGUAGE || "en";
+
+  if (!upcoming || upcoming.length === 0) {
+    return null;
+  }
+
+  // Format upcoming days
+  const upcomingText = upcoming.map(function(day) {
+    let desc = day.dayName + " (" + day.date + "): ";
+    if (day.hasEvent) {
+      desc += day.eventCategory + " Event";
+      if (day.activityType) {
+        desc += " + " + day.activityType + " placeholder";
+      }
+    } else if (day.activityType) {
+      desc += day.activityType + " (" + day.duration.min + "-" + day.duration.max + " min)";
+    }
+    return desc;
+  }).join("\n");
+
+  const prompt = `You are an expert cycling and running coach. Generate a training proposal for the upcoming week.
+
+ATHLETE CONTEXT:
+- Training Phase: ${phaseInfo.phaseName} (${phaseInfo.weeksOut} weeks to goal)
+- Goal: ${phaseInfo.goalDescription || goals?.primaryGoal?.name || "General fitness"}
+- Current CTL: ${fitnessMetrics.ctl?.toFixed(0) || "N/A"}
+- Current TSB: ${fitnessMetrics.tsb?.toFixed(0) || "N/A"}
+- Recovery Status: ${wellness?.recoveryStatus || "Unknown"}
+- Weekly TSS Target: ${loadAdvice?.tssRange?.min || 300}-${loadAdvice?.tssRange?.max || 500}
+
+UPCOMING SCHEDULED DAYS:
+${upcomingText}
+
+WORKOUT TYPE OPTIONS:
+Cycling: Recovery_Easy, Endurance_Z2, Endurance_Tempo, SweetSpot, Tempo_Sustained, FTP_Threshold, Over_Unders, VO2max_Intervals, Anaerobic_Sprints
+Running: Run_Recovery, Run_Easy, Run_Long, Run_Tempo, Run_Fartlek, Run_Threshold, Run_Intervals, Run_Strides
+
+INSTRUCTIONS:
+1. For each scheduled day, suggest a specific workout type and brief focus
+2. Consider hard-easy alternation (don't schedule back-to-back hard days)
+3. If there's an event, suggest appropriate pre/post-event training
+4. Keep suggestions practical and aligned with current fitness/phase
+5. Use ${lang === "nl" ? "Dutch" : lang === "ja" ? "Japanese" : lang === "es" ? "Spanish" : lang === "fr" ? "French" : "English"} language
+6. Be concise - max 2-3 sentences per day
+7. Format each day on its own line with the day name
+
+Generate a personalized training proposal:`;
+
+  try {
+    const proposal = callGeminiAPIText(prompt);
+    return proposal;
+  } catch (e) {
+    Logger.log("Error generating training proposal: " + e.toString());
+    return null;
+  }
+}
+
 // =========================================================
 // 8. VARIETY & REST DAY INTELLIGENCE
 // =========================================================
@@ -1122,92 +1429,287 @@ function getRecentWorkoutTypes(daysBack = 7) {
 }
 
 /**
- * Determine which workout types to generate based on variety and recovery
- * @param {object} wellness - Wellness summary
- * @param {object} recentTypes - { rides: [], runs: [], all: [] }
- * @param {string} activityType - "Ride" or "Run"
- * @returns {object} { types: [], isRestDay: boolean, reason: string }
+ * Smart workout type selection based on multiple factors
+ * @param {object} params - Selection parameters
+ * @param {object} params.wellness - Wellness summary
+ * @param {object} params.recentWorkouts - Recent workout data { types: [], lastIntensity: number }
+ * @param {string} params.activityType - "Ride" or "Run"
+ * @param {object} params.phaseInfo - Training phase info { phaseName, weeksOut }
+ * @param {number} params.tsb - Current TSB (Training Stress Balance)
+ * @param {boolean} params.eventTomorrow - Is there an A/B/C event tomorrow?
+ * @returns {object} { types: [], reason: string, maxIntensity: number }
  */
-function selectWorkoutTypes(wellness, recentTypes, activityType) {
-  // Base workout types based on activity
-  const rideTypes = ["FTP_Threshold", "VO2max_HighIntensity", "Endurance_Tempo"];
-  const runTypes = ["Run_Tempo", "Run_Intervals", "Run_Easy"];
-  const allTypes = activityType === "Run" ? runTypes : rideTypes;
+function selectWorkoutTypes(params) {
+  // Support both old and new calling conventions
+  let wellness, recentWorkouts, activityType, phaseInfo, tsb, eventTomorrow, eventYesterday;
 
-  // Check for rest day (Red recovery)
-  if (wellness?.available) {
-    if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
-      // Red recovery - rest day or easy only
-      const easyTypes = activityType === "Run"
-        ? ["Run_Recovery", "Run_Easy"]
-        : ["Recovery_Easy", "Endurance_Tempo"];
-      return {
-        types: easyTypes,
-        isRestDay: true,
-        reason: "Low recovery (" + wellness.today.recovery + "%) - recommending easy/recovery workouts only"
-      };
-    }
+  if (arguments.length === 3) {
+    // Old format: selectWorkoutTypes(wellness, recentTypes, activityType)
+    wellness = arguments[0];
+    recentWorkouts = { types: arguments[1], lastIntensity: 0 };
+    activityType = arguments[2];
+    phaseInfo = { phaseName: "Build" };
+    tsb = 0;
+    eventTomorrow = { hasEvent: false, category: null };
+    eventYesterday = { hadEvent: false, category: null };
+  } else {
+    wellness = params.wellness;
+    recentWorkouts = params.recentWorkouts || { types: {}, lastIntensity: 0 };
+    activityType = params.activityType;
+    phaseInfo = params.phaseInfo || { phaseName: "Build" };
+    tsb = params.tsb || 0;
+    // Support both boolean (legacy) and object format for eventTomorrow
+    eventTomorrow = typeof params.eventTomorrow === 'object'
+      ? params.eventTomorrow
+      : { hasEvent: !!params.eventTomorrow, category: null };
+    eventYesterday = params.eventYesterday || { hadEvent: false, category: null };
+  }
 
-    if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.YELLOW_THRESHOLD) {
-      // Yellow-ish - avoid high intensity
-      const moderateTypes = activityType === "Run"
-        ? ["Run_Tempo", "Run_Easy"]
-        : ["FTP_Threshold", "Endurance_Tempo"];
-      return {
-        types: moderateTypes,
-        isRestDay: false,
-        reason: "Moderate recovery (" + wellness.today.recovery + "%) - skipping high intensity"
-      };
+  const isRun = activityType === "Run";
+  const catalog = isRun ? WORKOUT_TYPES.run : WORKOUT_TYPES.ride;
+  const phaseName = phaseInfo.phaseName || "Build";
+
+  // Get recovery score (default to 70 if not available)
+  const recoveryScore = wellness?.today?.recovery ?? 70;
+
+  // Determine reasons for selection
+  const reasons = [];
+
+  // ===== DETERMINE MAX INTENSITY ALLOWED =====
+  let maxIntensity = 5; // Start with all intensities allowed
+
+  // 1. Event tomorrow = recovery only (stricter for A/B, moderate for C)
+  if (eventTomorrow.hasEvent) {
+    if (eventTomorrow.category === "A" || eventTomorrow.category === "B") {
+      maxIntensity = 2;
+      reasons.push(eventTomorrow.category + " event tomorrow - recovery/easy only");
+    } else {
+      maxIntensity = 3;
+      reasons.push("C event tomorrow - moderate/easy workout");
     }
   }
 
-  // Type mappings for variety check
-  const typeMapping = {
-    "FTPThreshold": "FTP_Threshold",
-    "VO2maxHighIntensity": "VO2max_HighIntensity",
-    "EnduranceTempo": "Endurance_Tempo",
-    "RecoveryEasy": "Recovery_Easy",
-    "Run_Intervals": "Run_Intervals",
-    "Run_Tempo": "Run_Tempo",
-    "Run_Easy": "Run_Easy",
-    "Run_Recovery": "Run_Recovery"
-  };
+  // 2. Event yesterday = recovery (A/B = easy, C = moderate)
+  if (eventYesterday.hadEvent) {
+    if (eventYesterday.category === "A" || eventYesterday.category === "B") {
+      maxIntensity = Math.min(maxIntensity, 2);
+      reasons.push(eventYesterday.category + " event yesterday - recovery day");
+    } else {
+      maxIntensity = Math.min(maxIntensity, 3);
+      reasons.push("C event yesterday - easier workout");
+    }
+  }
 
-  // Get relevant recent types based on activity
-  const relevantRecent = activityType === "Run" ? recentTypes.runs : recentTypes.rides;
+  // 3. Very negative TSB = easy workouts
+  if (tsb < -20) {
+    maxIntensity = Math.min(maxIntensity, 2);
+    reasons.push("High fatigue (TSB=" + tsb.toFixed(0) + ") - easy workouts");
+  } else if (tsb < -10) {
+    maxIntensity = Math.min(maxIntensity, 3);
+    reasons.push("Moderate fatigue (TSB=" + tsb.toFixed(0) + ") - limit intensity");
+  }
 
-  // Count recent occurrences
+  // 4. Day after hard workout = easier day
+  if (recentWorkouts.lastIntensity >= 4) {
+    maxIntensity = Math.min(maxIntensity, 3);
+    reasons.push("Recovery from yesterday's hard effort");
+  }
+
+  // 5. Yellow recovery = moderate only
+  if (wellness?.available && recoveryScore < TRAINING_CONSTANTS.RECOVERY.YELLOW_THRESHOLD) {
+    maxIntensity = Math.min(maxIntensity, 3);
+    reasons.push("Yellow recovery (" + recoveryScore + "%) - moderate intensity");
+  }
+
+  // ===== FILTER WORKOUT TYPES =====
+  const suitableTypes = [];
+
+  Object.keys(catalog).forEach(function(typeName) {
+    const type = catalog[typeName];
+
+    // Check intensity
+    if (type.intensity > maxIntensity) return;
+
+    // Check phase suitability
+    if (!type.phases.includes(phaseName) && !type.phases.includes("Base")) return;
+
+    // Check TSB range
+    if (tsb < type.tsbRange[0] || tsb > type.tsbRange[1]) return;
+
+    // Check minimum recovery
+    if (recoveryScore < type.minRecovery) return;
+
+    suitableTypes.push({
+      name: typeName,
+      intensity: type.intensity,
+      description: type.description
+    });
+  });
+
+  // ===== VARIETY CHECK =====
+  const recentTypeList = isRun
+    ? (recentWorkouts.types?.runs || [])
+    : (recentWorkouts.types?.rides || []);
+
+  // Count recent types
   const typeCounts = {};
-  relevantRecent.forEach(function(t) {
-    const mapped = typeMapping[t] || t;
-    typeCounts[mapped] = (typeCounts[mapped] || 0) + 1;
+  recentTypeList.forEach(function(t) {
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
   });
 
-  // If a type was done 2+ times in last 7 days, consider avoiding
-  const typesToAvoid = [];
-  let filteredTypes = allTypes.filter(function(type) {
-    const count = typeCounts[type] || 0;
-    if (count >= 2) {
-      typesToAvoid.push(type);
-      return false;
+  // Prefer types not done recently, but keep all as options
+  suitableTypes.sort(function(a, b) {
+    const countA = typeCounts[a.name] || 0;
+    const countB = typeCounts[b.name] || 0;
+    // Prefer less frequent types, then sort by intensity (moderate first for variety)
+    if (countA !== countB) return countA - countB;
+    // Prefer moderate intensity (3) over extremes
+    const distA = Math.abs(a.intensity - 3);
+    const distB = Math.abs(b.intensity - 3);
+    return distA - distB;
+  });
+
+  // ===== ENSURE VARIETY: Add easy options if only hard types selected =====
+  const hasEasyOption = suitableTypes.some(t => t.intensity <= 2);
+  if (!hasEasyOption && maxIntensity >= 2) {
+    // Add an easy workout option
+    const easyType = isRun ? "Run_Easy" : "Endurance_Z2";
+    if (catalog[easyType]) {
+      suitableTypes.push({
+        name: easyType,
+        intensity: 2,
+        description: catalog[easyType].description
+      });
     }
-    return true;
-  });
-
-  // Always keep at least 2 types
-  if (filteredTypes.length < 2) {
-    filteredTypes = allTypes;
   }
 
-  const varietyNote = typesToAvoid.length > 0
-    ? "Varying from recent: " + typesToAvoid.join(", ")
-    : "Good variety in recent workouts";
+  // ===== BUILD RESULT =====
+  if (suitableTypes.length === 0) {
+    // Fallback to easy workouts
+    const fallback = isRun ? ["Run_Easy", "Run_Recovery"] : ["Endurance_Z2", "Recovery_Easy"];
+    return {
+      types: fallback,
+      reason: "No suitable workouts for current conditions - defaulting to easy",
+      maxIntensity: 2
+    };
+  }
+
+  const selectedTypes = suitableTypes.map(t => t.name);
+
+  // Add phase-specific reason if no other reasons
+  if (reasons.length === 0) {
+    reasons.push(phaseName + " phase - balanced selection");
+  }
 
   return {
-    types: filteredTypes,
-    isRestDay: false,
-    reason: varietyNote
+    types: selectedTypes,
+    reason: reasons.join("; "),
+    maxIntensity: maxIntensity,
+    isRestDay: false
   };
+}
+
+/**
+ * Check if there's an A, B, or C priority event tomorrow
+ * All events warrant easier training the day before
+ * @returns {object} { hasEvent: boolean, category: string|null }
+ */
+function hasEventTomorrow() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = formatDateISO(tomorrow);
+
+  const endpoint = "/athlete/0/events?oldest=" + tomorrowStr + "&newest=" + tomorrowStr;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { hasEvent: false, category: null };
+  }
+
+  // Check for A, B, or C priority events
+  for (const e of result.data) {
+    if (e.category === "RACE_A") {
+      return { hasEvent: true, category: "A" };
+    }
+    if (e.category === "RACE_B") {
+      return { hasEvent: true, category: "B" };
+    }
+    if (e.category === "RACE_C") {
+      return { hasEvent: true, category: "C" };
+    }
+  }
+
+  return { hasEvent: false, category: null };
+}
+
+/**
+ * Check if there was an A, B, or C priority event yesterday
+ * Post-event recovery is also important
+ * @returns {object} { hadEvent: boolean, category: string|null }
+ */
+function hasEventYesterday() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = formatDateISO(yesterday);
+
+  const endpoint = "/athlete/0/events?oldest=" + yesterdayStr + "&newest=" + yesterdayStr;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { hadEvent: false, category: null };
+  }
+
+  // Check for A, B, or C priority events
+  for (const e of result.data) {
+    if (e.category === "RACE_A") {
+      return { hadEvent: true, category: "A" };
+    }
+    if (e.category === "RACE_B") {
+      return { hadEvent: true, category: "B" };
+    }
+    if (e.category === "RACE_C") {
+      return { hadEvent: true, category: "C" };
+    }
+  }
+
+  return { hadEvent: false, category: null };
+}
+
+/**
+ * Get yesterday's workout intensity (1-5 scale)
+ * @param {object} recentTypes - Recent workout types data
+ * @returns {number} Intensity of yesterday's workout (0 if none)
+ */
+function getYesterdayIntensity(recentTypes) {
+  // Check the most recent workout
+  const allRecent = recentTypes.all || [];
+  if (allRecent.length === 0) return 0;
+
+  const lastType = allRecent[0];
+  const catalog = { ...WORKOUT_TYPES.ride, ...WORKOUT_TYPES.run };
+
+  if (catalog[lastType]) {
+    return catalog[lastType].intensity;
+  }
+
+  // Estimate from type name
+  if (lastType.includes("VO2") || lastType.includes("Interval") || lastType.includes("Sprint")) {
+    return 5;
+  }
+  if (lastType.includes("Threshold") || lastType.includes("FTP")) {
+    return 4;
+  }
+  if (lastType.includes("Tempo") || lastType.includes("SweetSpot")) {
+    return 3;
+  }
+  if (lastType.includes("Easy") || lastType.includes("Z2")) {
+    return 2;
+  }
+  if (lastType.includes("Recovery")) {
+    return 1;
+  }
+
+  return 3; // Default to moderate
 }
 
 // =========================================================
@@ -2243,6 +2745,16 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
   Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
 
+  // Check for events around today (affects workout intensity selection)
+  const eventTomorrow = hasEventTomorrow();
+  const eventYesterday = hasEventYesterday();
+  if (eventTomorrow.hasEvent) {
+    Logger.log("Event tomorrow: " + eventTomorrow.category + " priority");
+  }
+  if (eventYesterday.hadEvent) {
+    Logger.log("Event yesterday: " + eventYesterday.category + " priority");
+  }
+
   // Get adaptive training context (RPE/Feel feedback + training gap analysis)
   const adaptiveContext = getAdaptiveTrainingContext(wellness);
   if (adaptiveContext.available) {
@@ -2262,8 +2774,19 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Adaptive Training: " + (adaptiveContext.gap.daysSinceLastWorkout || 0) + " days since last workout, no feedback data");
   }
 
-  // Select workout types based on recovery and variety
-  const typeSelection = selectWorkoutTypes(wellness, recentTypes, activityType);
+  // Select workout types based on phase, TSB, recovery, events, and variety
+  const typeSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: {
+      types: recentTypes,
+      lastIntensity: getYesterdayIntensity(recentTypes)
+    },
+    activityType: activityType,
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: eventTomorrow,
+    eventYesterday: eventYesterday
+  });
   Logger.log("Type selection: " + typeSelection.reason);
 
   if (typeSelection.isRestDay) {
@@ -3295,6 +3818,35 @@ ${t.phase_title}: ${phaseInfo.phaseName}
 ${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
 ${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
 ${t.focus}: ${phaseInfo.focus}
+`;
+  }
+
+  // Training Proposal for upcoming week
+  const upcoming = fetchUpcomingPlaceholders(7);
+  if (upcoming.length > 0) {
+    const trainingProposal = generateWeeklyTrainingProposal({
+      upcoming: upcoming,
+      phaseInfo: phaseInfo,
+      fitnessMetrics: fitnessMetrics,
+      goals: goals,
+      wellness: wellnessSummary,
+      loadAdvice: loadAdvice
+    });
+
+    if (trainingProposal) {
+      body += `
+-----------------------------------
+${t.training_proposal_title}
+-----------------------------------
+${trainingProposal}
+`;
+    }
+  } else {
+    body += `
+-----------------------------------
+${t.training_proposal_title}
+-----------------------------------
+${t.training_proposal_no_placeholders}
 `;
   }
 
@@ -4788,6 +5340,185 @@ function testCoachingNote() {
     Logger.log(note);
   } else {
     Logger.log("(Failed to generate coaching note)");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test function to verify workout type selection logic
+ * Tests various scenarios: phase, TSB, recovery, events
+ */
+function testWorkoutSelection() {
+  Logger.log("=== WORKOUT SELECTION TEST ===\n");
+
+  // Fetch real data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const recentTypes = getRecentWorkoutTypes(7);
+  const eventTomorrow = hasEventTomorrow();
+  const eventYesterday = hasEventYesterday();
+
+  Logger.log("--- Current Context ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Recovery: " + wellness.recoveryStatus + (wellness.today?.recovery ? " (" + wellness.today.recovery + "%)" : ""));
+  Logger.log("Event Tomorrow: " + (eventTomorrow.hasEvent ? eventTomorrow.category : "None"));
+  Logger.log("Event Yesterday: " + (eventYesterday.hadEvent ? eventYesterday.category : "None"));
+  Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
+  Logger.log("Recent runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
+
+  // Test with real data - Ride
+  Logger.log("\n--- Ride Selection (Real Data) ---");
+  const rideSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: getYesterdayIntensity(recentTypes) },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: eventTomorrow,
+    eventYesterday: eventYesterday
+  });
+  Logger.log("Max intensity: " + rideSelection.maxIntensity);
+  Logger.log("Reason: " + rideSelection.reason);
+  Logger.log("Recommended types: " + rideSelection.types.slice(0, 5).join(", "));
+
+  // Test with real data - Run
+  Logger.log("\n--- Run Selection (Real Data) ---");
+  const runSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: getYesterdayIntensity(recentTypes) },
+    activityType: "Run",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: eventTomorrow,
+    eventYesterday: eventYesterday
+  });
+  Logger.log("Max intensity: " + runSelection.maxIntensity);
+  Logger.log("Reason: " + runSelection.reason);
+  Logger.log("Recommended types: " + runSelection.types.slice(0, 5).join(", "));
+
+  // Test scenario: A event tomorrow
+  Logger.log("\n--- Scenario: A Event Tomorrow ---");
+  const aEventSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: 3 },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: 0,
+    eventTomorrow: { hasEvent: true, category: "A" },
+    eventYesterday: { hadEvent: false, category: null }
+  });
+  Logger.log("Max intensity: " + aEventSelection.maxIntensity);
+  Logger.log("Reason: " + aEventSelection.reason);
+  Logger.log("Recommended types: " + aEventSelection.types.slice(0, 3).join(", "));
+
+  // Test scenario: C event yesterday
+  Logger.log("\n--- Scenario: C Event Yesterday ---");
+  const postCEventSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: 4 },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: -15,
+    eventTomorrow: { hasEvent: false, category: null },
+    eventYesterday: { hadEvent: true, category: "C" }
+  });
+  Logger.log("Max intensity: " + postCEventSelection.maxIntensity);
+  Logger.log("Reason: " + postCEventSelection.reason);
+  Logger.log("Recommended types: " + postCEventSelection.types.slice(0, 3).join(", "));
+
+  // Test scenario: Very fatigued (TSB -25)
+  Logger.log("\n--- Scenario: Very Fatigued (TSB -25) ---");
+  const fatiguedSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: 3 },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: -25,
+    eventTomorrow: { hasEvent: false, category: null },
+    eventYesterday: { hadEvent: false, category: null }
+  });
+  Logger.log("Max intensity: " + fatiguedSelection.maxIntensity);
+  Logger.log("Reason: " + fatiguedSelection.reason);
+  Logger.log("Recommended types: " + fatiguedSelection.types.slice(0, 3).join(", "));
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test function to verify training proposal generation for weekly email
+ */
+function testTrainingProposal() {
+  Logger.log("=== TRAINING PROPOSAL TEST ===\n");
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const fitnessMetrics = fetchFitnessMetrics();
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+
+  Logger.log("--- Current Context ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Goal: " + (phaseInfo.goalDescription || "General fitness"));
+  Logger.log("CTL: " + fitnessMetrics.ctl.toFixed(0));
+  Logger.log("TSB: " + fitnessMetrics.tsb.toFixed(0));
+  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("Weekly TSS Target: " + loadAdvice.tssRange.min + "-" + loadAdvice.tssRange.max);
+
+  Logger.log("\n--- Upcoming Placeholders (7 days) ---");
+  const upcoming = fetchUpcomingPlaceholders(7);
+
+  if (upcoming.length === 0) {
+    Logger.log("No placeholders found for the next 7 days.");
+    Logger.log("Add 'Ride' or 'Run' placeholders to your Intervals.icu calendar to test.");
+    Logger.log("\n=== TEST COMPLETE ===");
+    return;
+  }
+
+  upcoming.forEach(function(day) {
+    let info = day.dayName + " (" + day.date + "): ";
+    if (day.hasEvent) {
+      info += day.eventCategory + " Event";
+      if (day.activityType) {
+        info += " + " + day.activityType;
+      }
+    } else if (day.activityType) {
+      info += day.activityType + " (" + day.duration.min + "-" + day.duration.max + " min)";
+    }
+    Logger.log("  " + info);
+  });
+
+  Logger.log("\n--- Generated Training Proposal ---");
+  const proposal = generateWeeklyTrainingProposal({
+    upcoming: upcoming,
+    phaseInfo: phaseInfo,
+    fitnessMetrics: fitnessMetrics,
+    goals: goals,
+    wellness: wellness,
+    loadAdvice: loadAdvice
+  });
+
+  if (proposal) {
+    Logger.log(proposal);
+  } else {
+    Logger.log("(Failed to generate training proposal)");
   }
 
   Logger.log("\n=== TEST COMPLETE ===");
