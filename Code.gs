@@ -406,7 +406,17 @@ const TRANSLATIONS = {
     monthly_total_activities: "Total Activities",
     monthly_consistency: "Consistency",
     monthly_weeks_trained: "Weeks Trained",
-    monthly_footer: "Keep building towards your goals!"
+    monthly_footer: "Keep building towards your goals!",
+    // Rest day (red recovery)
+    rest_day_subject: "[IntervalCoach] Rest Day - Recovery Priority",
+    rest_day_greeting: "Your body needs rest today. Recovery is just as important as training.",
+    rest_day_title: "REST DAY RECOMMENDED",
+    rest_day_reason: "Your recovery status indicates you need rest to avoid overtraining and allow adaptation.",
+    rest_day_alternatives: "Light Alternatives (if you must move)",
+    rest_day_walk: "Easy walk (20-30 min) - Zone 1 only, no elevation",
+    rest_day_strength: "Light strength/mobility (15-20 min) - Core work, stretching, foam rolling",
+    rest_day_note: "Listen to your body. Sometimes the best training is no training.",
+    rest_day_footer: "Your scheduled workout has been removed. Rest up!"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -467,7 +477,17 @@ const TRANSLATIONS = {
     monthly_total_activities: "総アクティビティ数",
     monthly_consistency: "継続性",
     monthly_weeks_trained: "トレーニング週数",
-    monthly_footer: "目標に向けて頑張りましょう！"
+    monthly_footer: "目標に向けて頑張りましょう！",
+    // Rest day (red recovery)
+    rest_day_subject: "[IntervalCoach] 休息日 - 回復優先",
+    rest_day_greeting: "今日は体を休める必要があります。回復もトレーニングと同じくらい重要です。",
+    rest_day_title: "休息日推奨",
+    rest_day_reason: "回復状態から、オーバートレーニングを避け、適応を促すために休息が必要です。",
+    rest_day_alternatives: "軽い代替案（動きたい場合）",
+    rest_day_walk: "ゆっくり散歩（20-30分） - ゾーン1のみ、平坦なコース",
+    rest_day_strength: "軽いストレングス/モビリティ（15-20分） - 体幹、ストレッチ、フォームローリング",
+    rest_day_note: "体の声を聞いてください。最高のトレーニングは休息であることもあります。",
+    rest_day_footer: "予定されていたワークアウトは削除されました。ゆっくり休んでください！"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -528,7 +548,17 @@ const TRANSLATIONS = {
     monthly_total_activities: "Total Actividades",
     monthly_consistency: "Consistencia",
     monthly_weeks_trained: "Semanas Entrenadas",
-    monthly_footer: "¡Sigue construyendo hacia tus metas!"
+    monthly_footer: "¡Sigue construyendo hacia tus metas!",
+    // Rest day (red recovery)
+    rest_day_subject: "[IntervalCoach] Día de Descanso - Prioridad Recuperación",
+    rest_day_greeting: "Tu cuerpo necesita descanso hoy. La recuperación es tan importante como el entrenamiento.",
+    rest_day_title: "DÍA DE DESCANSO RECOMENDADO",
+    rest_day_reason: "Tu estado de recuperación indica que necesitas descanso para evitar el sobreentrenamiento.",
+    rest_day_alternatives: "Alternativas Ligeras (si necesitas moverte)",
+    rest_day_walk: "Caminata fácil (20-30 min) - Solo Zona 1, sin desnivel",
+    rest_day_strength: "Fuerza/movilidad ligera (15-20 min) - Core, estiramientos, foam roller",
+    rest_day_note: "Escucha a tu cuerpo. A veces el mejor entrenamiento es no entrenar.",
+    rest_day_footer: "Tu entrenamiento programado ha sido eliminado. ¡Descansa!"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -595,7 +625,17 @@ const TRANSLATIONS = {
     monthly_total_activities: "Total Activités",
     monthly_consistency: "Régularité",
     monthly_weeks_trained: "Semaines Entraînées",
-    monthly_footer: "Continuez à progresser vers vos objectifs!"
+    monthly_footer: "Continuez à progresser vers vos objectifs!",
+    // Rest day (red recovery)
+    rest_day_subject: "[IntervalCoach] Jour de Repos - Priorité Récupération",
+    rest_day_greeting: "Votre corps a besoin de repos aujourd'hui. La récupération est aussi importante que l'entraînement.",
+    rest_day_title: "JOUR DE REPOS RECOMMANDÉ",
+    rest_day_reason: "Votre état de récupération indique que vous avez besoin de repos pour éviter le surentraînement.",
+    rest_day_alternatives: "Alternatives Légères (si vous devez bouger)",
+    rest_day_walk: "Marche facile (20-30 min) - Zone 1 uniquement, pas de dénivelé",
+    rest_day_strength: "Renforcement/mobilité léger (15-20 min) - Gainage, étirements, rouleau",
+    rest_day_note: "Écoutez votre corps. Parfois le meilleur entraînement est de ne pas s'entraîner.",
+    rest_day_footer: "Votre entraînement prévu a été supprimé. Reposez-vous!"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -663,7 +703,17 @@ const TRANSLATIONS = {
     monthly_total_activities: "Totaal Activiteiten",
     monthly_consistency: "Consistentie",
     monthly_weeks_trained: "Weken Getraind",
-    monthly_footer: "Blijf bouwen aan je doelen!"
+    monthly_footer: "Blijf bouwen aan je doelen!",
+    // Rest day (red recovery)
+    rest_day_subject: "[IntervalCoach] Rustdag - Herstel Prioriteit",
+    rest_day_greeting: "Je lichaam heeft vandaag rust nodig. Herstel is net zo belangrijk als trainen.",
+    rest_day_title: "RUSTDAG AANBEVOLEN",
+    rest_day_reason: "Je herstelstatus geeft aan dat rust nodig is om overtraining te voorkomen.",
+    rest_day_alternatives: "Lichte Alternatieven (als je toch wilt bewegen)",
+    rest_day_walk: "Rustige wandeling (20-30 min) - Alleen zone 1, vlak terrein",
+    rest_day_strength: "Lichte kracht/mobiliteit (15-20 min) - Core, stretching, foam rollen",
+    rest_day_note: "Luister naar je lichaam. Soms is de beste training geen training.",
+    rest_day_footer: "Je geplande workout is verwijderd. Rust lekker uit!"
   }
 };
 
@@ -2092,6 +2142,26 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const phaseInfo = calculateTrainingPhase(targetDate);
   phaseInfo.goalDescription = goalDescription; // Attach for use in prompts
 
+  // Check for red recovery - skip workout and send rest day email instead
+  if (isRestDayRecommended(wellness)) {
+    Logger.log("*** RED RECOVERY DETECTED - Rest day recommended ***");
+    Logger.log("Recovery Status: " + wellness.recoveryStatus);
+    if (wellness.today?.recovery != null) {
+      Logger.log("Recovery Score: " + wellness.today.recovery + "%");
+    }
+
+    // Delete the placeholder from Intervals.icu calendar
+    if (availability.placeholder) {
+      deleteIntervalEvent(availability.placeholder);
+    }
+
+    // Send rest day email with AI-generated advice
+    sendRestDayEmail(wellness, phaseInfo);
+
+    Logger.log("Workout generation skipped - rest day email sent");
+    return;
+  }
+
   // Fetch sport-specific data
   let powerProfile = { available: false };
   let runningData = { available: false };
@@ -2824,6 +2894,167 @@ ${workout.workoutDescription}
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach", attachments: [workout.blob] });
   Logger.log("Email sent successfully.");
+}
+
+// =========================================================
+// 11a-2. REST DAY EMAIL (Red Recovery)
+// =========================================================
+
+/**
+ * Check if recovery status indicates a rest day is needed
+ * @param {object} wellness - Wellness summary from createWellnessSummary
+ * @returns {boolean} true if rest day is recommended (red recovery)
+ */
+function isRestDayRecommended(wellness) {
+  if (!wellness?.available) return false;
+
+  // Check for red/strained recovery
+  const recovery = wellness.recoveryStatus || '';
+  if (recovery.includes('Red') || recovery.includes('Strained') || recovery.includes('Fatigued')) {
+    return true;
+  }
+
+  // Also check raw recovery score
+  if (wellness.today?.recovery != null && wellness.today.recovery < TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Delete an event from Intervals.icu calendar
+ * @param {object} event - Event object with id property
+ * @returns {boolean} true if deleted successfully
+ */
+function deleteIntervalEvent(event) {
+  if (!event?.id) {
+    Logger.log("No event ID provided for deletion");
+    return false;
+  }
+
+  const athleteId = "0"; // 0 = current athlete
+  const url = "https://intervals.icu/api/v1/athlete/" + athleteId + "/events/" + event.id;
+
+  const options = {
+    method: "delete",
+    headers: { "Authorization": getIcuAuthHeader() },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    if (code === 200 || code === 204) {
+      Logger.log(" -> Deleted placeholder event from Intervals.icu");
+      return true;
+    } else {
+      Logger.log(" -> Failed to delete event: " + response.getContentText());
+      return false;
+    }
+  } catch (e) {
+    Logger.log(" -> Error deleting event: " + e.toString());
+    return false;
+  }
+}
+
+/**
+ * Generate AI-powered rest day advice based on wellness data
+ * Uses callGeminiAPIText for consistent API handling
+ * @param {object} wellness - Wellness summary
+ * @returns {string} AI-generated rest day advice
+ */
+function generateRestDayAdvice(wellness) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
+  const langName = langMap[language] || 'English';
+
+  const w = wellness.today || {};
+  const avg = wellness.averages || {};
+
+  const prompt = `You are a professional cycling and running coach. The athlete has RED recovery status today, indicating they need rest.
+
+**Today's Wellness Data:**
+- Recovery Score: ${w.recovery != null ? w.recovery + '%' : 'N/A'} (RED = below 34%)
+- Sleep: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'})
+- HRV: ${w.hrv || 'N/A'} ms (7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms)
+- Resting HR: ${w.restingHR || 'N/A'} bpm (7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm)
+- Soreness: ${w.soreness ? w.soreness + '/5' : 'N/A'}
+- Fatigue: ${w.fatigue ? w.fatigue + '/5' : 'N/A'}
+- Stress: ${w.stress ? w.stress + '/5' : 'N/A'}
+
+**Instructions:**
+Write a brief, encouraging rest day message in ${langName}. Include:
+1. A short explanation of why rest is important today (2-3 sentences max)
+2. Two light alternatives if they want to move (keep it simple):
+   - Easy walk suggestion (duration, intensity)
+   - Light strength/mobility suggestion (duration, focus areas)
+3. A motivating closing line
+
+Keep the tone supportive, not preachy. Be concise (max 150 words total).`;
+
+  // Use existing callGeminiAPIText function for consistent API handling
+  return callGeminiAPIText(prompt);
+}
+
+/**
+ * Send rest day email when recovery is red
+ * @param {object} wellness - Wellness summary
+ * @param {object} phaseInfo - Training phase info
+ */
+function sendRestDayEmail(wellness, phaseInfo) {
+  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  const subject = t.rest_day_subject + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+
+  // Generate AI advice
+  const aiAdvice = generateRestDayAdvice(wellness);
+
+  let body = `${t.rest_day_greeting}\n\n`;
+
+  // Add phase info
+  body += `===================================
+${t.phase_title}: ${phaseInfo.phaseName}
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit})
+===================================\n`;
+
+  // Recovery section
+  const w = wellness.today || {};
+  body += `
+-----------------------------------
+${t.recovery_title}
+-----------------------------------
+${t.recovery_status}: ${wellness.recoveryStatus}
+${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
+${t.hrv}: ${w.hrv || 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
+${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
+${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
+`;
+
+  // Rest day recommendation
+  body += `
+===================================
+${t.rest_day_title}
+===================================
+`;
+
+  // Add AI-generated advice or fallback to translations
+  if (aiAdvice) {
+    body += aiAdvice;
+  } else {
+    body += `${t.rest_day_reason}
+
+${t.rest_day_alternatives}:
+• ${t.rest_day_walk}
+• ${t.rest_day_strength}
+
+${t.rest_day_note}`;
+  }
+
+  body += `\n\n${t.rest_day_footer}`;
+
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Rest day email sent successfully.");
 }
 
 // =========================================================
@@ -4390,6 +4621,45 @@ function testTrainingLoadAdvisor() {
   if (advice.warning) {
     Logger.log("⚠️ Warning: " + advice.warning);
   }
+}
+
+/**
+ * Test rest day email functionality
+ * Simulates a red recovery scenario and generates the rest day email content
+ */
+function testRestDayEmail() {
+  Logger.log("=== REST DAY EMAIL TEST ===");
+
+  // Fetch current wellness data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("--- Current Wellness Data ---");
+  Logger.log("Recovery Status: " + wellness.recoveryStatus);
+  Logger.log("Recovery Score: " + (wellness.today?.recovery != null ? wellness.today.recovery + "%" : "N/A"));
+  Logger.log("Is Rest Day Recommended: " + isRestDayRecommended(wellness));
+
+  // Calculate phase info
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  Logger.log("\n--- Phase Info ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+
+  // Test AI advice generation
+  Logger.log("\n--- AI Rest Day Advice ---");
+  const aiAdvice = generateRestDayAdvice(wellness);
+  if (aiAdvice) {
+    Logger.log(aiAdvice);
+  } else {
+    Logger.log("(AI advice generation failed, would use fallback translations)");
+  }
+
+  Logger.log("\n--- Test Complete ---");
+  Logger.log("To send an actual test email, uncomment the line below:");
+  Logger.log("// sendRestDayEmail(wellness, phaseInfo);");
 }
 
 function createAthleteSummary(data) {
