@@ -4745,6 +4745,54 @@ function testRestDayEmail() {
   Logger.log("// sendRestDayEmail(wellness, phaseInfo);");
 }
 
+/**
+ * Test personalized coaching note generation
+ * Generates a sample coaching note based on current data
+ */
+function testCoachingNote() {
+  Logger.log("=== COACHING NOTE TEST ===");
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  // Create a mock workout object
+  const mockWorkout = {
+    type: "Tempo_SweetSpot",
+    recommendationReason: "Good recovery status and base phase focus on aerobic development"
+  };
+
+  Logger.log("--- Input Data ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Workout: " + mockWorkout.type);
+
+  Logger.log("\n--- Generated Coaching Note ---");
+  const note = generatePersonalizedCoachingNote(summary, phaseInfo, mockWorkout, wellness, powerProfile);
+
+  if (note) {
+    Logger.log(note);
+  } else {
+    Logger.log("(Failed to generate coaching note)");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
 function createAthleteSummary(data) {
   const today = new Date();
   const threeWeeksAgo = new Date();
