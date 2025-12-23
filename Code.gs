@@ -4515,3 +4515,45 @@ function testApiUtilities() {
 
   Logger.log("=== API UTILITIES TEST COMPLETE ===");
 }
+
+/**
+ * Debug fitness-model-events endpoint to understand eFTP event structure
+ */
+function debugFitnessModelEvents() {
+  Logger.log("=== FITNESS MODEL EVENTS DEBUG ===");
+
+  const result = fetchIcuApi("/athlete/0/fitness-model-events");
+
+  if (!result.success) {
+    Logger.log("API call failed: " + result.error);
+    return;
+  }
+
+  const events = result.data;
+  Logger.log("Total events: " + (Array.isArray(events) ? events.length : "NOT AN ARRAY: " + typeof events));
+
+  if (!Array.isArray(events)) {
+    Logger.log("Raw data: " + JSON.stringify(events).substring(0, 500));
+    return;
+  }
+
+  // Show unique categories
+  const categories = [...new Set(events.map(e => e.category))];
+  Logger.log("Categories found: " + categories.join(", "));
+
+  // Show first few events
+  Logger.log("--- Sample events ---");
+  events.slice(0, 5).forEach(function(e, i) {
+    Logger.log((i+1) + ". " + JSON.stringify(e));
+  });
+
+  // Look for any eFTP-related events
+  const eftpRelated = events.filter(e =>
+    (e.category && e.category.toLowerCase().includes("eftp")) ||
+    (e.category && e.category.toLowerCase().includes("ftp"))
+  );
+  Logger.log("--- eFTP-related events (" + eftpRelated.length + ") ---");
+  eftpRelated.slice(0, 5).forEach(function(e, i) {
+    Logger.log((i+1) + ". " + JSON.stringify(e));
+  });
+}
