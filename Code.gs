@@ -839,47 +839,43 @@ function createWellnessSummary(wellnessRecords) {
  * Returns: { hasPlaceholder: boolean, placeholder: object, duration: {min, max}, activityType: "Ride"|"Run" }
  */
 function findIntervalCoachPlaceholder(dateStr) {
-  const url = "https://intervals.icu/api/v1/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
+  const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
   const ridePlaceholder = USER_SETTINGS.PLACEHOLDER_RIDE.toLowerCase();
   const runPlaceholder = USER_SETTINGS.PLACEHOLDER_RUN.toLowerCase();
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  const result = fetchIcuApi(endpoint);
 
-    if (response.getResponseCode() === 200) {
-      const events = JSON.parse(response.getContentText());
+  if (!result.success) {
+    Logger.log("Error checking Intervals.icu calendar: " + result.error);
+    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
+  }
 
-      // Find placeholder event starting with "Ride", "Run", or "Hardlopen"
-      const placeholder = events.find(function(e) {
-        if (!e.name) return false;
-        const nameLower = e.name.toLowerCase();
-        return nameLower.startsWith(ridePlaceholder) ||
-               nameLower.startsWith(runPlaceholder) ||
-               nameLower.startsWith("hardlopen");
-      });
+  const events = result.data;
+  if (!Array.isArray(events)) {
+    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
+  }
 
-      if (placeholder) {
-        // Detect activity type from name
-        const nameLower = placeholder.name.toLowerCase();
-        const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
-        const activityType = isRun ? "Run" : "Ride";
+  // Find placeholder event starting with "Ride", "Run", or "Hardlopen"
+  const placeholder = events.find(function(e) {
+    if (!e.name) return false;
+    const nameLower = e.name.toLowerCase();
+    return nameLower.startsWith(ridePlaceholder) ||
+           nameLower.startsWith(runPlaceholder) ||
+           nameLower.startsWith("hardlopen");
+  });
 
-        // Parse duration with activity-specific defaults
-        const duration = parseDurationFromName(placeholder.name, activityType);
+  if (placeholder) {
+    const nameLower = placeholder.name.toLowerCase();
+    const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
+    const activityType = isRun ? "Run" : "Ride";
+    const duration = parseDurationFromName(placeholder.name, activityType);
 
-        return {
-          hasPlaceholder: true,
-          placeholder: placeholder,
-          duration: duration,
-          activityType: activityType
-        };
-      }
-    }
-  } catch (e) {
-    Logger.log("Error checking Intervals.icu calendar: " + e.toString());
+    return {
+      hasPlaceholder: true,
+      placeholder: placeholder,
+      duration: duration,
+      activityType: activityType
+    };
   }
 
   return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
@@ -1462,65 +1458,59 @@ function testEftp() {
  * Fetch running data (threshold pace, pace zones) from Intervals.icu
  */
 function fetchRunningData() {
-  const url = "https://intervals.icu/api/v1/athlete/0";
+  const result = fetchIcuApi("/athlete/0");
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
+  if (!result.success) {
+    Logger.log("Error fetching running data: " + result.error);
+    return { available: false };
+  }
+
+  const data = result.data;
+
+  // Find Run settings in sportSettings array
+  if (data.sportSettings) {
+    const settingsArray = Array.isArray(data.sportSettings)
+      ? data.sportSettings
+      : Object.values(data.sportSettings);
+
+    const runSetting = settingsArray.find(function(s) {
+      return s?.types?.includes("Run");
     });
 
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
+    if (runSetting) {
+      // Also fetch pace curve for Critical Speed
+      const paceCurve = fetchRunningPaceCurve();
 
-      // Find Run settings in sportSettings array
-      if (data.sportSettings) {
-        const settingsArray = Array.isArray(data.sportSettings)
-          ? data.sportSettings
-          : Object.values(data.sportSettings);
-
-        const runSetting = settingsArray.find(function(s) {
-          return s && s.types && s.types.includes("Run");
-        });
-
-        if (runSetting) {
-          // Also fetch pace curve for Critical Speed
-          const paceCurve = fetchRunningPaceCurve();
-
-          // Convert threshold_pace from m/s to min:sec/km if it's a number
-          let thresholdPaceFormatted = runSetting.threshold_pace;
-          if (typeof runSetting.threshold_pace === 'number' && runSetting.threshold_pace > 0) {
-            thresholdPaceFormatted = convertMsToMinKm(runSetting.threshold_pace);
-          }
-
-          // Convert pace_zones from m/s to min:sec/km
-          let paceZonesFormatted = runSetting.pace_zones;
-          if (runSetting.pace_zones && Array.isArray(runSetting.pace_zones)) {
-            paceZonesFormatted = runSetting.pace_zones.map(function(p) {
-              return typeof p === 'number' ? convertMsToMinKm(p) : p;
-            });
-          }
-
-          return {
-            available: true,
-            thresholdPace: thresholdPaceFormatted,     // Formatted as "5:00" min/km
-            thresholdPaceMs: runSetting.threshold_pace, // Raw m/s value
-            paceZones: paceZonesFormatted,             // Array of formatted paces
-            paceZoneNames: runSetting.pace_zone_names, // Zone names
-            lthr: runSetting.lthr,                     // Lactate threshold HR
-            maxHr: runSetting.max_hr,
-            // Pace curve data (Critical Speed)
-            criticalSpeed: paceCurve.criticalSpeed,       // Current CS in min/km
-            criticalSpeedMs: paceCurve.criticalSpeedMs,   // CS in m/s
-            dPrime: paceCurve.dPrime,                     // D' anaerobic capacity
-            seasonBestCS: paceCurve.seasonBestCS,         // Season best CS
-            bestEfforts: paceCurve.bestEfforts            // Best times at key distances
-          };
-        }
+      // Convert threshold_pace from m/s to min:sec/km if it's a number
+      let thresholdPaceFormatted = runSetting.threshold_pace;
+      if (typeof runSetting.threshold_pace === 'number' && runSetting.threshold_pace > 0) {
+        thresholdPaceFormatted = convertMsToMinKm(runSetting.threshold_pace);
       }
+
+      // Convert pace_zones from m/s to min:sec/km
+      let paceZonesFormatted = runSetting.pace_zones;
+      if (runSetting.pace_zones && Array.isArray(runSetting.pace_zones)) {
+        paceZonesFormatted = runSetting.pace_zones.map(function(p) {
+          return typeof p === 'number' ? convertMsToMinKm(p) : p;
+        });
+      }
+
+      return {
+        available: true,
+        thresholdPace: thresholdPaceFormatted,     // Formatted as "5:00" min/km
+        thresholdPaceMs: runSetting.threshold_pace, // Raw m/s value
+        paceZones: paceZonesFormatted,             // Array of formatted paces
+        paceZoneNames: runSetting.pace_zone_names, // Zone names
+        lthr: runSetting.lthr,                     // Lactate threshold HR
+        maxHr: runSetting.max_hr,
+        // Pace curve data (Critical Speed)
+        criticalSpeed: paceCurve.criticalSpeed,       // Current CS in min/km
+        criticalSpeedMs: paceCurve.criticalSpeedMs,   // CS in m/s
+        dPrime: paceCurve.dPrime,                     // D' anaerobic capacity
+        seasonBestCS: paceCurve.seasonBestCS,         // Season best CS
+        bestEfforts: paceCurve.bestEfforts            // Best times at key distances
+      };
     }
-  } catch (e) {
-    Logger.log("Error fetching running data: " + e.toString());
   }
 
   return { available: false };
@@ -1539,95 +1529,67 @@ function fetchRunningPaceCurve() {
     bestEfforts: {}
   };
 
-  // Fetch current (42-day) pace curve using id parameter
-  const url42 = "https://intervals.icu/api/v1/athlete/0/pace-curves?type=Run&id=42d";
+  // Fetch current (42-day) pace curve
+  const current = fetchIcuApi("/athlete/0/pace-curves?type=Run&id=42d");
 
-  try {
-    const response = UrlFetchApp.fetch(url42, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  if (current.success && current.data?.list?.length > 0) {
+    const curve = current.data.list[0];
 
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-
-      if (data && data.list && data.list.length > 0) {
-        const curve = data.list[0];
-
-        // Extract Critical Speed model (API uses "CS" type with criticalSpeed/dPrime fields)
-        if (curve.paceModels && curve.paceModels.length > 0) {
-          const csModel = curve.paceModels.find(function(m) { return m.type === "CS"; }) || curve.paceModels[0];
-          if (csModel) {
-            result.criticalSpeedMs = csModel.criticalSpeed;  // m/s (field is criticalSpeed, not cs)
-            result.dPrime = csModel.dPrime;                   // meters (field is dPrime, not d_prime)
-            // Convert m/s to min/km
-            if (csModel.criticalSpeed) {
-              result.criticalSpeed = convertMsToMinKm(csModel.criticalSpeed);
-            }
-          }
-        }
-
-        // Extract best efforts from values array
-        // values array contains [distance, time] pairs or similar structure
-        if (curve.values && Array.isArray(curve.values)) {
-          const keyDistances = [400, 800, 1500, 1609, 3000, 5000]; // meters
-
-          // values might be structured as array of objects or nested arrays
-          // Let's check and extract best times at key distances
-          curve.values.forEach(function(v) {
-            // Try to detect format - could be {distance, secs} or [distance, secs]
-            let dist, totalSecs;
-            if (Array.isArray(v)) {
-              dist = v[0];
-              totalSecs = v[1];
-            } else if (v && typeof v === 'object') {
-              dist = v.distance || v.d;
-              totalSecs = v.secs || v.time || v.s;
-            }
-
-            if (dist && totalSecs && keyDistances.includes(dist)) {
-              const mins = Math.floor(totalSecs / 60);
-              const secs = Math.round(totalSecs % 60);
-              const pacePerKm = (totalSecs / dist) * 1000;
-
-              result.bestEfforts[dist] = {
-                time: mins + ":" + (secs < 10 ? "0" : "") + secs,
-                pace: convertMsToMinKm(dist / totalSecs)
-              };
-            }
-          });
+    // Extract Critical Speed model (API uses "CS" type with criticalSpeed/dPrime fields)
+    if (curve.paceModels?.length > 0) {
+      const csModel = curve.paceModels.find(function(m) { return m.type === "CS"; }) || curve.paceModels[0];
+      if (csModel) {
+        result.criticalSpeedMs = csModel.criticalSpeed;
+        result.dPrime = csModel.dPrime;
+        if (csModel.criticalSpeed) {
+          result.criticalSpeed = convertMsToMinKm(csModel.criticalSpeed);
         }
       }
     }
-  } catch (e) {
-    Logger.log("Error fetching 42-day pace curve: " + e.toString());
+
+    // Extract best efforts from values array
+    if (curve.values && Array.isArray(curve.values)) {
+      const keyDistances = [400, 800, 1500, 1609, 3000, 5000];
+
+      curve.values.forEach(function(v) {
+        let dist, totalSecs;
+        if (Array.isArray(v)) {
+          dist = v[0];
+          totalSecs = v[1];
+        } else if (v && typeof v === 'object') {
+          dist = v.distance || v.d;
+          totalSecs = v.secs || v.time || v.s;
+        }
+
+        if (dist && totalSecs && keyDistances.includes(dist)) {
+          const mins = Math.floor(totalSecs / 60);
+          const secs = Math.round(totalSecs % 60);
+
+          result.bestEfforts[dist] = {
+            time: mins + ":" + (secs < 10 ? "0" : "") + secs,
+            pace: convertMsToMinKm(dist / totalSecs)
+          };
+        }
+      });
+    }
+  } else if (current.error) {
+    Logger.log("Error fetching 42-day pace curve: " + current.error);
   }
 
   // Fetch season/all-time pace curve for comparison
-  const urlSeason = "https://intervals.icu/api/v1/athlete/0/pace-curves?type=Run";
+  const season = fetchIcuApi("/athlete/0/pace-curves?type=Run");
 
-  try {
-    const response = UrlFetchApp.fetch(urlSeason, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  if (season.success && season.data?.list?.length > 0) {
+    const curve = season.data.list[0];
 
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-
-      if (data && data.list && data.list.length > 0) {
-        const curve = data.list[0];
-
-        if (curve.paceModels && curve.paceModels.length > 0) {
-          const csModel = curve.paceModels.find(function(m) { return m.type === "CS"; }) || curve.paceModels[0];
-          if (csModel && csModel.criticalSpeed) {
-            result.seasonBestCS = convertMsToMinKm(csModel.criticalSpeed);
-          }
-        }
+    if (curve.paceModels?.length > 0) {
+      const csModel = curve.paceModels.find(function(m) { return m.type === "CS"; }) || curve.paceModels[0];
+      if (csModel?.criticalSpeed) {
+        result.seasonBestCS = convertMsToMinKm(csModel.criticalSpeed);
       }
     }
-  } catch (e) {
-    Logger.log("Error fetching season pace curve: " + e.toString());
+  } else if (season.error) {
+    Logger.log("Error fetching season pace curve: " + season.error);
   }
 
   return result;
@@ -1637,69 +1599,47 @@ function fetchRunningPaceCurve() {
  * Fetch athlete data including weight, FTP, and eFTP from Intervals.icu
  */
 function fetchAthleteData() {
-  const url = "https://intervals.icu/api/v1/athlete/0";
+  const result = fetchIcuApi("/athlete/0");
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-
-      // sportSettings may be array or object with numeric keys - find Ride settings
-      let manualFtp = null;
-      let eFtp = null;
-
-      if (data.sportSettings) {
-        // Convert to array if it's an object with numeric keys
-        const settingsArray = Array.isArray(data.sportSettings)
-          ? data.sportSettings
-          : Object.values(data.sportSettings);
-
-        const rideSetting = settingsArray.find(function(s) {
-          return s && s.types && s.types.includes("Ride");
-        });
-
-        if (rideSetting) {
-          manualFtp = rideSetting.ftp || null;  // Manual/set FTP (303W)
-          // Current eFTP and other metrics from mmp_model (calculated daily)
-          if (rideSetting.mmp_model) {
-            eFtp = rideSetting.mmp_model.ftp || null;      // Rolling eFTP (269W)
-          }
-        }
-      }
-
-      // Extract current (rolling) metrics from mmp_model
-      let currentWPrime = null;
-      let currentPMax = null;
-      if (data.sportSettings) {
-        const settingsArray = Array.isArray(data.sportSettings)
-          ? data.sportSettings
-          : Object.values(data.sportSettings);
-        const rideSetting = settingsArray.find(function(s) {
-          return s && s.types && s.types.includes("Ride");
-        });
-        if (rideSetting && rideSetting.mmp_model) {
-          currentWPrime = rideSetting.mmp_model.wPrime || null;  // Current W' (15120 J)
-          currentPMax = rideSetting.mmp_model.pMax || null;      // Current pMax (880W)
-        }
-      }
-
-      return {
-        ftp: manualFtp,
-        eFtp: eFtp,
-        weight: data.icu_weight || data.weight || null,
-        wPrime: currentWPrime,   // Current W' (anaerobic capacity in Joules)
-        pMax: currentPMax        // Current max power
-      };
-    }
-  } catch (e) {
-    Logger.log("Error fetching athlete data: " + e.toString());
+  if (!result.success) {
+    Logger.log("Error fetching athlete data: " + result.error);
+    return { ftp: null, eFtp: null, weight: null };
   }
 
-  return { ftp: null, eFtp: null, weight: null };
+  const data = result.data;
+
+  // sportSettings may be array or object with numeric keys - find Ride settings
+  let manualFtp = null;
+  let eFtp = null;
+  let currentWPrime = null;
+  let currentPMax = null;
+
+  if (data.sportSettings) {
+    const settingsArray = Array.isArray(data.sportSettings)
+      ? data.sportSettings
+      : Object.values(data.sportSettings);
+
+    const rideSetting = settingsArray.find(function(s) {
+      return s?.types?.includes("Ride");
+    });
+
+    if (rideSetting) {
+      manualFtp = rideSetting.ftp || null;
+      if (rideSetting.mmp_model) {
+        eFtp = rideSetting.mmp_model.ftp || null;
+        currentWPrime = rideSetting.mmp_model.wPrime || null;
+        currentPMax = rideSetting.mmp_model.pMax || null;
+      }
+    }
+  }
+
+  return {
+    ftp: manualFtp,
+    eFtp: eFtp,
+    weight: data.icu_weight || data.weight || null,
+    wPrime: currentWPrime,
+    pMax: currentPMax
+  };
 }
 
 /**
@@ -1737,109 +1677,89 @@ function fetchPowerCurve() {
   const athleteData = fetchAthleteData();
 
   // Get all-time power curve for peak powers
-  const url = "https://intervals.icu/api/v1/athlete/0/power-curves?type=Ride";
+  const result = fetchIcuApi("/athlete/0/power-curves?type=Ride");
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-
-      // Power curve is in data.list array
-      if (data && data.list && data.list.length > 0) {
-        const curve = data.list[0]; // Use first (default) time period
-        const watts = curve.watts;
-        const secs = curve.secs;
-
-        if (!watts || !secs) {
-          return { available: false };
-        }
-
-        // Find power at key durations by searching the secs array
-        // The secs array is NOT sequential (may have gaps like 1,2,3...60,65,70...)
-        const getPowerAt = function(targetSecs) {
-          // Search for exact match first
-          for (let i = 0; i < secs.length; i++) {
-            if (secs[i] === targetSecs) {
-              return watts[i];
-            }
-          }
-          // If no exact match, find closest value <= targetSecs
-          let bestIdx = 0;
-          for (let i = 0; i < secs.length; i++) {
-            if (secs[i] <= targetSecs) {
-              bestIdx = i;
-            } else {
-              break; // secs is sorted, so we can stop
-            }
-          }
-          return watts[bestIdx];
-        };
-
-        // Calculate FTP from 20-min power as fallback
-        const peak20min = getPowerAt(1200);
-        const curveFtp = Math.round(peak20min * TRAINING_CONSTANTS.POWER.FTP_FROM_20MIN);
-
-        // Extract eFTP from powerModels for comparison
-        const modelEftp = extractEftpFromModels(curve.powerModels);
-
-        // Current eFTP from athlete settings (mmp_model) - this is the rolling daily value
-        const currentEftp = athleteData.eFtp;
-
-        // Priority: current eFTP from mmp_model > curve models > manual FTP > 20min*0.95
-        const effectiveFtp = currentEftp || modelEftp || athleteData.ftp || curveFtp;
-
-        // Extract W' and pMax from season powerModels (FFT_CURVES is most accurate)
-        let seasonWPrime = null;
-        let seasonPMax = null;
-        if (curve.powerModels) {
-          const fftModel = curve.powerModels.find(function(m) { return m.type === "FFT_CURVES"; });
-          if (fftModel) {
-            seasonWPrime = fftModel.wPrime;  // Season W' (17516 J)
-            seasonPMax = fftModel.pMax;       // Season pMax (1190W)
-          }
-        }
-
-        return {
-          available: true,
-          // Peak powers at key durations
-          peak5s: getPowerAt(5),       // Neuromuscular
-          peak10s: getPowerAt(10),     // Sprint
-          peak30s: getPowerAt(30),     // Anaerobic
-          peak1min: getPowerAt(60),    // Anaerobic capacity
-          peak2min: getPowerAt(120),   // VO2max short
-          peak5min: getPowerAt(300),   // VO2max
-          peak8min: getPowerAt(480),   // VO2max long
-          peak20min: peak20min,        // FTP proxy
-          peak30min: getPowerAt(1800), // Sub-threshold
-          peak60min: getPowerAt(3600), // Endurance
-          // FTP metrics
-          ftp: effectiveFtp,           // Current effective FTP (best available)
-          eFTP: currentEftp || modelEftp || curveFtp, // Current eFTP (rolling daily)
-          currentEftp: currentEftp,    // From mmp_model (269W - changes daily)
-          allTimeEftp: modelEftp,      // From all-time power curve models
-          manualFTP: athleteData.ftp,  // Manually set FTP (303W)
-          curveFTP: curveFtp,          // FTP from 20min power * 0.95
-          // W' (Anaerobic Work Capacity)
-          wPrime: athleteData.wPrime,      // Current W' from mmp_model (15120 J)
-          seasonWPrime: seasonWPrime,      // Season best W' (17516 J)
-          // pMax (Max Power)
-          pMax: athleteData.pMax,          // Current pMax from mmp_model (880W)
-          seasonPMax: seasonPMax,          // Season best pMax (1190W)
-          // Other metrics
-          weight: athleteData.weight,      // For W/kg
-          vo2max5m: curve.vo2max_5m        // VO2max estimate from 5-min power
-        };
-      }
-    }
-  } catch (e) {
-    Logger.log("Error fetching power curve: " + e.toString());
+  if (!result.success) {
+    Logger.log("Error fetching power curve: " + result.error);
+    return { available: false };
   }
 
-  return { available: false };
+  const data = result.data;
+
+  // Power curve is in data.list array
+  if (!data?.list?.length) {
+    return { available: false };
+  }
+
+  const curve = data.list[0];
+  const watts = curve.watts;
+  const secs = curve.secs;
+
+  if (!watts || !secs) {
+    return { available: false };
+  }
+
+  // Find power at key durations by searching the secs array
+  const getPowerAt = function(targetSecs) {
+    for (let i = 0; i < secs.length; i++) {
+      if (secs[i] === targetSecs) {
+        return watts[i];
+      }
+    }
+    let bestIdx = 0;
+    for (let i = 0; i < secs.length; i++) {
+      if (secs[i] <= targetSecs) {
+        bestIdx = i;
+      } else {
+        break;
+      }
+    }
+    return watts[bestIdx];
+  };
+
+  // Calculate FTP from 20-min power as fallback
+  const peak20min = getPowerAt(1200);
+  const curveFtp = Math.round(peak20min * TRAINING_CONSTANTS.POWER.FTP_FROM_20MIN);
+
+  // Extract eFTP from powerModels for comparison
+  const modelEftp = extractEftpFromModels(curve.powerModels);
+  const currentEftp = athleteData.eFtp;
+  const effectiveFtp = currentEftp || modelEftp || athleteData.ftp || curveFtp;
+
+  // Extract W' and pMax from season powerModels
+  let seasonWPrime = null;
+  let seasonPMax = null;
+  const fftModel = curve.powerModels?.find(function(m) { return m.type === "FFT_CURVES"; });
+  if (fftModel) {
+    seasonWPrime = fftModel.wPrime;
+    seasonPMax = fftModel.pMax;
+  }
+
+  return {
+    available: true,
+    peak5s: getPowerAt(5),
+    peak10s: getPowerAt(10),
+    peak30s: getPowerAt(30),
+    peak1min: getPowerAt(60),
+    peak2min: getPowerAt(120),
+    peak5min: getPowerAt(300),
+    peak8min: getPowerAt(480),
+    peak20min: peak20min,
+    peak30min: getPowerAt(1800),
+    peak60min: getPowerAt(3600),
+    ftp: effectiveFtp,
+    eFTP: currentEftp || modelEftp || curveFtp,
+    currentEftp: currentEftp,
+    allTimeEftp: modelEftp,
+    manualFTP: athleteData.ftp,
+    curveFTP: curveFtp,
+    wPrime: athleteData.wPrime,
+    seasonWPrime: seasonWPrime,
+    pMax: athleteData.pMax,
+    seasonPMax: seasonPMax,
+    weight: athleteData.weight,
+    vo2max5m: curve.vo2max_5m
+  };
 }
 
 /**
@@ -1980,38 +1900,30 @@ function fetchAndLogActivities() {
   requireValidConfig();
 
   const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  
+
   const to = new Date();
   const from = new Date();
-  from.setDate(to.getDate() - 90);
+  from.setDate(to.getDate() - TRAINING_CONSTANTS.LOOKBACK.ACTIVITIES_DEFAULT);
 
-  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
+  const result = fetchIcuApi(endpoint);
 
-  try {
-    const response = UrlFetchApp.fetch(url, { 
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
-    
-    if (response.getResponseCode() !== 200) {
-      Logger.log("Error fetching activities: " + response.getContentText());
-      return;
-    }
-
-    const activities = JSON.parse(response.getContentText());
-    if (!activities || activities.length === 0) {
-      Logger.log("No activities to write");
-      return;
-    }
-
-    const rows = activities.map(a => mapActivityToRow(a));
-    sheet.clear();
-    sheet.getRange(1, 1, 1, HEADERS_FIXED.length).setValues([HEADERS_FIXED]);
-    sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-    Logger.log(`${rows.length} rows added to spreadsheet.`);
-  } catch (e) {
-    Logger.log("Exception in fetchAndLogActivities: " + e.toString());
+  if (!result.success) {
+    Logger.log("Error fetching activities: " + result.error);
+    return;
   }
+
+  const activities = result.data;
+  if (!activities || activities.length === 0) {
+    Logger.log("No activities to write");
+    return;
+  }
+
+  const rows = activities.map(a => mapActivityToRow(a));
+  sheet.clear();
+  sheet.getRange(1, 1, 1, HEADERS_FIXED.length).setValues([HEADERS_FIXED]);
+  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+  Logger.log(`${rows.length} rows added to spreadsheet.`);
 }
 
 // =========================================================
@@ -3573,52 +3485,51 @@ function fetchWeeklyActivities(daysBack, daysOffset = 0) {
   const from = new Date(to);
   from.setDate(to.getDate() - daysBack + 1);
 
-  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
 
   const result = {
     totalActivities: 0,
     rides: 0,
     runs: 0,
-    totalTime: 0,      // in seconds
+    totalTime: 0,
     totalTss: 0,
-    totalDistance: 0,  // in meters
+    totalDistance: 0,
     activities: []
   };
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  const apiResult = fetchIcuApi(endpoint);
 
-    if (response.getResponseCode() === 200) {
-      const activities = JSON.parse(response.getContentText());
-
-      activities.forEach(function(a) {
-        result.totalActivities++;
-        result.totalTime += a.moving_time || 0;
-        result.totalTss += a.icu_training_load || 0;
-        result.totalDistance += a.distance || 0;
-
-        if (a.type === 'Ride' || a.type === 'VirtualRide') {
-          result.rides++;
-        } else if (a.type === 'Run' || a.type === 'VirtualRun') {
-          result.runs++;
-        }
-
-        result.activities.push({
-          date: a.start_date_local,
-          name: a.name,
-          type: a.type,
-          duration: a.moving_time,
-          tss: a.icu_training_load,
-          distance: a.distance
-        });
-      });
-    }
-  } catch (e) {
-    Logger.log("Error fetching weekly activities: " + e.toString());
+  if (!apiResult.success) {
+    Logger.log("Error fetching weekly activities: " + apiResult.error);
+    return result;
   }
+
+  const activities = apiResult.data;
+  if (!Array.isArray(activities)) {
+    return result;
+  }
+
+  activities.forEach(function(a) {
+    result.totalActivities++;
+    result.totalTime += a.moving_time || 0;
+    result.totalTss += a.icu_training_load || 0;
+    result.totalDistance += a.distance || 0;
+
+    if (a.type === 'Ride' || a.type === 'VirtualRide') {
+      result.rides++;
+    } else if (a.type === 'Run' || a.type === 'VirtualRun') {
+      result.runs++;
+    }
+
+    result.activities.push({
+      date: a.start_date_local,
+      name: a.name,
+      type: a.type,
+      duration: a.moving_time,
+      tss: a.icu_training_load,
+      distance: a.distance
+    });
+  });
 
   return result;
 }
@@ -3692,7 +3603,7 @@ function fetchRecentActivityFeedback(days = 14) {
   const from = new Date(today);
   from.setDate(today.getDate() - days);
 
-  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
 
   const result = {
     activities: [],
@@ -3705,66 +3616,62 @@ function fetchRecentActivityFeedback(days = 14) {
     }
   };
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  const apiResult = fetchIcuApi(endpoint);
 
-    if (response.getResponseCode() === 200) {
-      const activities = JSON.parse(response.getContentText());
-
-      let totalRpe = 0;
-      let rpeCount = 0;
-      let totalFeel = 0;
-      let feelCount = 0;
-
-      activities.forEach(function(a) {
-        // Only include cycling and running activities
-        if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
-          const activity = {
-            date: a.start_date_local,
-            name: a.name,
-            type: a.type,
-            duration: a.moving_time,
-            tss: a.icu_training_load || 0,
-            intensity: a.icu_intensity || null,
-            rpe: a.icu_rpe || null,
-            feel: a.feel || null
-          };
-
-          result.activities.push(activity);
-
-          // Track RPE (1-10 scale)
-          if (a.icu_rpe != null) {
-            totalRpe += a.icu_rpe;
-            rpeCount++;
-            if (a.icu_rpe <= 4) result.summary.rpeDistribution.easy++;
-            else if (a.icu_rpe <= 6) result.summary.rpeDistribution.moderate++;
-            else if (a.icu_rpe <= 8) result.summary.rpeDistribution.hard++;
-            else result.summary.rpeDistribution.veryHard++;
-          }
-
-          // Track Feel (1-5 scale: 1=Bad, 2=Poor, 3=Okay, 4=Good, 5=Great)
-          if (a.feel != null) {
-            totalFeel += a.feel;
-            feelCount++;
-            if (a.feel === 1) result.summary.feelDistribution.bad++;
-            else if (a.feel === 2) result.summary.feelDistribution.poor++;
-            else if (a.feel === 3) result.summary.feelDistribution.okay++;
-            else if (a.feel === 4) result.summary.feelDistribution.good++;
-            else if (a.feel === 5) result.summary.feelDistribution.great++;
-          }
-        }
-      });
-
-      result.summary.totalWithFeedback = Math.max(rpeCount, feelCount);
-      result.summary.avgRpe = rpeCount > 0 ? totalRpe / rpeCount : null;
-      result.summary.avgFeel = feelCount > 0 ? totalFeel / feelCount : null;
-    }
-  } catch (e) {
-    Logger.log("Error fetching activity feedback: " + e.toString());
+  if (!apiResult.success) {
+    Logger.log("Error fetching activity feedback: " + apiResult.error);
+    return result;
   }
+
+  const activities = apiResult.data;
+  if (!Array.isArray(activities)) {
+    return result;
+  }
+
+  let totalRpe = 0;
+  let rpeCount = 0;
+  let totalFeel = 0;
+  let feelCount = 0;
+
+  activities.forEach(function(a) {
+    if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
+      const activity = {
+        date: a.start_date_local,
+        name: a.name,
+        type: a.type,
+        duration: a.moving_time,
+        tss: a.icu_training_load || 0,
+        intensity: a.icu_intensity || null,
+        rpe: a.icu_rpe || null,
+        feel: a.feel || null
+      };
+
+      result.activities.push(activity);
+
+      if (a.icu_rpe != null) {
+        totalRpe += a.icu_rpe;
+        rpeCount++;
+        if (a.icu_rpe <= 4) result.summary.rpeDistribution.easy++;
+        else if (a.icu_rpe <= 6) result.summary.rpeDistribution.moderate++;
+        else if (a.icu_rpe <= 8) result.summary.rpeDistribution.hard++;
+        else result.summary.rpeDistribution.veryHard++;
+      }
+
+      if (a.feel != null) {
+        totalFeel += a.feel;
+        feelCount++;
+        if (a.feel === 1) result.summary.feelDistribution.bad++;
+        else if (a.feel === 2) result.summary.feelDistribution.poor++;
+        else if (a.feel === 3) result.summary.feelDistribution.okay++;
+        else if (a.feel === 4) result.summary.feelDistribution.good++;
+        else if (a.feel === 5) result.summary.feelDistribution.great++;
+      }
+    }
+  });
+
+  result.summary.totalWithFeedback = Math.max(rpeCount, feelCount);
+  result.summary.avgRpe = rpeCount > 0 ? totalRpe / rpeCount : null;
+  result.summary.avgFeel = feelCount > 0 ? totalFeel / feelCount : null;
 
   return result;
 }
@@ -4074,11 +3981,11 @@ function testAdaptiveTraining() {
  */
 function getDaysSinceLastWorkout() {
   const today = new Date();
-  const lookbackDays = 30; // Look back up to 30 days
+  const lookbackDays = 30;
   const from = new Date(today);
   from.setDate(today.getDate() - lookbackDays);
 
-  const url = `https://intervals.icu/api/v1/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(today)}`;
 
   const result = {
     daysSinceLastWorkout: null,
@@ -4086,46 +3993,44 @@ function getDaysSinceLastWorkout() {
     hasRecentActivity: false
   };
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  const apiResult = fetchIcuApi(endpoint);
 
-    if (response.getResponseCode() === 200) {
-      const activities = JSON.parse(response.getContentText());
+  if (!apiResult.success) {
+    Logger.log("Error fetching activities for gap detection: " + apiResult.error);
+    return result;
+  }
 
-      // Filter to cycling and running only
-      const relevantActivities = activities.filter(a =>
-        a.type === 'Ride' || a.type === 'VirtualRide' ||
-        a.type === 'Run' || a.type === 'VirtualRun'
-      );
+  const activities = apiResult.data;
+  if (!Array.isArray(activities)) {
+    return result;
+  }
 
-      if (relevantActivities.length > 0) {
-        // Sort by date descending (most recent first)
-        relevantActivities.sort((a, b) =>
-          new Date(b.start_date_local) - new Date(a.start_date_local)
-        );
+  // Filter to cycling and running only
+  const relevantActivities = activities.filter(a =>
+    a.type === 'Ride' || a.type === 'VirtualRide' ||
+    a.type === 'Run' || a.type === 'VirtualRun'
+  );
 
-        const lastActivity = relevantActivities[0];
-        const lastDate = new Date(lastActivity.start_date_local);
-        const diffTime = today - lastDate;
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  if (relevantActivities.length > 0) {
+    relevantActivities.sort((a, b) =>
+      new Date(b.start_date_local) - new Date(a.start_date_local)
+    );
 
-        result.daysSinceLastWorkout = diffDays;
-        result.lastActivity = {
-          date: lastActivity.start_date_local,
-          name: lastActivity.name,
-          type: lastActivity.type,
-          load: lastActivity.icu_training_load || 0
-        };
-        result.hasRecentActivity = diffDays <= 3;
-      } else {
-        result.daysSinceLastWorkout = lookbackDays; // No activity found in lookback period
-      }
-    }
-  } catch (e) {
-    Logger.log("Error fetching activities for gap detection: " + e.message);
+    const lastActivity = relevantActivities[0];
+    const lastDate = new Date(lastActivity.start_date_local);
+    const diffTime = today - lastDate;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    result.daysSinceLastWorkout = diffDays;
+    result.lastActivity = {
+      date: lastActivity.start_date_local,
+      name: lastActivity.name,
+      type: lastActivity.type,
+      load: lastActivity.icu_training_load || 0
+    };
+    result.hasRecentActivity = diffDays <= 3;
+  } else {
+    result.daysSinceLastWorkout = lookbackDays;
   }
 
   return result;
@@ -4275,29 +4180,23 @@ function fetchHistoricalEftp(date) {
   const targetDate = date || new Date();
   const targetDateStr = formatDateISO(targetDate);
 
-  const url = "https://intervals.icu/api/v1/athlete/0/fitness-model-events";
+  const result = fetchIcuApi("/athlete/0/fitness-model-events");
 
-  try {
-    const response = UrlFetchApp.fetch(url, {
-      headers: { "Authorization": getIcuAuthHeader() },
-      muteHttpExceptions: true
-    });
+  if (!result.success) {
+    Logger.log("Error fetching historical eFTP: " + result.error);
+    return null;
+  }
 
-    if (response.getResponseCode() === 200) {
-      const events = JSON.parse(response.getContentText());
+  const events = result.data;
 
-      // Filter SET_EFTP events and find the most recent one on or before the target date
-      const eftpEvents = events
-        .filter(function(e) { return e.category === "SET_EFTP" && e.start_date <= targetDateStr; })
-        .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
+  // Filter SET_EFTP events and find the most recent one on or before the target date
+  const eftpEvents = events
+    .filter(function(e) { return e.category === "SET_EFTP" && e.start_date <= targetDateStr; })
+    .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
 
-      if (eftpEvents.length > 0) {
-        // The value is stored in the event data
-        return eftpEvents[0].value || null;
-      }
-    }
-  } catch (e) {
-    Logger.log("Error fetching historical eFTP: " + e.toString());
+  if (eftpEvents.length > 0) {
+    // The value is stored in the event data
+    return eftpEvents[0].value || null;
   }
 
   return null;
@@ -4550,4 +4449,69 @@ function sum(arr) { return arr.reduce((a,b)=>a+b,0); }
 function getOrCreateFolder(name) {
   const folders = DriveApp.getFoldersByName(name);
   return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
+}
+
+// =========================================================
+// TEST FUNCTIONS: API UTILITIES
+// =========================================================
+
+/**
+ * Test fetchIcuApi and core API utilities
+ * Verifies that the API wrapper is working correctly
+ */
+function testApiUtilities() {
+  Logger.log("=== API UTILITIES TEST ===");
+
+  // Test 1: Auth header generation
+  Logger.log("--- Auth Header ---");
+  try {
+    const authHeader = getIcuAuthHeader();
+    Logger.log("Auth header generated: " + (authHeader.startsWith("Basic ") ? "OK (Basic auth)" : "UNEXPECTED FORMAT"));
+  } catch (e) {
+    Logger.log("Auth header FAILED: " + e.toString());
+  }
+
+  // Test 2: Basic API call to athlete endpoint
+  Logger.log("--- fetchIcuApi (athlete endpoint) ---");
+  const athleteResult = fetchIcuApi("/athlete/0");
+  if (athleteResult.success) {
+    Logger.log("API call succeeded");
+    Logger.log("Athlete ID: " + (athleteResult.data.id || "N/A"));
+    Logger.log("Athlete name: " + (athleteResult.data.name || "N/A"));
+  } else {
+    Logger.log("API call FAILED: " + athleteResult.error);
+  }
+
+  // Test 3: Wellness endpoint
+  Logger.log("--- fetchIcuApi (wellness endpoint) ---");
+  const today = formatDateISO(new Date());
+  const wellnessResult = fetchIcuApi("/athlete/0/wellness/" + today);
+  if (wellnessResult.success) {
+    Logger.log("Wellness data retrieved for " + today);
+    Logger.log("CTL: " + (wellnessResult.data.ctl || "N/A"));
+    Logger.log("ATL: " + (wellnessResult.data.atl || "N/A"));
+  } else {
+    Logger.log("Wellness call FAILED: " + wellnessResult.error);
+  }
+
+  // Test 4: Historical eFTP
+  Logger.log("--- fetchHistoricalEftp ---");
+  const historicalEftp = fetchHistoricalEftp(new Date());
+  if (historicalEftp) {
+    Logger.log("Current eFTP from history: " + historicalEftp + "W");
+  } else {
+    Logger.log("No historical eFTP data found");
+  }
+
+  // Test 5: Check an older eFTP (30 days ago)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const olderEftp = fetchHistoricalEftp(thirtyDaysAgo);
+  if (olderEftp) {
+    Logger.log("eFTP 30 days ago: " + olderEftp + "W");
+  } else {
+    Logger.log("No eFTP data found for 30 days ago");
+  }
+
+  Logger.log("=== API UTILITIES TEST COMPLETE ===");
 }
