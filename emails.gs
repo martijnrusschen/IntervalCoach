@@ -401,7 +401,7 @@ ${t.focus}: ${phaseInfo.focus}
     twoWeekHistory: getTwoWeekWorkoutHistory()
   };
 
-  // Get upcoming events
+  // Get upcoming events (races)
   const upcomingEvents = [];
   for (let i = 0; i < 7; i++) {
     const eventCheck = hasEventInDays(i);
@@ -416,6 +416,35 @@ ${t.focus}: ${phaseInfo.focus}
     }
   }
   planContext.upcomingEvents = upcomingEvents;
+
+  // Get existing scheduled workouts for next 7 days
+  const existingWorkouts = [];
+  for (let i = 1; i <= 7; i++) {  // Start from tomorrow (i=1)
+    const checkDate = new Date(today);
+    checkDate.setDate(today.getDate() + i);
+    const dateStr = formatDateISO(checkDate);
+    const dayName = Utilities.formatDate(checkDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+
+    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr);
+    if (eventsResult.success && eventsResult.data?.length > 0) {
+      const workout = eventsResult.data.find(e => e.category === 'WORKOUT');
+      if (workout) {
+        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workout.name || '');
+        const isWeeklyPlan = workout.description?.includes('[Weekly Plan]');
+        if (!isSimplePlaceholder && !isWeeklyPlan) {
+          // User has a specific workout scheduled
+          existingWorkouts.push({
+            date: dateStr,
+            dayName: dayName,
+            name: workout.name,
+            duration: workout.moving_time ? Math.round(workout.moving_time / 60) : null,
+            type: workout.type || (workout.name?.toLowerCase().includes('run') ? 'Run' : 'Ride')
+          });
+        }
+      }
+    }
+  }
+  planContext.existingWorkouts = existingWorkouts;
 
   // Generate AI weekly plan
   Logger.log("Generating weekly training plan...");

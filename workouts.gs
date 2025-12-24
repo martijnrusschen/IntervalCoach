@@ -914,11 +914,19 @@ function generateAIWeeklyPlan(context) {
     ).join('\n');
   }
 
-  // Build scheduled days context
+  // Build scheduled days context (simple placeholders)
   let scheduledContext = '';
   if (context.scheduledDays && context.scheduledDays.length > 0) {
-    scheduledContext = '\n**ALREADY SCHEDULED:**\n' + context.scheduledDays.map(d =>
+    scheduledContext = '\n**PLACEHOLDER DAYS (need workout type):**\n' + context.scheduledDays.map(d =>
       `- ${d.dayName} (${d.date}): ${d.activityType} ${d.duration ? d.duration.min + '-' + d.duration.max + 'min' : ''}`
+    ).join('\n');
+  }
+
+  // Build existing workouts context (user already scheduled specific workouts)
+  let existingWorkoutsContext = '';
+  if (context.existingWorkouts && context.existingWorkouts.length > 0) {
+    existingWorkoutsContext = '\n**EXISTING WORKOUTS (DO NOT CHANGE - include as-is in your plan):**\n' + context.existingWorkouts.map(w =>
+      `- ${w.dayName} (${w.date}): ${w.name}${w.duration ? ' (' + w.duration + ' min)' : ''}`
     ).join('\n');
   }
 
@@ -958,7 +966,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}
+${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
@@ -980,9 +988,10 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 8. Respect already scheduled days, enhance with type recommendations
 9. If fatigued (TSB < -15), reduce volume and intensity
 10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
+11. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
 
 **YOUR TASK:**
-Create a 7-day plan starting from TOMORROW (skip today - ${context.startDate || 'unknown'}). For each day provide:
+Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
 - Recommended activity (Ride/Run/Rest)
 - Specific workout type (from list above)
 - Estimated TSS
