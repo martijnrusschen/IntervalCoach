@@ -506,21 +506,6 @@ Recovery Notes: ${weeklyPlan.recoveryNotes}
 }
 
 // =========================================================
-// WEEKLY PLANNING EMAIL (DEPRECATED - Use sendWeeklySummaryEmail)
-// =========================================================
-
-/**
- * @deprecated Use sendWeeklySummaryEmail() instead - it now includes weekly planning.
- * Send weekly training plan email
- * Call this at the start of the week (e.g., Sunday evening or Monday morning)
- */
-function sendWeeklyPlanningEmail() {
-  Logger.log("WARNING: sendWeeklyPlanningEmail is deprecated. Use sendWeeklySummaryEmail instead.");
-  // Call the combined function instead
-  return sendWeeklySummaryEmail();
-}
-
-// =========================================================
 // MONTHLY PROGRESS EMAIL
 // =========================================================
 
