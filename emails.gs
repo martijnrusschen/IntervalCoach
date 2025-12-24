@@ -387,55 +387,44 @@ ${t.training_proposal_no_placeholders}
 `;
   }
 
-  body += `\n${t.weekly_footer}`;
+  // ===================================
+  // WEEKLY PLAN SECTION (Forward-looking)
+  // ===================================
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Weekly summary email sent successfully.");
-}
-
-// =========================================================
-// WEEKLY PLANNING EMAIL
-// =========================================================
-
-/**
- * Send weekly training plan email
- * Call this at the start of the week (e.g., Sunday evening or Monday morning)
- */
-function sendWeeklyPlanningEmail() {
-  requireValidConfig();
-
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
-  const today = new Date();
-
-  // Gather all context
-  const fitnessMetrics = fetchFitnessMetrics();
-  const wellnessRecords = fetchWellnessData();
-  const wellness = createWellnessSummary(wellnessRecords);
-  const powerProfile = analyzePowerProfile(fetchPowerCurve());
-  const lastWeekActivities = fetchWeeklyActivities(7);
+  // Get recent workout types for variety
   const recentTypes = getRecentWorkoutTypes(7);
-  const upcoming = fetchUpcomingPlaceholders(7);
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics);
 
-  // Get goals
-  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
-  const goals = goalsResult.success && goalsResult.data ? {
-    available: true,
-    allGoals: goalsResult.data,
-    primaryGoal: goalsResult.data.find(g => g.priority === 'A'),
-    secondaryGoals: goalsResult.data.filter(g => g.priority === 'B')
-  } : { available: false };
-
-  // Calculate phase
-  const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
-    (USER_SETTINGS.TARGET_DATE || formatDateISO(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)));
-  const phaseInfo = calculateTrainingPhase(targetDate, {
-    goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
+  // Build context for AI planning
+  const planContext = {
+    startDate: formatDateISO(today),
+    phase: phaseInfo.phaseName,
+    weeksOut: phaseInfo.weeksOut,
+    phaseFocus: phaseInfo.focus,
+    phaseReasoning: phaseInfo.reasoning,
+    ctl: fitnessMetrics.ctl,
+    atl: fitnessMetrics.atl,
+    tsb: fitnessMetrics.tsb,
+    eftp: powerProfile && powerProfile.available ? powerProfile.currentEftp : null,
+    ctlTrend: fitnessMetrics.rampRate > 0.5 ? 'increasing' : fitnessMetrics.rampRate < -0.5 ? 'decreasing' : 'stable',
+    recoveryStatus: wellnessSummary.available ? wellnessSummary.recoveryStatus : 'Unknown',
+    avgRecovery: wellnessSummary.available ? wellnessSummary.averages?.recovery : null,
+    avgSleep: wellnessSummary.available ? wellnessSummary.averages?.sleep : null,
     goals: goals,
-    ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
-    tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
-    enableAI: true
-  });
+    lastWeek: {
+      totalTss: weekData.totalTss,
+      activities: weekData.totalActivities,
+      rideTypes: recentTypes.rides,
+      runTypes: recentTypes.runs,
+      highIntensityDays: recentTypes.all.filter(t => {
+        const catalog = { ...WORKOUT_TYPES.ride, ...WORKOUT_TYPES.run };
+        return catalog[t]?.intensity >= 4;
+      }).length
+    },
+    scheduledDays: upcoming.filter(d => d.activityType),
+    tssTarget: loadAdvice.tssRange,
+    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax },
+    twoWeekHistory: getTwoWeekWorkoutHistory()
+  };
 
   // Get upcoming events
   const upcomingEvents = [];
@@ -451,65 +440,20 @@ function sendWeeklyPlanningEmail() {
       });
     }
   }
-
-  // Build context for AI planning
-  const planContext = {
-    startDate: formatDateISO(today),
-    phase: phaseInfo.phaseName,
-    weeksOut: phaseInfo.weeksOut,
-    phaseFocus: phaseInfo.focus,
-    phaseReasoning: phaseInfo.reasoning,
-    ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl || 0,
-    atl: fitnessMetrics.atl_7 || fitnessMetrics.atl || 0,
-    tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb || 0,
-    eftp: powerProfile.available ? powerProfile.currentEftp : null,
-    ctlTrend: fitnessMetrics.rampRate > 0.5 ? 'increasing' : fitnessMetrics.rampRate < -0.5 ? 'decreasing' : 'stable',
-    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
-    avgRecovery: wellness.available ? wellness.averages?.recovery : null,
-    avgSleep: wellness.available ? wellness.averages?.sleep : null,
-    goals: goals,
-    lastWeek: {
-      totalTss: lastWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0),
-      activities: lastWeekActivities.length,
-      rideTypes: recentTypes.rides,
-      runTypes: recentTypes.runs,
-      highIntensityDays: recentTypes.all.filter(t => {
-        const catalog = { ...WORKOUT_TYPES.ride, ...WORKOUT_TYPES.run };
-        return catalog[t]?.intensity >= 4;
-      }).length
-    },
-    upcomingEvents: upcomingEvents,
-    scheduledDays: upcoming.filter(d => d.activityType),
-    tssTarget: loadAdvice.tssRange,
-    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax },
-    twoWeekHistory: getTwoWeekWorkoutHistory()
-  };
+  planContext.upcomingEvents = upcomingEvents;
 
   // Generate AI weekly plan
   Logger.log("Generating weekly training plan...");
   const weeklyPlan = generateAIWeeklyPlan(planContext);
 
-  if (!weeklyPlan) {
-    Logger.log("Failed to generate weekly plan");
-    return;
-  }
+  if (weeklyPlan) {
+    // Create calendar events from the weekly plan
+    const calendarResults = createWeeklyPlanEvents(weeklyPlan);
 
-  // Create calendar events from the weekly plan
-  const calendarResults = createWeeklyPlanEvents(weeklyPlan);
-
-  // Build email
-  const weekStart = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MMM d");
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekEndStr = Utilities.formatDate(weekEnd, SYSTEM_SETTINGS.TIMEZONE, "MMM d");
-
-  const subject = `[IntervalCoach] Week Plan: ${weekStart} - ${weekEndStr}`;
-
-  let body = `Your training plan for the week ahead.\n\n`;
-
-  // Strategy overview
-  body += `===================================
-WEEKLY STRATEGY
+    // Add plan section to email
+    body += `
+===================================
+${t.weekly_plan_title || 'WEEK AHEAD PLAN'}
 ===================================
 ${weeklyPlan.weeklyStrategy}
 
@@ -518,70 +462,62 @@ Intensity Mix: ${weeklyPlan.intensityDistribution.high} hard | ${weeklyPlan.inte
 
 `;
 
-  // Day by day plan
-  body += `===================================
-DAY-BY-DAY PLAN
-===================================\n`;
-
-  for (const day of weeklyPlan.days) {
-    const activityIcon = day.activity === 'Rest' ? '🛋️' : day.activity === 'Ride' ? '🚴' : '🏃';
-    body += `
-${day.dayName} (${day.date})
+    // Day by day plan
+    for (const day of weeklyPlan.days) {
+      const activityIcon = day.activity === 'Rest' ? '🛋️' : day.activity === 'Ride' ? '🚴' : '🏃';
+      body += `${day.dayName} (${day.date})
 ${activityIcon} ${day.activity}${day.workoutType ? ': ' + day.workoutType : ''}
 ${day.activity !== 'Rest' ? 'TSS: ~' + day.estimatedTSS + ' | ' + day.duration + ' min' : ''}
 ${day.focus}
+
 `;
+    }
+
+    // Key workouts
+    if (weeklyPlan.keyWorkouts && weeklyPlan.keyWorkouts.length > 0) {
+      body += `Key Workouts This Week:
+`;
+      weeklyPlan.keyWorkouts.forEach(kw => {
+        body += `• ${kw}\n`;
+      });
+    }
+
+    // Recovery notes
+    if (weeklyPlan.recoveryNotes) {
+      body += `
+Recovery Notes: ${weeklyPlan.recoveryNotes}
+`;
+    }
+
+    // Calendar sync info
+    if (calendarResults.created > 0) {
+      body += `
+📅 ${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
+`;
+    }
+  } else {
+    Logger.log("Failed to generate weekly plan");
   }
 
-  // Key workouts
-  if (weeklyPlan.keyWorkouts && weeklyPlan.keyWorkouts.length > 0) {
-    body += `
-===================================
-KEY WORKOUTS THIS WEEK
-===================================
-`;
-    weeklyPlan.keyWorkouts.forEach(kw => {
-      body += `• ${kw}\n`;
-    });
-  }
-
-  // Recovery notes
-  if (weeklyPlan.recoveryNotes) {
-    body += `
------------------------------------
-Recovery Notes
------------------------------------
-${weeklyPlan.recoveryNotes}
-`;
-  }
-
-  // Calendar sync info
-  if (calendarResults.created > 0) {
-    body += `
------------------------------------
-Calendar Sync
------------------------------------
-${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
-These placeholders will be replaced with detailed workouts each day.
-`;
-  }
-
-  // Current status
-  body += `
-===================================
-CURRENT STATUS
-===================================
-Phase: ${phaseInfo.phaseName} (${phaseInfo.weeksOut} weeks to goal)
-CTL: ${planContext.ctl.toFixed(0)} | TSB: ${planContext.tsb.toFixed(1)}
-Recovery: ${planContext.recoveryStatus}
-`;
-
-  body += `\n\nHave a great week of training!`;
+  body += `\n${t.weekly_footer}`;
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Weekly planning email sent successfully.");
+  Logger.log("Weekly summary email sent successfully.");
+}
 
-  return weeklyPlan;
+// =========================================================
+// WEEKLY PLANNING EMAIL (DEPRECATED - Use sendWeeklySummaryEmail)
+// =========================================================
+
+/**
+ * @deprecated Use sendWeeklySummaryEmail() instead - it now includes weekly planning.
+ * Send weekly training plan email
+ * Call this at the start of the week (e.g., Sunday evening or Monday morning)
+ */
+function sendWeeklyPlanningEmail() {
+  Logger.log("WARNING: sendWeeklyPlanningEmail is deprecated. Use sendWeeklySummaryEmail instead.");
+  // Call the combined function instead
+  return sendWeeklySummaryEmail();
 }
 
 // =========================================================

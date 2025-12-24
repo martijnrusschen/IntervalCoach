@@ -255,22 +255,15 @@ Once everything works, set up automatic triggers:
 - Type: Day timer
 - Time: 6:00 AM - 7:00 AM
 
-**Trigger 3: Weekly Planning (Recommended)**
-- Function: `sendWeeklyPlanningEmail`
-- Event source: Time-driven
-- Type: Week timer
-- Day: Sunday or Monday
-- Time: 6:00 AM - 7:00 AM
-- Creates weekly plan + syncs placeholder events to Intervals.icu calendar
-
-**Trigger 4: Weekly Summary (Optional)**
+**Trigger 3: Weekly Summary + Planning (Recommended)**
 - Function: `sendWeeklySummaryEmail`
 - Event source: Time-driven
 - Type: Week timer
 - Day: Sunday
-- Time: 8:00 PM - 9:00 PM
+- Time: 6:00 PM - 7:00 PM
+- Reviews past week + creates next week's plan + syncs to Intervals.icu calendar
 
-**Trigger 5: Monthly Progress Report (Optional)**
+**Trigger 4: Monthly Progress Report (Optional)**
 - Function: `sendMonthlyProgressEmail`
 - Event source: Time-driven
 - Type: Month timer
@@ -354,7 +347,7 @@ IntervalCoach sends a daily email with:
 - Attached .zwo file (for cycling)
 
 ### Weekly Summary Email
-A weekly recap email (set up via trigger) includes:
+A weekly recap + planning email (set up via trigger) includes:
 - AI-generated personalized weekly insights
 - Training totals (activities, time, TSS, distance)
 - Week-over-week comparison for all metrics
@@ -362,6 +355,8 @@ A weekly recap email (set up via trigger) includes:
 - Health & recovery averages (sleep, HRV, resting HR) with changes vs previous week
 - Training load advice (target CTL, weekly/daily TSS recommendations)
 - Training phase and goal progress
+- **Week Ahead Plan** with day-by-day workout suggestions
+- Auto-syncs weekly plan to Intervals.icu calendar as placeholder events
 
 ### Monthly Progress Report
 A monthly report (set up via trigger, e.g., 1st of each month) compares the previous complete calendar month with the month before that:
