@@ -1528,3 +1528,139 @@ function testAIRestDayAssessment() {
 
   Logger.log("\n=== AI REST DAY ASSESSMENT TEST COMPLETE ===");
 }
+
+/**
+ * Test AI weekly planning
+ */
+function testAIWeeklyPlan() {
+  Logger.log("=== AI WEEKLY PLAN TEST ===");
+  requireValidConfig();
+
+  // Gather context
+  const fitnessMetrics = fetchFitnessMetrics();
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
+  const powerProfile = analyzePowerProfile(fetchPowerCurve());
+  const lastWeekActivities = fetchWeeklyActivities(7);
+  const recentTypes = getRecentWorkoutTypes(7);
+  const upcoming = fetchUpcomingPlaceholders(7);
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics);
+
+  // Get goals
+  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
+  const goals = goalsResult.success && goalsResult.data ? {
+    available: true,
+    allGoals: goalsResult.data,
+    primaryGoal: goalsResult.data.find(g => g.priority === 'A'),
+    secondaryGoals: goalsResult.data.filter(g => g.priority === 'B')
+  } : { available: false };
+
+  // Phase
+  const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
+    (USER_SETTINGS.TARGET_DATE || formatDateISO(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)));
+  const phaseInfo = calculateTrainingPhase(targetDate, {
+    goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
+    goals: goals,
+    ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
+    tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
+    enableAI: true
+  });
+
+  const ctl = fitnessMetrics.ctl_90 || fitnessMetrics.ctl || 0;
+  const tsb = fitnessMetrics.tsb_current || fitnessMetrics.tsb || 0;
+  const atl = fitnessMetrics.atl_7 || fitnessMetrics.atl || 0;
+
+  Logger.log("\n--- Current Status ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks to goal)");
+  Logger.log("CTL: " + ctl.toFixed(0) + " | ATL: " + atl.toFixed(0) + " | TSB: " + tsb.toFixed(1));
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("Last week activities: " + lastWeekActivities.length);
+  Logger.log("TSS target: " + loadAdvice.tssRange.min + "-" + loadAdvice.tssRange.max);
+
+  // Upcoming events check
+  Logger.log("\n--- Upcoming Events ---");
+  let upcomingEvents = [];
+  for (let i = 0; i < 7; i++) {
+    const eventCheck = hasEventInDays(i);
+    if (eventCheck.hasEvent) {
+      const eventDate = new Date();
+      eventDate.setDate(eventDate.getDate() + i);
+      upcomingEvents.push({
+        date: formatDateISO(eventDate),
+        dayName: Utilities.formatDate(eventDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE"),
+        eventCategory: eventCheck.category
+      });
+      Logger.log("Day " + i + ": " + eventCheck.category + " event");
+    }
+  }
+  if (upcomingEvents.length === 0) {
+    Logger.log("No events in next 7 days");
+  }
+
+  // Build context
+  const planContext = {
+    startDate: formatDateISO(new Date()),
+    phase: phaseInfo.phaseName,
+    weeksOut: phaseInfo.weeksOut,
+    phaseFocus: phaseInfo.focus,
+    phaseReasoning: phaseInfo.reasoning,
+    ctl: ctl,
+    atl: atl,
+    tsb: tsb,
+    eftp: powerProfile.available ? powerProfile.currentEftp : null,
+    ctlTrend: fitnessMetrics.rampRate > 0.5 ? 'increasing' : fitnessMetrics.rampRate < -0.5 ? 'decreasing' : 'stable',
+    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
+    avgRecovery: wellness.available ? wellness.averages?.recovery : null,
+    avgSleep: wellness.available ? wellness.averages?.sleep : null,
+    goals: goals,
+    lastWeek: {
+      totalTss: lastWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0),
+      activities: lastWeekActivities.length,
+      rideTypes: recentTypes.rides,
+      runTypes: recentTypes.runs
+    },
+    upcomingEvents: upcomingEvents,
+    scheduledDays: upcoming.filter(d => d.activityType),
+    tssTarget: loadAdvice.tssRange,
+    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax }
+  };
+
+  // Generate plan
+  Logger.log("\n--- Generating Weekly Plan ---");
+  const plan = generateAIWeeklyPlan(planContext);
+
+  if (!plan) {
+    Logger.log("ERROR: Failed to generate weekly plan");
+    return;
+  }
+
+  Logger.log("\n--- Weekly Strategy ---");
+  Logger.log(plan.weeklyStrategy);
+  Logger.log("Total Planned TSS: " + plan.totalPlannedTSS);
+  Logger.log("Intensity: " + plan.intensityDistribution.high + " hard, " +
+             plan.intensityDistribution.medium + " medium, " +
+             plan.intensityDistribution.low + " easy, " +
+             plan.intensityDistribution.rest + " rest");
+
+  Logger.log("\n--- Day-by-Day Plan ---");
+  for (const day of plan.days) {
+    const line = day.dayName + " (" + day.date + "): " +
+                 day.activity + (day.workoutType ? " - " + day.workoutType : "") +
+                 (day.estimatedTSS ? " [TSS: " + day.estimatedTSS + "]" : "");
+    Logger.log(line);
+    Logger.log("  " + day.focus);
+  }
+
+  if (plan.keyWorkouts && plan.keyWorkouts.length > 0) {
+    Logger.log("\n--- Key Workouts ---");
+    plan.keyWorkouts.forEach(kw => Logger.log("• " + kw));
+  }
+
+  if (plan.recoveryNotes) {
+    Logger.log("\n--- Recovery Notes ---");
+    Logger.log(plan.recoveryNotes);
+  }
+
+  Logger.log("\n=== AI WEEKLY PLAN TEST COMPLETE ===");
+  Logger.log("To send as email, run: sendWeeklyPlanningEmail()");
+}

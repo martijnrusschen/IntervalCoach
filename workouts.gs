@@ -9,10 +9,12 @@
 // =========================================================
 
 /**
- * Check Intervals.icu calendar for workout placeholders
- * Looks for events starting with "Ride" or "Run" (e.g., "Ride - 90min" or "Run - 45min")
+ * Check Intervals.icu calendar for workout placeholders or existing generated workouts
+ * Looks for:
+ * 1. Placeholders starting with "Ride" or "Run" (e.g., "Ride - 90min" or "Run - 45min")
+ * 2. Existing generated workouts (workout types from catalog, or workouts with .zwo files)
  * @param {string} dateStr - Date in yyyy-MM-dd format
- * @returns {object} { hasPlaceholder, placeholder, duration, activityType }
+ * @returns {object} { hasPlaceholder, placeholder, duration, activityType, isExisting }
  */
 function findIntervalCoachPlaceholder(dateStr) {
   const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
@@ -23,15 +25,19 @@ function findIntervalCoachPlaceholder(dateStr) {
 
   if (!result.success) {
     Logger.log("Error checking Intervals.icu calendar: " + result.error);
-    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
+    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null, isExisting: false };
   }
 
   const events = result.data;
   if (!Array.isArray(events)) {
-    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
+    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null, isExisting: false };
   }
 
-  // Find placeholder event starting with "Ride", "Run", or "Hardlopen"
+  // Get all workout type names for matching existing workouts
+  const rideWorkoutTypes = Object.keys(WORKOUT_TYPES.ride).map(t => t.toLowerCase());
+  const runWorkoutTypes = Object.keys(WORKOUT_TYPES.run).map(t => t.toLowerCase());
+
+  // First priority: Find placeholder event starting with "Ride", "Run", or "Hardlopen"
   const placeholder = events.find(function(e) {
     if (!e.name) return false;
     const nameLower = e.name.toLowerCase();
@@ -50,11 +56,48 @@ function findIntervalCoachPlaceholder(dateStr) {
       hasPlaceholder: true,
       placeholder: placeholder,
       duration: duration,
-      activityType: activityType
+      activityType: activityType,
+      isExisting: false
     };
   }
 
-  return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null };
+  // Second priority: Find existing generated workout that can be replaced
+  const existingWorkout = events.find(function(e) {
+    if (!e.name) return false;
+    const nameLower = e.name.toLowerCase();
+
+    // Check if it's a workout type we generated (ride or run)
+    const isRideType = rideWorkoutTypes.some(t => nameLower.includes(t));
+    const isRunType = runWorkoutTypes.some(t => nameLower.includes(t));
+
+    // Also check for workouts with .zwo files (category WORKOUT)
+    const isZwoWorkout = e.category === 'WORKOUT' && e.filename && e.filename.endsWith('.zwo');
+
+    return isRideType || isRunType || isZwoWorkout;
+  });
+
+  if (existingWorkout) {
+    const nameLower = existingWorkout.name.toLowerCase();
+    const isRunType = runWorkoutTypes.some(t => nameLower.includes(t));
+    const activityType = isRunType ? "Run" : "Ride";
+
+    // Try to extract duration from the existing workout or use default
+    const duration = existingWorkout.moving_time
+      ? { min: Math.round(existingWorkout.moving_time / 60 * 0.9), max: Math.round(existingWorkout.moving_time / 60 * 1.1) }
+      : (activityType === "Run" ? USER_SETTINGS.DEFAULT_DURATION_RUN : USER_SETTINGS.DEFAULT_DURATION_RIDE);
+
+    Logger.log("Found existing workout to replace: " + existingWorkout.name);
+
+    return {
+      hasPlaceholder: true,
+      placeholder: existingWorkout,
+      duration: duration,
+      activityType: activityType,
+      isExisting: true
+    };
+  }
+
+  return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null, isExisting: false };
 }
 
 /**
@@ -105,14 +148,16 @@ function checkAvailability(wellness) {
       reason: "No placeholder found for today. Add '" + USER_SETTINGS.PLACEHOLDER_RIDE + "' or '" + USER_SETTINGS.PLACEHOLDER_RUN + " - 45min' to your Intervals.icu calendar.",
       duration: null,
       placeholder: null,
-      activityType: null
+      activityType: null,
+      isExisting: false
     };
   }
 
-  // Found placeholder - extract info
+  // Found placeholder or existing workout - extract info
   const placeholderName = result.placeholder.name;
   const duration = result.duration;
   const activityType = result.activityType;
+  const isExisting = result.isExisting;
 
   // Add recovery note if wellness data available
   let recoveryNote = "";
@@ -122,12 +167,15 @@ function checkAvailability(wellness) {
     }
   }
 
+  const reasonPrefix = isExisting ? "Replacing existing workout: " : "Found placeholder: ";
+
   return {
     shouldGenerate: true,
-    reason: "Found placeholder: " + placeholderName + " (" + activityType + ")" + recoveryNote,
+    reason: reasonPrefix + placeholderName + " (" + activityType + ")" + recoveryNote,
     duration: duration,
     placeholder: result.placeholder,
-    activityType: activityType
+    activityType: activityType,
+    isExisting: isExisting
   };
 }
 
@@ -843,6 +891,144 @@ Generate a personalized training proposal:`;
     return proposal;
   } catch (e) {
     Logger.log("Error generating training proposal: " + e.toString());
+    return null;
+  }
+}
+
+/**
+ * Generate comprehensive AI weekly training plan
+ * @param {object} context - Full context for planning
+ * @returns {object} Structured weekly plan with day-by-day recommendations
+ */
+function generateAIWeeklyPlan(context) {
+  // Build last week summary
+  let lastWeekContext = '';
+  if (context.lastWeek) {
+    const lw = context.lastWeek;
+    lastWeekContext = `
+**LAST WEEK REVIEW:**
+- Total TSS: ${lw.totalTss?.toFixed(0) || 'N/A'}
+- Activities: ${lw.activities || 0}
+- Rides: ${lw.rideTypes?.join(', ') || 'None'}
+- Runs: ${lw.runTypes?.join(', ') || 'None'}
+- High Intensity Days: ${lw.highIntensityDays || 0}
+`;
+  }
+
+  // Build upcoming events context
+  let eventsContext = '';
+  if (context.upcomingEvents && context.upcomingEvents.length > 0) {
+    eventsContext = '\n**UPCOMING EVENTS:**\n' + context.upcomingEvents.map(e =>
+      `- ${e.date} (${e.dayName}): ${e.eventCategory} priority${e.name ? ' - ' + e.name : ''}`
+    ).join('\n');
+  }
+
+  // Build scheduled days context
+  let scheduledContext = '';
+  if (context.scheduledDays && context.scheduledDays.length > 0) {
+    scheduledContext = '\n**ALREADY SCHEDULED:**\n' + context.scheduledDays.map(d =>
+      `- ${d.dayName} (${d.date}): ${d.activityType} ${d.duration ? d.duration.min + '-' + d.duration.max + 'min' : ''}`
+    ).join('\n');
+  }
+
+  // Build goals context
+  let goalsContext = '';
+  if (context.goals?.available) {
+    const g = context.goals;
+    goalsContext = `
+**GOALS:**
+- Primary (A): ${g.primaryGoal ? g.primaryGoal.name + ' (' + g.primaryGoal.date + ')' : 'None'}
+- Secondary (B): ${g.secondaryGoals?.length > 0 ? g.secondaryGoals.map(r => r.name).join(', ') : 'None'}
+`;
+  }
+
+  const prompt = `You are an expert cycling and running coach creating a WEEKLY TRAINING PLAN.
+
+**ATHLETE STATUS:**
+- Training Phase: ${context.phase || 'Build'} (${context.weeksOut || '?'} weeks to goal)
+- Phase Focus: ${context.phaseFocus || 'General development'}
+${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : ''}
+
+**CURRENT FITNESS:**
+- CTL (Fitness): ${context.ctl?.toFixed(0) || 'N/A'}
+- ATL (Fatigue): ${context.atl?.toFixed(0) || 'N/A'}
+- TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
+- eFTP: ${context.eftp || 'N/A'}W
+- CTL Trend: ${context.ctlTrend || 'stable'}
+${goalsContext}
+**RECOVERY STATUS:**
+- Current: ${context.recoveryStatus || 'Unknown'}
+- 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
+- 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
+${lastWeekContext}${eventsContext}${scheduledContext}
+
+**WEEKLY TARGETS:**
+- Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
+- Daily TSS Range: ${context.dailyTss?.min || 50}-${context.dailyTss?.max || 100}
+
+**AVAILABLE WORKOUT TYPES:**
+Cycling: Recovery_Easy (1), Endurance_Z2 (2), Endurance_Tempo (3), SweetSpot (3), Tempo_Sustained (3), FTP_Threshold (4), Over_Unders (4), VO2max_Intervals (5), Anaerobic_Sprints (5)
+Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartlek (3), Run_Threshold (4), Run_Intervals (5), Run_Strides (2)
+(Numbers = intensity 1-5)
+
+**PLANNING RULES:**
+1. Never schedule back-to-back intensity 4-5 days
+2. After intensity 5, next day should be 1-2
+3. Include at least 1 full rest day if TSB < -10
+4. Pre-race day (A/B event): intensity 1-2 only
+5. Post-race day (A/B event): rest or intensity 1
+6. Build week = 3-4 quality sessions; Recovery week = 1-2 quality sessions
+7. Respect already scheduled days, enhance with type recommendations
+8. If fatigued (TSB < -15), reduce volume and intensity
+
+**YOUR TASK:**
+Create a 7-day plan starting from ${context.startDate || 'today'}. For each day provide:
+- Recommended activity (Ride/Run/Rest)
+- Specific workout type (from list above)
+- Estimated TSS
+- Brief focus/notes
+
+**Output JSON only:**
+{
+  "weeklyStrategy": "2-3 sentence overview of the week's approach",
+  "totalPlannedTSS": 350,
+  "intensityDistribution": {
+    "high": 2,
+    "medium": 2,
+    "low": 2,
+    "rest": 1
+  },
+  "days": [
+    {
+      "date": "2024-01-15",
+      "dayName": "Monday",
+      "activity": "Ride",
+      "workoutType": "Endurance_Z2",
+      "intensity": 2,
+      "estimatedTSS": 50,
+      "duration": 60,
+      "focus": "Easy spin to start the week"
+    },
+    ...
+  ],
+  "keyWorkouts": ["Wednesday: Threshold intervals for FTP development", "Saturday: Long endurance for aerobic base"],
+  "recoveryNotes": "Include foam rolling after Thursday's session"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+
+  if (!response) {
+    Logger.log("AI weekly plan: No response from Gemini");
+    return null;
+  }
+
+  try {
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI weekly plan: " + e.toString());
+    Logger.log("Raw response: " + response.substring(0, 500));
     return null;
   }
 }
