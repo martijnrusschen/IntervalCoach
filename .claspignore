@@ -1,0 +1,9 @@
+# Ignore sample config (conflicts with real config.gs)
+config.sample.gs
+
+# Ignore non-script files
+README.md
+LICENSE
+CLAUDE.md
+.git/**
+.github/**
