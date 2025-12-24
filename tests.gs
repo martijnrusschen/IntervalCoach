@@ -818,7 +818,6 @@ function testAIWeeklyPlan() {
   const lastWeekActivities = fetchWeeklyActivities(7);
   const recentTypes = getRecentWorkoutTypes(7);
   const upcoming = fetchUpcomingPlaceholders(7);
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics);
 
   const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
   const goals = goalsResult.success && goalsResult.data ? {
@@ -841,6 +840,9 @@ function testAIWeeklyPlan() {
   const ctl = fitnessMetrics.ctl_90 || fitnessMetrics.ctl || 0;
   const tsb = fitnessMetrics.tsb_current || fitnessMetrics.tsb || 0;
   const atl = fitnessMetrics.atl_7 || fitnessMetrics.atl || 0;
+
+  // Calculate load advice after phaseInfo is available
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
 
   Logger.log("\n--- Current Status ---");
   Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks to goal)");
