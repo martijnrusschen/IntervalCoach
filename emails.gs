@@ -357,38 +357,11 @@ ${t.focus}: ${phaseInfo.focus}
 `;
   }
 
-  // Training Proposal
-  const upcoming = fetchUpcomingPlaceholders(7);
-  if (upcoming.length > 0) {
-    const trainingProposal = generateWeeklyTrainingProposal({
-      upcoming: upcoming,
-      phaseInfo: phaseInfo,
-      fitnessMetrics: fitnessMetrics,
-      goals: goals,
-      wellness: wellnessSummary,
-      loadAdvice: loadAdvice
-    });
-
-    if (trainingProposal) {
-      body += `
------------------------------------
-${t.training_proposal_title}
------------------------------------
-${trainingProposal}
-`;
-    }
-  } else {
-    body += `
------------------------------------
-${t.training_proposal_title}
------------------------------------
-${t.training_proposal_no_placeholders}
-`;
-  }
-
   // ===================================
   // WEEKLY PLAN SECTION (Forward-looking)
   // ===================================
+
+  const upcoming = fetchUpcomingPlaceholders(7);
 
   // Get recent workout types for variety
   const recentTypes = getRecentWorkoutTypes(7);
