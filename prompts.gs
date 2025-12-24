@@ -966,3 +966,92 @@ Based on the athlete's current state, wellness trends, and training context:
   }
 }
 
+// =========================================================
+// AI RECOVERY ASSESSMENT
+// =========================================================
+
+/**
+ * Generate AI-driven recovery assessment using personal baselines
+ * Replaces fixed thresholds with individualized analysis
+ * @param {object} today - Today's wellness data
+ * @param {object} averages - 7-day averages (personal baselines)
+ * @returns {object} { recoveryStatus, intensityModifier, personalizedReason, confidence }
+ */
+function generateAIRecoveryAssessment(today, averages) {
+  if (!today) {
+    return null;
+  }
+
+  // Calculate trend indicators
+  const hrvTrend = (today.hrv && averages.hrv)
+    ? ((today.hrv - averages.hrv) / averages.hrv * 100).toFixed(1)
+    : null;
+  const sleepTrend = (today.sleep && averages.sleep)
+    ? (today.sleep - averages.sleep).toFixed(1)
+    : null;
+  const recoveryTrend = (today.recovery != null && averages.recovery)
+    ? (today.recovery - averages.recovery).toFixed(0)
+    : null;
+
+  // Build subjective markers context
+  let subjectiveContext = '';
+  if (today.soreness || today.fatigue || today.stress || today.mood) {
+    subjectiveContext = `\n**Subjective Markers (1-5 scale, 1=best):**`;
+    if (today.soreness) subjectiveContext += `\n- Soreness: ${today.soreness}/5`;
+    if (today.fatigue) subjectiveContext += `\n- Fatigue: ${today.fatigue}/5`;
+    if (today.stress) subjectiveContext += `\n- Stress: ${today.stress}/5`;
+    if (today.mood) subjectiveContext += `\n- Mood: ${today.mood}/5`;
+  }
+
+  const prompt = `You are an expert coach assessing an athlete's recovery status for today's training.
+
+**Today's Wellness Data:**
+- Recovery Score: ${today.recovery != null ? today.recovery + '%' : 'N/A'}${recoveryTrend ? ` (${recoveryTrend >= 0 ? '+' : ''}${recoveryTrend}% vs avg)` : ''}
+- HRV: ${today.hrv || 'N/A'} ms${hrvTrend ? ` (${hrvTrend >= 0 ? '+' : ''}${hrvTrend}% vs avg)` : ''}
+- Sleep: ${today.sleep ? today.sleep.toFixed(1) + 'h' : 'N/A'}${sleepTrend ? ` (${sleepTrend >= 0 ? '+' : ''}${sleepTrend}h vs avg)` : ''}
+- Resting HR: ${today.restingHR || 'N/A'} bpm${subjectiveContext}
+
+**Personal Baselines (7-day averages):**
+- Avg Recovery: ${averages.recovery ? averages.recovery.toFixed(0) + '%' : 'N/A'}
+- Avg HRV: ${averages.hrv ? averages.hrv.toFixed(0) + ' ms' : 'N/A'}
+- Avg Sleep: ${averages.sleep ? averages.sleep.toFixed(1) + 'h' : 'N/A'}
+- Avg Resting HR: ${averages.restingHR ? averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+
+**Assessment Guidelines:**
+- Consider personal baselines, not population norms
+- HRV above personal average = positive sign, below = concerning
+- Recovery trends matter: improving = green, declining = yellow/red
+- Weight multiple signals: a low recovery score with high HRV may still be OK
+- Sleep debt compounds: multiple poor nights = more conservative
+
+**Determine recovery status:**
+- **Green (Primed)**: Above personal baseline, ready for hard training
+- **Yellow (Recovering)**: Near baseline or mixed signals, moderate training OK
+- **Red (Strained)**: Below baseline on multiple metrics, easy day recommended
+
+**Output JSON only (no markdown wrapping):**
+{
+  "recoveryStatus": "Green (Primed)|Yellow (Recovering)|Red (Strained)",
+  "intensityModifier": <number 0.7-1.0>,
+  "personalizedReason": "1-2 sentence explanation using their specific data",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI recovery assessment: No response from Gemini");
+      return null;
+    }
+
+    // Parse JSON from response
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI recovery assessment: " + e.toString());
+    return null;
+  }
+}
+

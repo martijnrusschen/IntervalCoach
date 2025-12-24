@@ -300,6 +300,69 @@ function testRestDayEmail() {
 }
 
 /**
+ * Test AI-enhanced recovery assessment with personal baselines
+ */
+function testAIRecoveryAssessment() {
+  Logger.log("=== AI RECOVERY ASSESSMENT TEST ===");
+
+  // Fetch wellness data
+  const wellnessRecords = fetchWellnessData(7);
+
+  if (!wellnessRecords || wellnessRecords.length === 0) {
+    Logger.log("ERROR: No wellness data available");
+    return;
+  }
+
+  // Get raw data before AI processing
+  const latestWithData = wellnessRecords.find(r => r.sleep > 0 || r.hrv || r.recovery) || wellnessRecords[0];
+  const last7Days = wellnessRecords.slice(0, 7);
+
+  Logger.log("\n--- Today's Raw Data ---");
+  Logger.log("Recovery Score: " + (latestWithData.recovery != null ? latestWithData.recovery + "%" : "N/A"));
+  Logger.log("HRV: " + (latestWithData.hrv || "N/A") + " ms");
+  Logger.log("Sleep: " + (latestWithData.sleep ? latestWithData.sleep.toFixed(1) + "h" : "N/A"));
+  Logger.log("Resting HR: " + (latestWithData.restingHR || "N/A") + " bpm");
+
+  // Calculate averages for comparison
+  const avgRecovery = average(last7Days.map(w => w.recovery).filter(v => v != null));
+  const avgHRV = average(last7Days.map(w => w.hrv).filter(v => v != null));
+  const avgSleep = average(last7Days.map(w => w.sleep).filter(v => v > 0));
+
+  Logger.log("\n--- Personal Baselines (7-day avg) ---");
+  Logger.log("Avg Recovery: " + (avgRecovery ? avgRecovery.toFixed(0) + "%" : "N/A"));
+  Logger.log("Avg HRV: " + (avgHRV ? avgHRV.toFixed(0) + " ms" : "N/A"));
+  Logger.log("Avg Sleep: " + (avgSleep ? avgSleep.toFixed(1) + "h" : "N/A"));
+
+  // Get AI-enhanced wellness summary
+  Logger.log("\n--- AI Recovery Assessment ---");
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("AI Enhanced: " + (wellness.aiEnhanced ? "YES" : "NO (fallback)"));
+  Logger.log("Recovery Status: " + wellness.recoveryStatus);
+  Logger.log("Intensity Modifier: " + (wellness.intensityModifier * 100).toFixed(0) + "%");
+  if (wellness.personalizedReason) {
+    Logger.log("Reason: " + wellness.personalizedReason);
+  }
+
+  // Show what fixed thresholds would have said
+  Logger.log("\n--- Fixed Threshold Comparison ---");
+  if (latestWithData.recovery != null) {
+    let fixedStatus;
+    if (latestWithData.recovery >= 66) {
+      fixedStatus = "Green (Primed)";
+    } else if (latestWithData.recovery >= 34) {
+      fixedStatus = "Yellow (Recovering)";
+    } else {
+      fixedStatus = "Red (Strained)";
+    }
+    Logger.log("Fixed threshold would say: " + fixedStatus);
+    Logger.log("AI says: " + wellness.recoveryStatus);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test weekly summary
  */
 function testWeeklySummary() {

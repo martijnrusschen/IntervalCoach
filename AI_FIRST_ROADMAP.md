@@ -16,6 +16,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Tests Reorganization** - Moved to dedicated tests.gs
 - [x] **AI Power Profile Analysis** - Replaced hardcoded benchmarks with goal-aware AI analysis
 - [x] **AI Training Load Advisor** - Replaced fixed ramp rates with wellness-aware AI recommendations
+- [x] **AI Recovery Assessment** - Replaced fixed thresholds with personal baseline analysis
 
 ---
 
@@ -27,7 +28,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 |---|---------|---------------|---------------------|--------|
 | 1 | **Power Profile Analysis** | Hardcoded benchmarks (sprint=200% FTP, VO2max=120% FTP, etc.) in `power.gs:604-609` | AI interprets power curve considering event type, training history, individual physiology | **Complete** |
 | 2 | **Training Load Advisor** | Fixed ramp rates (3-5-7-8 CTL/week) in `utils.gs:671-674` | AI recommends load based on athlete's response patterns, life stress, season context | **Complete** |
-| 3 | **Recovery Assessment** | Fixed thresholds (Green≥67%, Red<34%) in `constants.gs` | AI uses personal baselines, HRV trends, considers cumulative load not just daily score | Pending |
+| 3 | **Recovery Assessment** | Fixed thresholds (Green≥67%, Red<34%) in `constants.gs` | AI uses personal baselines, HRV trends, considers cumulative load not just daily score | **Complete** |
 
 ### Medium Impact
 
@@ -78,22 +79,20 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - Falls back to fixed thresholds if AI unavailable
 - Returns `aiEnhanced: true/false` flag for tracking
 
-### Feature 3: AI Recovery Assessment
+### Feature 3: AI Recovery Assessment ✅ COMPLETE
 
-**Current code** (`constants.gs` + `wellness.gs`):
-```javascript
-RECOVERY: {
-  GREEN_THRESHOLD: 67,
-  RED_THRESHOLD: 34,
-  YELLOW_THRESHOLD: 50
-}
-```
+**Implementation:**
+- Added `generateAIRecoveryAssessment()` in `prompts.gs` - AI prompt using personal baselines
+- Modified `createWellnessSummary()` in `wellness.gs` to call AI first, fall back to fixed thresholds
+- Added `testAIRecoveryAssessment()` in `tests.gs`
 
-**AI-first approach**:
-- Use athlete's personal HRV baseline (not population norms)
-- Consider 7-day trends, not just today's number
-- Factor in training phase (expect lower recovery during build)
-- Weight multiple signals (HRV + sleep + subjective feel)
+**Key changes:**
+- AI receives today's wellness + 7-day averages (personal baseline)
+- Compares to personal patterns, not population norms
+- Considers trend direction (improving vs declining)
+- Returns personalized reason explaining the assessment
+- Falls back to fixed thresholds if AI unavailable
+- Returns `aiEnhanced: true/false` flag for tracking
 
 ---
 

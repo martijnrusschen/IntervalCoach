@@ -96,33 +96,74 @@ function createWellnessSummary(wellnessRecords) {
   const avgRestingHR = average(last7Days.map(w => w.restingHR).filter(v => v != null));
   const avgRecovery = average(last7Days.map(w => w.recovery).filter(v => v != null));
 
-  // Determine recovery status based on latest data with values
+  // Determine recovery status - AI-enhanced with personal baselines
   let recoveryStatus = "Unknown";
   let intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+  let aiEnhanced = false;
+  let personalizedReason = null;
 
-  if (latestWithData.recovery != null) {
-    if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD) {
-      recoveryStatus = "Green (Primed)";
-      intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
-    } else if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
-      recoveryStatus = "Yellow (Recovering)";
-      intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
-    } else {
-      recoveryStatus = "Red (Strained)";
-      intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
+  // Build today's data object for AI
+  const todayData = {
+    recovery: latestWithData.recovery,
+    hrv: latestWithData.hrv,
+    sleep: latestWithData.sleep,
+    restingHR: latestWithData.restingHR,
+    soreness: latestWithData.soreness,
+    fatigue: latestWithData.fatigue,
+    stress: latestWithData.stress,
+    mood: latestWithData.mood
+  };
+
+  const averagesData = {
+    recovery: avgRecovery,
+    hrv: avgHRV,
+    sleep: avgSleep,
+    restingHR: avgRestingHR
+  };
+
+  // Try AI-driven assessment first
+  try {
+    const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData);
+
+    if (aiAssessment && aiAssessment.recoveryStatus) {
+      Logger.log("AI Recovery Assessment: " + JSON.stringify(aiAssessment));
+      recoveryStatus = aiAssessment.recoveryStatus;
+      intensityModifier = aiAssessment.intensityModifier || TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+      personalizedReason = aiAssessment.personalizedReason || null;
+      aiEnhanced = true;
     }
-  } else if (latestWithData.hrv != null && avgHRV > 0) {
-    // Fallback: Use HRV trend if no recovery score
-    const hrvDeviation = (latestWithData.hrv - avgHRV) / avgHRV;
-    if (hrvDeviation >= TRAINING_CONSTANTS.HRV_DEVIATION_THRESHOLD) {
-      recoveryStatus = "Above Baseline (Well Recovered)";
-      intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
-    } else if (hrvDeviation >= -0.1) {
-      recoveryStatus = "Normal";
-      intensityModifier = 0.9;
-    } else {
-      recoveryStatus = "Below Baseline (Fatigued)";
-      intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
+  } catch (e) {
+    Logger.log("AI recovery assessment failed, using fallback: " + e.toString());
+  }
+
+  // ===== FALLBACK: Fixed threshold logic =====
+  if (!aiEnhanced) {
+    Logger.log("Using fallback fixed-threshold recovery assessment");
+
+    if (latestWithData.recovery != null) {
+      if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD) {
+        recoveryStatus = "Green (Primed)";
+        intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+      } else if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
+        recoveryStatus = "Yellow (Recovering)";
+        intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
+      } else {
+        recoveryStatus = "Red (Strained)";
+        intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
+      }
+    } else if (latestWithData.hrv != null && avgHRV > 0) {
+      // Fallback: Use HRV trend if no recovery score
+      const hrvDeviation = (latestWithData.hrv - avgHRV) / avgHRV;
+      if (hrvDeviation >= TRAINING_CONSTANTS.HRV_DEVIATION_THRESHOLD) {
+        recoveryStatus = "Above Baseline (Well Recovered)";
+        intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+      } else if (hrvDeviation >= -0.1) {
+        recoveryStatus = "Normal";
+        intensityModifier = 0.9;
+      } else {
+        recoveryStatus = "Below Baseline (Fatigued)";
+        intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
+      }
     }
   }
 
@@ -158,7 +199,9 @@ function createWellnessSummary(wellnessRecords) {
     },
     recoveryStatus: recoveryStatus,
     sleepStatus: sleepStatus,
-    intensityModifier: intensityModifier
+    intensityModifier: intensityModifier,
+    aiEnhanced: aiEnhanced,
+    personalizedReason: personalizedReason
   };
 }
 
