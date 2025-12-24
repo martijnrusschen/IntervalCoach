@@ -277,10 +277,14 @@ function callGeminiAPIText(prompt) {
 
     if (responseCode === 200) {
       const data = JSON.parse(responseText);
-      if (data.candidates?.[0]?.content?.parts?.[0]) {
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
         return data.candidates[0].content.parts[0].text;
+      } else if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        Logger.log("Gemini API: Response blocked by safety filter");
+      } else if (data.candidates?.length === 0) {
+        Logger.log("Gemini API: No candidates returned");
       } else {
-        Logger.log("Gemini API: Unexpected response structure");
+        Logger.log("Gemini API: Unexpected response structure: " + JSON.stringify(data).substring(0, 500));
       }
     } else {
       Logger.log("Gemini API error " + responseCode + ": " + responseText.substring(0, 500));
