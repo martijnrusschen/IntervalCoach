@@ -711,6 +711,38 @@ function hasEventYesterday() {
 }
 
 /**
+ * Check if there's an A, B, or C priority event in N days
+ * @param {number} days - Number of days from today
+ * @returns {object} { hasEvent, category }
+ */
+function hasEventInDays(days) {
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + days);
+  const dateStr = formatDateISO(targetDate);
+
+  const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { hasEvent: false, category: null };
+  }
+
+  for (const e of result.data) {
+    if (e.category === "RACE_A") {
+      return { hasEvent: true, category: "A" };
+    }
+    if (e.category === "RACE_B") {
+      return { hasEvent: true, category: "B" };
+    }
+    if (e.category === "RACE_C") {
+      return { hasEvent: true, category: "C" };
+    }
+  }
+
+  return { hasEvent: false, category: null };
+}
+
+/**
  * Get yesterday's workout intensity (1-5 scale)
  * @param {object} recentTypes - Recent workout types data
  * @returns {number} Intensity of yesterday's workout (0 if none)

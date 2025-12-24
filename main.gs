@@ -228,6 +228,49 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Adaptive Training: " + (adaptiveContext.gap.daysSinceLastWorkout || 0) + " days since last workout, no feedback data");
   }
 
+  // ===== AI REST DAY ASSESSMENT (with full context) =====
+  // The early RED check (line 66) handles emergencies, this considers full context
+  const restDayContext = {
+    wellness: wellness,
+    tsb: summary.tsb_current,
+    ctl: summary.ctl_90,
+    atl: summary.atl_7,
+    phase: phaseInfo.phaseName,
+    eventTomorrow: eventTomorrow,
+    eventIn2Days: hasEventInDays(2),
+    recentWorkouts: {
+      rides: recentTypes.rides,
+      runs: recentTypes.runs
+    },
+    lastIntensity: getYesterdayIntensity(recentTypes),
+    consecutiveDays: adaptiveContext.gap?.daysSinceLastWorkout === 0 ?
+      (adaptiveContext.consecutiveTrainingDays || 'Unknown') : 0
+  };
+
+  const aiRestAssessment = generateAIRestDayAssessment(restDayContext);
+
+  if (aiRestAssessment) {
+    Logger.log("AI Rest Assessment: " + (aiRestAssessment.isRestDay ? "REST DAY" : "Train") +
+               " (confidence: " + aiRestAssessment.confidence + ")");
+    Logger.log("  Reasoning: " + aiRestAssessment.reasoning);
+
+    if (aiRestAssessment.isRestDay && aiRestAssessment.confidence !== 'low') {
+      Logger.log("*** AI RECOMMENDS REST DAY ***");
+      Logger.log("  Alternatives: " + aiRestAssessment.alternatives);
+
+      // Delete the placeholder from Intervals.icu calendar
+      if (availability.placeholder) {
+        deleteIntervalEvent(availability.placeholder);
+      }
+
+      // Send rest day email with AI reasoning
+      sendRestDayEmail(wellness, phaseInfo, aiRestAssessment);
+
+      Logger.log("Workout generation skipped - AI-recommended rest day email sent");
+      return;
+    }
+  }
+
   // Select workout types based on phase, TSB, recovery, events, and variety
   // Now AI-enhanced with fallback to rule-based selection
   const typeSelection = selectWorkoutTypes({
@@ -1405,4 +1448,82 @@ function testAIWorkoutDecision() {
   }
 
   Logger.log("\n=== AI WORKOUT DECISION TEST COMPLETE ===");
+}
+
+/**
+ * Test AI-driven rest day assessment
+ */
+function testAIRestDayAssessment() {
+  Logger.log("=== AI REST DAY ASSESSMENT TEST ===");
+  requireValidConfig();
+
+  // Get real data
+  const summary = fetchFitnessMetrics();
+  const wellness = fetchWellnessData();
+  const recentTypes = getRecentWorkoutTypes(7);
+  const eventTomorrow = hasEventTomorrow();
+  const eventIn2Days = hasEventInDays(2);
+
+  // Extract CTL/TSB with fallbacks
+  const ctl = summary.ctl_90 || summary.ctl || 0;
+  const tsb = summary.tsb_current || summary.tsb || 0;
+  const atl = summary.atl_7 || summary.atl || 0;
+
+  Logger.log("\n--- Current State ---");
+  Logger.log("CTL: " + ctl.toFixed(1) + " | ATL: " + atl.toFixed(1) + " | TSB: " + tsb.toFixed(1));
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  if (wellness.available && wellness.today) {
+    Logger.log("Recovery Score: " + (wellness.today.recovery || 'N/A') + "%");
+    Logger.log("Sleep: " + (wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'));
+    Logger.log("HRV: " + (wellness.today.hrv || 'N/A') + "ms");
+  }
+  Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
+  Logger.log("Event tomorrow: " + (eventTomorrow.hasEvent ? eventTomorrow.category : "No"));
+  Logger.log("Event in 2 days: " + (eventIn2Days.hasEvent ? eventIn2Days.category : "No"));
+
+  // Build context for AI assessment
+  const restDayContext = {
+    wellness: wellness,
+    tsb: tsb,
+    ctl: ctl,
+    atl: atl,
+    phase: "Build",
+    eventTomorrow: eventTomorrow,
+    eventIn2Days: eventIn2Days,
+    recentWorkouts: {
+      rides: recentTypes.rides,
+      runs: recentTypes.runs
+    },
+    lastIntensity: getYesterdayIntensity(recentTypes),
+    consecutiveDays: "Unknown"
+  };
+
+  Logger.log("\n--- AI Rest Day Assessment ---");
+  const assessment = generateAIRestDayAssessment(restDayContext);
+
+  if (assessment) {
+    Logger.log("Decision: " + (assessment.isRestDay ? "REST DAY" : "TRAIN"));
+    Logger.log("Confidence: " + assessment.confidence);
+    Logger.log("Reasoning: " + assessment.reasoning);
+    Logger.log("Alternatives: " + assessment.alternatives);
+
+    if (assessment.isRestDay) {
+      Logger.log("\n*** AI RECOMMENDS REST ***");
+    } else {
+      Logger.log("\n*** AI SAYS GO AHEAD AND TRAIN ***");
+    }
+  } else {
+    Logger.log("AI assessment failed - would fall back to rule-based check");
+  }
+
+  // Also show what the rule-based check would say
+  Logger.log("\n--- Rule-Based Check (for comparison) ---");
+  const ruleBasedRest = isRestDayRecommended(wellness);
+  Logger.log("Rule-based decision: " + (ruleBasedRest ? "REST DAY (Red recovery)" : "TRAIN"));
+
+  if (assessment && assessment.isRestDay !== ruleBasedRest) {
+    Logger.log("*** DIFFERENT DECISIONS - AI and rules disagree ***");
+  }
+
+  Logger.log("\n=== AI REST DAY ASSESSMENT TEST COMPLETE ===");
 }

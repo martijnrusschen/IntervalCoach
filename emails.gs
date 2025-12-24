@@ -132,17 +132,21 @@ ${workout.workoutDescription}
 // =========================================================
 
 /**
- * Send rest day email when recovery is red
+ * Send rest day email when recovery is red or AI recommends rest
  * @param {object} wellness - Wellness summary
  * @param {object} phaseInfo - Training phase info
+ * @param {object} aiAssessment - Optional AI rest day assessment with reasoning
  */
-function sendRestDayEmail(wellness, phaseInfo) {
+function sendRestDayEmail(wellness, phaseInfo, aiAssessment) {
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
 
-  const subject = t.rest_day_subject + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+  // Indicate if this is an AI-recommended rest day
+  const isAIRecommended = aiAssessment && aiAssessment.isRestDay;
+  const subjectSuffix = isAIRecommended ? " (AI Recommended)" : "";
+  const subject = t.rest_day_subject + subjectSuffix + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI advice
-  const aiAdvice = generateRestDayAdvice(wellness);
+  // Generate AI advice (fallback if no assessment provided)
+  const aiAdvice = isAIRecommended ? null : generateRestDayAdvice(wellness);
 
   let body = `${t.rest_day_greeting}\n\n`;
 
@@ -172,7 +176,16 @@ ${t.rest_day_title}
 ===================================
 `;
 
-  if (aiAdvice) {
+  if (isAIRecommended) {
+    // Use AI assessment reasoning
+    body += `**Why rest today?**
+${aiAssessment.reasoning}
+
+**Confidence:** ${aiAssessment.confidence}
+
+**Recommended alternatives:**
+${aiAssessment.alternatives}`;
+  } else if (aiAdvice) {
     body += aiAdvice;
   } else {
     body += `${t.rest_day_reason}
@@ -187,7 +200,7 @@ ${t.rest_day_note}`;
   body += `\n\n${t.rest_day_footer}`;
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Rest day email sent successfully.");
+  Logger.log("Rest day email sent successfully" + (isAIRecommended ? " (AI recommended)" : "") + ".");
 }
 
 // =========================================================

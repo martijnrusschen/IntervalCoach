@@ -187,3 +187,101 @@ function isRestDayRecommended(wellness) {
   return false;
 }
 
+/**
+ * AI-driven rest day assessment - considers full context beyond simple thresholds
+ * @param {object} context - Full context for decision
+ * @returns {object} { isRestDay, confidence, reasoning, alternatives }
+ */
+function generateAIRestDayAssessment(context) {
+  // Build subjective markers context
+  let subjectiveContext = '';
+  if (context.wellness?.today) {
+    const w = context.wellness.today;
+    const markers = [];
+    if (w.soreness) markers.push('Soreness: ' + w.soreness + '/5');
+    if (w.fatigue) markers.push('Fatigue: ' + w.fatigue + '/5');
+    if (w.stress) markers.push('Stress: ' + w.stress + '/5');
+    if (w.mood) markers.push('Mood: ' + w.mood + '/5');
+    if (markers.length > 0) {
+      subjectiveContext = '\n- Subjective Markers: ' + markers.join(', ');
+    }
+  }
+
+  // Build events context
+  let eventsContext = '';
+  if (context.eventTomorrow?.hasEvent) {
+    eventsContext += '\n- EVENT TOMORROW: ' + context.eventTomorrow.category + ' priority race';
+  }
+  if (context.eventIn2Days?.hasEvent) {
+    eventsContext += '\n- Event in 2 days: ' + context.eventIn2Days.category + ' priority';
+  }
+
+  // Build recent training context
+  let trainingContext = '';
+  if (context.recentWorkouts) {
+    const rides = context.recentWorkouts.rides || [];
+    const runs = context.recentWorkouts.runs || [];
+    trainingContext = `
+- Recent Rides (7d): ${rides.length > 0 ? rides.join(', ') : 'None'}
+- Recent Runs (7d): ${runs.length > 0 ? runs.join(', ') : 'None'}
+- Yesterday's Intensity: ${context.lastIntensity || 0}/5
+- Consecutive Training Days: ${context.consecutiveDays || 'Unknown'}`;
+  }
+
+  const prompt = `You are an expert coach deciding if today should be a REST DAY.
+
+**RECOVERY DATA:**
+- Recovery Status: ${context.wellness?.recoveryStatus || 'Unknown'}
+- Recovery Score: ${context.wellness?.today?.recovery ? context.wellness.today.recovery + '%' : 'N/A'}
+- Sleep: ${context.wellness?.today?.sleep ? context.wellness.today.sleep.toFixed(1) + 'h' : 'N/A'} (${context.wellness?.sleepStatus || 'Unknown'})
+- HRV: ${context.wellness?.today?.hrv ? context.wellness.today.hrv + 'ms' : 'N/A'} (7d avg: ${context.wellness?.averages?.hrv ? context.wellness.averages.hrv.toFixed(0) + 'ms' : 'N/A'})${subjectiveContext}
+
+**FITNESS & FATIGUE:**
+- TSB (Form): ${context.tsb != null ? context.tsb.toFixed(1) : 'N/A'} ${context.tsb < -25 ? '(VERY FATIGUED)' : context.tsb < -15 ? '(fatigued)' : context.tsb < -5 ? '(tired)' : '(okay)'}
+- CTL (Fitness): ${context.ctl ? context.ctl.toFixed(0) : 'N/A'}
+- ATL (Fatigue): ${context.atl ? context.atl.toFixed(0) : 'N/A'}
+${eventsContext}
+
+**RECENT TRAINING:**${trainingContext}
+
+**TRAINING PHASE:** ${context.phase || 'Unknown'}
+
+**DECISION CRITERIA:**
+Consider rest day if:
+1. TSB < -25 (very fatigued) + Yellow/Red recovery
+2. Recovery < 50% even if TSB okay
+3. 4+ consecutive hard training days
+4. Important race in 1-2 days (pre-race rest)
+5. Subjective markers all high (soreness/fatigue/stress 4-5)
+6. Sleep consistently < 6h + other warning signs
+
+But DON'T recommend rest if:
+- Green recovery with TSB > -15 (athlete is coping fine)
+- Recovery Yellow but TSB > -5 (form is good)
+- No subjective complaints and metrics borderline
+
+**Output JSON only:**
+{
+  "isRestDay": true/false,
+  "confidence": "high|medium|low",
+  "reasoning": "2-3 sentence explanation",
+  "alternatives": "If not rest day, what intensity is appropriate? If rest day, what light activity is okay?"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+
+  if (!response) {
+    Logger.log("AI rest day assessment: No response from Gemini");
+    return null;
+  }
+
+  try {
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI rest day assessment: " + e.toString());
+    return null;
+  }
+}
+
