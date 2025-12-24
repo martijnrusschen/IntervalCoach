@@ -53,12 +53,26 @@ function findIntervalCoachPlaceholder(dateStr) {
     const activityType = isRun ? "Run" : "Ride";
     const duration = parseDurationFromName(placeholder.name, activityType);
 
+    // Check if this is a weekly plan placeholder and extract suggested workout type
+    let suggestedType = null;
+    let isWeeklyPlan = false;
+    if (placeholder.description && placeholder.description.includes('[Weekly Plan]')) {
+      isWeeklyPlan = true;
+      // Extract workout type from description (format: "[Weekly Plan]\nWorkoutType\n...")
+      const lines = placeholder.description.split('\n');
+      if (lines.length >= 2 && lines[1].trim()) {
+        suggestedType = lines[1].trim();
+      }
+    }
+
     return {
       hasPlaceholder: true,
       placeholder: placeholder,
       duration: duration,
       activityType: activityType,
-      isExisting: false
+      isExisting: false,
+      isWeeklyPlan: isWeeklyPlan,
+      suggestedType: suggestedType
     };
   }
 
@@ -173,14 +187,17 @@ function checkAvailability(wellness) {
   }
 
   const reasonPrefix = isExisting ? "Replacing existing workout: " : "Found placeholder: ";
+  const weeklyPlanNote = result.isWeeklyPlan ? " [from weekly plan: " + (result.suggestedType || "no type") + "]" : "";
 
   return {
     shouldGenerate: true,
-    reason: reasonPrefix + placeholderName + " (" + activityType + ")" + recoveryNote,
+    reason: reasonPrefix + placeholderName + " (" + activityType + ")" + weeklyPlanNote + recoveryNote,
     duration: duration,
     placeholder: result.placeholder,
     activityType: activityType,
-    isExisting: isExisting
+    isExisting: isExisting,
+    isWeeklyPlan: result.isWeeklyPlan || false,
+    suggestedType: result.suggestedType || null
   };
 }
 
@@ -367,6 +384,42 @@ function getRecentWorkoutTypes(daysBack = 7) {
   return result;
 }
 
+/**
+ * Get 2-week workout history with frequency analysis for variety planning
+ * @returns {object} { rideTypes, runTypes, mostFrequent, typeCounts }
+ */
+function getTwoWeekWorkoutHistory() {
+  const twoWeekTypes = getRecentWorkoutTypes(14);
+
+  // Count frequency of each type
+  const allTypes = [...twoWeekTypes.rides, ...twoWeekTypes.runs];
+  const typeCounts = {};
+  allTypes.forEach(function(t) {
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+
+  // Find most frequent
+  let mostFrequent = null;
+  let maxCount = 0;
+  Object.keys(typeCounts).forEach(function(type) {
+    if (typeCounts[type] > maxCount) {
+      maxCount = typeCounts[type];
+      mostFrequent = type;
+    }
+  });
+
+  // Get unique types (de-duplicated)
+  const uniqueRides = [...new Set(twoWeekTypes.rides)];
+  const uniqueRuns = [...new Set(twoWeekTypes.runs)];
+
+  return {
+    rideTypes: uniqueRides,
+    runTypes: uniqueRuns,
+    mostFrequent: mostFrequent ? mostFrequent + ' (' + maxCount + 'x)' : null,
+    typeCounts: typeCounts
+  };
+}
+
 // =========================================================
 // AI-DRIVEN WORKOUT DECISION
 // =========================================================
@@ -416,7 +469,12 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - Last Workout Intensity: ${context.lastIntensity || 0}/5 (${context.daysSinceLastWorkout || 0} days ago)
 
 **DURATION WINDOW:** ${context.duration?.min || 45}-${context.duration?.max || 60} minutes
-
+${context.suggestedType ? `
+**WEEKLY PLAN SUGGESTION:**
+The weekly plan suggests "${context.suggestedType}" for today.
+Consider this as a starting point, but adjust based on current conditions (especially recovery, TSB, and yesterday's intensity).
+If conditions have changed significantly, choose a more appropriate workout type.
+` : ''}
 **AVAILABLE WORKOUT TYPES:**
 ${workoutOptions}
 
@@ -532,7 +590,10 @@ function selectWorkoutTypes(params) {
         recentWorkouts: recentWorkouts.types,
         lastIntensity: recentWorkouts.lastIntensity,
         daysSinceLastWorkout: params.daysSinceLastWorkout,
-        duration: params.duration
+        duration: params.duration,
+        // Weekly plan hint (may be adjusted based on current conditions)
+        suggestedType: params.suggestedType,
+        isWeeklyPlan: params.isWeeklyPlan
       };
 
       const aiDecision = generateAIWorkoutDecision(aiContext);
@@ -833,6 +894,18 @@ function generateAIWeeklyPlan(context) {
 `;
   }
 
+  // Build 2-week workout history for variety
+  let historyContext = '';
+  if (context.twoWeekHistory) {
+    const hist = context.twoWeekHistory;
+    historyContext = `
+**RECENT WORKOUT HISTORY (2 weeks - avoid repeating):**
+- Ride Types Used: ${hist.rideTypes?.join(', ') || 'None'}
+- Run Types Used: ${hist.runTypes?.join(', ') || 'None'}
+- Most Frequent: ${hist.mostFrequent || 'N/A'}
+`;
+  }
+
   // Build upcoming events context
   let eventsContext = '';
   if (context.upcomingEvents && context.upcomingEvents.length > 0) {
@@ -878,7 +951,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${lastWeekContext}${eventsContext}${scheduledContext}
+${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
@@ -890,14 +963,16 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 (Numbers = intensity 1-5)
 
 **PLANNING RULES:**
-1. Never schedule back-to-back intensity 4-5 days
-2. After intensity 5, next day should be 1-2
-3. Include at least 1 full rest day if TSB < -10
-4. Pre-race day (A/B event): intensity 1-2 only
-5. Post-race day (A/B event): rest or intensity 1
-6. Build week = 3-4 quality sessions; Recovery week = 1-2 quality sessions
-7. Respect already scheduled days, enhance with type recommendations
-8. If fatigued (TSB < -15), reduce volume and intensity
+1. Maximum 3 rides and 1-2 runs per week (athlete has limited time)
+2. Never schedule back-to-back intensity 4-5 days
+3. After intensity 5, next day should be 1-2
+4. Include at least 1 full rest day if TSB < -10
+5. Pre-race day (A/B event): intensity 1-2 only
+6. Post-race day (A/B event): rest or intensity 1
+7. Build week = 3-4 quality sessions; Recovery week = 1-2 quality sessions
+8. Respect already scheduled days, enhance with type recommendations
+9. If fatigued (TSB < -15), reduce volume and intensity
+10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'today'}. For each day provide:
@@ -1065,5 +1140,99 @@ function uploadRunToIntervals(name, description, dateStr, placeholder, duration)
   } catch (e) {
     Logger.log(" -> Error uploading run to Intervals.icu: " + e.toString());
   }
+}
+
+// =========================================================
+// WEEKLY PLAN CALENDAR CREATION
+// =========================================================
+
+/**
+ * Create placeholder events in Intervals.icu calendar from weekly plan
+ * These are simple placeholders that will be replaced by detailed workouts on the day
+ * @param {object} weeklyPlan - Weekly plan from generateAIWeeklyPlan
+ * @returns {object} { created: number, skipped: number, errors: number }
+ */
+function createWeeklyPlanEvents(weeklyPlan) {
+  if (!weeklyPlan || !weeklyPlan.days) {
+    Logger.log("No weekly plan to create events from");
+    return { created: 0, skipped: 0, errors: 0 };
+  }
+
+  const athleteId = "0";
+  const results = { created: 0, skipped: 0, errors: 0 };
+
+  Logger.log("Creating calendar events from weekly plan...");
+
+  for (const day of weeklyPlan.days) {
+    // Skip rest days
+    if (day.activity === 'Rest') {
+      Logger.log(` -> ${day.date} (${day.dayName}): Rest day - skipping`);
+      results.skipped++;
+      continue;
+    }
+
+    // Check if there's already an event on this date
+    const existingCheck = fetchIcuApi("/athlete/" + athleteId + "/events?oldest=" + day.date + "&newest=" + day.date);
+    if (existingCheck.success && existingCheck.data?.length > 0) {
+      // Check if any are IntervalCoach events or user-created workouts
+      const hasExisting = existingCheck.data.some(e =>
+        e.category === 'WORKOUT' ||
+        e.name?.includes('IntervalCoach') ||
+        (e.name && !['Ride', 'Run'].includes(e.name))
+      );
+      if (hasExisting) {
+        Logger.log(` -> ${day.date} (${day.dayName}): Event exists - skipping`);
+        results.skipped++;
+        continue;
+      }
+    }
+
+    // Create placeholder event
+    const isRun = day.activity === 'Run';
+    const placeholderName = isRun
+      ? `Run - ${day.duration}min`
+      : `Ride - ${day.duration}min`;
+
+    const payload = {
+      category: "WORKOUT",
+      type: day.activity,
+      name: placeholderName,
+      description: `[Weekly Plan]\n${day.workoutType}\n${day.focus}\n\nTSS Target: ~${day.estimatedTSS}\n\nThis placeholder will be replaced with a detailed workout on the day.`,
+      start_date_local: day.date + "T10:00:00",
+      moving_time: day.duration * 60
+    };
+
+    const url = "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
+    const options = {
+      method: "post",
+      headers: {
+        "Authorization": getIcuAuthHeader(),
+        "Content-Type": "application/json"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    try {
+      const response = UrlFetchApp.fetch(url, options);
+      const code = response.getResponseCode();
+      if (code === 200 || code === 201) {
+        Logger.log(` -> ${day.date} (${day.dayName}): Created ${day.activity} placeholder (${day.workoutType})`);
+        results.created++;
+      } else {
+        Logger.log(` -> ${day.date}: Failed to create event - ${response.getContentText().substring(0, 100)}`);
+        results.errors++;
+      }
+    } catch (e) {
+      Logger.log(` -> ${day.date}: Error creating event - ${e.toString()}`);
+      results.errors++;
+    }
+
+    // Small delay between API calls
+    Utilities.sleep(200);
+  }
+
+  Logger.log(`Weekly plan events: ${results.created} created, ${results.skipped} skipped, ${results.errors} errors`);
+  return results;
 }
 

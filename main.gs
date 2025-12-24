@@ -273,6 +273,11 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     }
   }
 
+  // Log if this is a weekly plan refresh
+  if (availability.isWeeklyPlan) {
+    Logger.log("Weekly plan workout - suggested type: " + (availability.suggestedType || "none"));
+  }
+
   // Select workout types based on phase, TSB, recovery, events, and variety
   const typeSelection = selectWorkoutTypes({
     wellness: wellness,
@@ -291,6 +296,9 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     goals: goals,
     powerProfile: powerProfile,
     daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
+    // Weekly plan hint - AI may adjust based on current conditions
+    suggestedType: availability.suggestedType,
+    isWeeklyPlan: availability.isWeeklyPlan,
     enableAI: true
   });
 

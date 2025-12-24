@@ -481,7 +481,8 @@ function sendWeeklyPlanningEmail() {
     upcomingEvents: upcomingEvents,
     scheduledDays: upcoming.filter(d => d.activityType),
     tssTarget: loadAdvice.tssRange,
-    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax }
+    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax },
+    twoWeekHistory: getTwoWeekWorkoutHistory()
   };
 
   // Generate AI weekly plan
@@ -492,6 +493,9 @@ function sendWeeklyPlanningEmail() {
     Logger.log("Failed to generate weekly plan");
     return;
   }
+
+  // Create calendar events from the weekly plan
+  const calendarResults = createWeeklyPlanEvents(weeklyPlan);
 
   // Build email
   const weekStart = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MMM d");
@@ -548,6 +552,17 @@ KEY WORKOUTS THIS WEEK
 Recovery Notes
 -----------------------------------
 ${weeklyPlan.recoveryNotes}
+`;
+  }
+
+  // Calendar sync info
+  if (calendarResults.created > 0) {
+    body += `
+-----------------------------------
+Calendar Sync
+-----------------------------------
+${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
+These placeholders will be replaced with detailed workouts each day.
 `;
   }
 
