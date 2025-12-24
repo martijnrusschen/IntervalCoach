@@ -264,6 +264,41 @@ Once everything works, set up automatic triggers:
 
 Click **Save** for each trigger.
 
+## Development: Deploy with clasp
+
+Instead of copy/paste, you can use [clasp](https://github.com/google/clasp) (Google's CLI tool) to push code directly to Apps Script.
+
+### One-time Setup
+
+```bash
+# Install clasp
+npm install -g @google/clasp
+
+# Enable Apps Script API (required)
+# Visit: https://script.google.com/home/usersettings
+# Set "Google Apps Script API" to ON
+
+# Login to Google
+clasp login
+
+# Create .clasp.json with your script ID
+echo '{"scriptId": "YOUR_SCRIPT_ID", "rootDir": "."}' > .clasp.json
+```
+
+To find your script ID: Open Apps Script → Project Settings → Script ID
+
+### Daily Usage
+
+```bash
+# Push local changes to Apps Script
+clasp push
+
+# Pull changes from Apps Script (if edited online)
+clasp pull
+```
+
+**Note:** `config.gs` (with your API keys) is pushed but not committed to git.
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -285,6 +320,9 @@ Click **Save** for each trigger.
 | `testTrainingLoadAdvisor()` | Training load recommendations |
 | `testMonthlyProgress()` | 8-week progress trends (CTL, eFTP, volume) |
 | `testApiUtilities()` | API connectivity, auth, and historical eFTP |
+| `testWorkoutSelection()` | Smart workout type selection logic |
+| `testTrainingProposal()` | Weekly training proposal generation |
+| `testCoachingNote()` | Personalized coaching note generation |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
