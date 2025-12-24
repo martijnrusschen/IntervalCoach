@@ -5,6 +5,19 @@
  */
 
 // =========================================================
+// LANGUAGE HELPER
+// =========================================================
+
+/**
+ * Get the language name for AI prompts based on user settings
+ * @returns {string} Language name (e.g., "Dutch", "English")
+ */
+function getPromptLanguage() {
+  const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
+  return langMap[USER_SETTINGS.LANGUAGE] || "English";
+}
+
+// =========================================================
 // CYCLING WORKOUT PROMPT
 // =========================================================
 
@@ -21,8 +34,7 @@
  * @returns {string} Complete prompt for Gemini
  */
 function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext) {
-  const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
-  const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
+  const analysisLang = getPromptLanguage();
 
   // Zwift Display Name (Clean, short name without "IntervalCoach_" prefix)
   const safeType = type.replace(/[^a-zA-Z0-9]/g,"");
@@ -202,8 +214,7 @@ ${wellnessContext}${powerContext}${adaptiveTrainingContext}
  * @returns {string} Complete prompt for Gemini
  */
 function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext) {
-  const langMap = { "ja": "Japanese", "en": "English", "es": "Spanish", "fr": "French", "nl": "Dutch" };
-  const analysisLang = langMap[USER_SETTINGS.LANGUAGE] || "English";
+  const analysisLang = getPromptLanguage();
 
   const safeType = type.replace(/[^a-zA-Z0-9]/g, "");
   const workoutName = "IntervalCoach_" + safeType + "_" + dateStr;
@@ -360,9 +371,7 @@ Include:
  * @returns {string} AI-generated subject line
  */
 function generateAIEmailSubject(phaseInfo, workout, wellness) {
-  const language = USER_SETTINGS.LANGUAGE || 'en';
-  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
-  const langName = langMap[language] || 'English';
+  const langName = getPromptLanguage();
 
   // Build context for AI
   let recoveryContext = 'Unknown';
@@ -420,9 +429,7 @@ Return ONLY the subject line, nothing else.`;
  * @returns {string} AI-generated coaching note
  */
 function generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile) {
-  const language = USER_SETTINGS.LANGUAGE || 'en';
-  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
-  const langName = langMap[language] || 'English';
+  const langName = getPromptLanguage();
 
   const w = wellness?.today || {};
   const avg = wellness?.averages || {};
@@ -482,9 +489,7 @@ Be warm but professional. Use "you" to address the athlete directly. Don't repea
  * @returns {string} AI-generated rest day advice
  */
 function generateRestDayAdvice(wellness) {
-  const language = USER_SETTINGS.LANGUAGE || 'en';
-  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
-  const langName = langMap[language] || 'English';
+  const langName = getPromptLanguage();
 
   const w = wellness.today || {};
   const avg = wellness.averages || {};
@@ -518,57 +523,89 @@ Keep the tone supportive, not preachy. Be concise (max 150 words total).`;
 // =========================================================
 
 /**
- * Generate AI-powered weekly insight based on training data
+ * Generate AI-powered weekly coaching narrative
+ * Enhanced to produce comprehensive coaching letter, not just brief insight
+ * @param {object} weekData - This week's activity data
+ * @param {object} prevWeekData - Previous week's activity data
+ * @param {object} fitnessMetrics - Current fitness metrics
+ * @param {object} prevFitnessMetrics - Previous week's fitness metrics
+ * @param {object} wellnessSummary - Wellness summary with averages
+ * @param {object} prevWellnessSummary - Previous week's wellness summary
+ * @param {number} currentEftp - Current eFTP
+ * @param {number} prevWeekEftp - Previous week's eFTP
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal information
+ * @param {object} loadAdvice - Training load advice (optional)
+ * @param {Array} upcomingPlaceholders - Upcoming week's planned workouts (optional)
  */
-function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals) {
-  const language = USER_SETTINGS.LANGUAGE || 'en';
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals, loadAdvice, upcomingPlaceholders) {
+  const langName = getPromptLanguage();
 
   const ctlChange = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
   const tsbChange = fitnessMetrics.tsb - (prevFitnessMetrics.tsb || 0);
   const eftpChange = (currentEftp && prevWeekEftp) ? currentEftp - prevWeekEftp : null;
+  const tssChange = weekData.totalTss - (prevWeekData.totalTss || 0);
 
   const prevAvg = prevWellnessSummary && prevWellnessSummary.available ? prevWellnessSummary.averages : {};
   const currAvg = wellnessSummary && wellnessSummary.available ? wellnessSummary.averages : {};
   const sleepChange = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
   const hrvChange = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
 
-  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's weekly training.
+  // Build upcoming week context
+  let upcomingContext = '';
+  if (upcomingPlaceholders && upcomingPlaceholders.length > 0) {
+    const workoutList = upcomingPlaceholders.map(p => p.name || p.type || 'Workout').join(', ');
+    upcomingContext = `\nUPCOMING WEEK PLANNED:\n- ${upcomingPlaceholders.length} sessions: ${workoutList}`;
+  }
 
-ATHLETE'S WEEK DATA:
+  // Build load advice context
+  let loadContext = '';
+  if (loadAdvice) {
+    loadContext = `\nLOAD RECOMMENDATION:\n- Advice: ${loadAdvice.rampRateAdvice}\n- Weekly TSS Target: ${loadAdvice.tssRange?.min}-${loadAdvice.tssRange?.max}`;
+    if (loadAdvice.warning) {
+      loadContext += `\n- Warning: ${loadAdvice.warning}`;
+    }
+  }
+
+  const prompt = `You are a friendly, expert cycling and running coach writing a personalized weekly coaching letter to your athlete.
+
+THIS WEEK'S TRAINING:
 - Activities: ${weekData.totalActivities} (${weekData.rides} rides, ${weekData.runs} runs)
-- Total Time: ${Math.round(weekData.totalTime / 60)} minutes
-- Total TSS: ${weekData.totalTss.toFixed(0)}
+- Total Time: ${Math.round(weekData.totalTime / 60)} minutes (${(weekData.totalTime / 3600).toFixed(1)} hours)
+- Total TSS: ${weekData.totalTss.toFixed(0)} (${tssChange >= 0 ? '+' : ''}${tssChange.toFixed(0)} vs last week)
 - Total Distance: ${(weekData.totalDistance / 1000).toFixed(1)} km
 
 PREVIOUS WEEK:
 - Activities: ${prevWeekData.totalActivities}
 - Total TSS: ${prevWeekData.totalTss.toFixed(0)}
 
-FITNESS METRICS (current → change vs last week):
-- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)} (${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)})
-- ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}
+FITNESS PROGRESS:
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)} (${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)} this week)
 - TSB (Form): ${fitnessMetrics.tsb.toFixed(1)} (${tsbChange >= 0 ? '+' : ''}${tsbChange.toFixed(1)})
-- Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}
 - eFTP: ${currentEftp || 'N/A'}W${eftpChange !== null ? ' (' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W)' : ''}
+- Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) + ' CTL/week' : 'N/A'}
 
-WELLNESS (7-day averages → change vs last week):
-- Sleep: ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange !== null ? ' (' + (sleepChange >= 0 ? '+' : '') + sleepChange.toFixed(1) + 'h)' : ''}
+RECOVERY & WELLNESS (7-day averages):
+- Sleep: ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange !== null ? ' (' + (sleepChange >= 0 ? '+' : '') + sleepChange.toFixed(1) + 'h vs last week)' : ''}
 - HRV: ${currAvg.hrv ? currAvg.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange !== null ? ' (' + (hrvChange >= 0 ? '+' : '') + hrvChange.toFixed(0) + ')' : ''}
-- Resting HR: ${currAvg.restingHR ? currAvg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+- Recovery Status: ${wellnessSummary?.recoveryStatus || 'Unknown'}
 
-TRAINING PHASE: ${phaseInfo.phaseName}
-GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
-WEEKS TO GOAL: ${phaseInfo.weeksOut}
+TRAINING CONTEXT:
+- Phase: ${phaseInfo.phaseName}
+- Goal: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+- Weeks to Goal: ${phaseInfo.weeksOut}${loadContext}${upcomingContext}
 
-Write a brief, personalized weekly summary (3-4 sentences max) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
+Write a personalized coaching letter (5-7 sentences) in ${langName}.
 
-Include:
-1. Acknowledge their training effort this week
-2. Comment on significant changes: fitness (CTL/eFTP trends), form (TSB), or recovery (HRV/sleep)
-3. One actionable insight based on the data trends
-4. Brief encouragement for the upcoming week based on their phase
+Your letter should feel like it's from a personal coach who knows this athlete. Include:
+1. Open with acknowledgment of their week (effort, consistency, key sessions)
+2. Highlight the most significant metric change (fitness gains, recovery trends)
+3. Connect their progress to their goal (what this week means for Marmotte/their A race)
+4. Address any concerns (fatigue building up, recovery declining) with reassurance
+5. Preview next week with coaching intent (what to focus on, what to watch for)
+6. Close with motivating but genuine encouragement
 
-Keep it conversational, supportive, and concise. Do not use bullet points or headers. Just write natural sentences.`;
+Write in a warm, conversational tone. Use "you" and "your" to make it personal. Do not use bullet points, headers, or emoji. Just write natural paragraphs.`;
 
   try {
     const response = callGeminiAPIText(prompt);
@@ -590,7 +627,7 @@ Keep it conversational, supportive, and concise. Do not use bullet points or hea
  * Generate AI-powered monthly insight based on training trends
  */
 function generateMonthlyInsight(currentMonth, previousMonth, phaseInfo, goals) {
-  const language = USER_SETTINGS.LANGUAGE || 'en';
+  const langName = getPromptLanguage();
 
   const activityChange = currentMonth.totals.activities - previousMonth.totals.activities;
   const tssChange = currentMonth.totals.tss - previousMonth.totals.tss;
@@ -627,7 +664,7 @@ TRAINING PHASE: ${phaseInfo.phaseName}
 GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
 WEEKS TO GOAL: ${phaseInfo.weeksOut}
 
-Write a personalized monthly progress summary (3-4 sentences) in ${language === 'nl' ? 'Dutch' : language === 'ja' ? 'Japanese' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : 'English'}.
+Write a personalized monthly progress summary (3-4 sentences) in ${langName}.
 
 Include:
 1. Overall assessment of this month compared to last month
@@ -780,6 +817,8 @@ function generateAIPowerProfileAnalysis(powerData, goals) {
     return null;
   }
 
+  const langName = getPromptLanguage();
+
   const ftp = powerData.currentEftp || powerData.eFTP || powerData.ftp;
 
   // Build goal context
@@ -830,11 +869,12 @@ function generateAIPowerProfileAnalysis(powerData, goals) {
 4. Consider the event type: climbing requires 5-20min power, crits need sprints, TTs need threshold endurance
 
 **Output JSON only (no markdown wrapping):**
+Write all text fields in ${langName}.
 {
-  "strengths": ["Concise strength 1", "Concise strength 2"],
-  "weaknesses": ["Concise limiter 1", "Concise limiter 2"],
-  "recommendations": ["Specific training recommendation 1", "Specific training recommendation 2"],
-  "eventRelevance": "1-2 sentence analysis of how this profile matches the goal event",
+  "strengths": ["Concise strength 1 in ${langName}", "Concise strength 2"],
+  "weaknesses": ["Concise limiter 1 in ${langName}", "Concise limiter 2"],
+  "recommendations": ["Specific training recommendation 1 in ${langName}", "Specific recommendation 2"],
+  "eventRelevance": "1-2 sentence analysis in ${langName} of how this profile matches the goal event",
   "confidence": "high|medium|low"
 }`;
 
@@ -870,6 +910,8 @@ function generateAIPowerProfileAnalysis(powerData, goals) {
  * @returns {object} { recommendedRampRate, rampRateCategory, personalizedAdvice, warnings, confidence }
  */
 function generateAITrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellness) {
+  const langName = getPromptLanguage();
+
   const currentCTL = fitnessMetrics.ctl || 0;
   const currentATL = fitnessMetrics.atl || 0;
   const currentTSB = fitnessMetrics.tsb || 0;
@@ -939,11 +981,12 @@ Based on the athlete's current state, wellness trends, and training context:
 4. Account for training phase - taper phases need reduction, not building
 
 **Output JSON only (no markdown wrapping):**
+Write the "personalizedAdvice" and "warnings" in ${langName}.
 {
   "recommendedRampRate": <number between -5 and 8>,
   "rampRateCategory": "Recovery|Maintain|Build|Aggressive|Reduce",
-  "personalizedAdvice": "1-2 sentence personalized recommendation based on their specific data",
-  "warnings": ["Array of specific warnings if any, empty array if none"],
+  "personalizedAdvice": "1-2 sentence personalized recommendation in ${langName}",
+  "warnings": ["Array of specific warnings in ${langName}, empty array if none"],
   "weeklyTSSMultiplier": <number 0.4-1.1 to adjust base weekly TSS>,
   "confidence": "high|medium|low"
 }`;
@@ -981,6 +1024,8 @@ function generateAIRecoveryAssessment(today, averages) {
   if (!today) {
     return null;
   }
+
+  const langName = getPromptLanguage();
 
   // Calculate trend indicators
   const hrvTrend = (today.hrv && averages.hrv)
@@ -1030,10 +1075,11 @@ function generateAIRecoveryAssessment(today, averages) {
 - **Red (Strained)**: Below baseline on multiple metrics, easy day recommended
 
 **Output JSON only (no markdown wrapping):**
+Write the "personalizedReason" in ${langName}.
 {
   "recoveryStatus": "Green (Primed)|Yellow (Recovering)|Red (Strained)",
   "intensityModifier": <number 0.7-1.0>,
-  "personalizedReason": "1-2 sentence explanation using their specific data",
+  "personalizedReason": "1-2 sentence explanation in ${langName} using their specific data",
   "confidence": "high|medium|low"
 }`;
 

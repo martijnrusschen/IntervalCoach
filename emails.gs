@@ -240,13 +240,25 @@ function sendWeeklySummaryEmail() {
 
   const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI insight
-  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp, prevFitnessMetrics.eftp, phaseInfo, goals);
+  // Calculate load advice first (needed for AI insight)
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
+
+  // Fetch upcoming placeholders for next week preview
+  const upcoming = fetchUpcomingPlaceholders(7);
+
+  // Generate AI coaching letter (comprehensive narrative)
+  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp, prevFitnessMetrics.eftp, phaseInfo, goals, loadAdvice, upcoming);
 
   let body = `${t.weekly_greeting}\n\n`;
 
+  // AI Coaching Letter - the main content
   if (aiInsight) {
-    body += `${aiInsight}\n\n`;
+    body += `===================================
+${t.coach_note_title || "Coach's Letter"}
+===================================
+${aiInsight}
+
+`;
   }
 
   // Week Overview
@@ -319,8 +331,7 @@ ${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.re
 ${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}${recoveryChange}`;
   }
 
-  // Training Load Advice (AI-enhanced with wellness data)
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
+  // Training Load Advice (uses loadAdvice calculated earlier)
   body += `
 
 -----------------------------------
@@ -352,7 +363,7 @@ ${t.focus}: ${phaseInfo.focus}
   // WEEKLY PLAN SECTION (Forward-looking)
   // ===================================
 
-  const upcoming = fetchUpcomingPlaceholders(7);
+  // Uses 'upcoming' fetched earlier for AI insight
 
   // Get recent workout types for variety
   const recentTypes = getRecentWorkoutTypes(7);
