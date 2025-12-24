@@ -667,12 +667,14 @@ function generateAdaptivePromptContext(feedback, adaptation, gapData, gapAnalysi
 
 /**
  * Calculate training load recommendations based on current fitness and goals
+ * AI-enhanced with wellness-aware recommendations, falls back to fixed thresholds
  * @param {object} fitnessMetrics - Current CTL, ATL, TSB, rampRate
  * @param {object} phaseInfo - Training phase info (weeksOut, phaseName)
  * @param {object} goals - Goal information
+ * @param {object} wellness - Optional wellness data with averages
  * @returns {object} Training load advice
  */
-function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals) {
+function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellness) {
   const currentCTL = fitnessMetrics.ctl || 0;
   const currentATL = fitnessMetrics.atl || 0;
   const currentTSB = fitnessMetrics.tsb || 0;
@@ -680,97 +682,111 @@ function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals) {
   const weeksOut = phaseInfo.weeksOut || 12;
 
   // Target CTL based on current fitness and time to goal
-  // Aim to peak 5-15% above current CTL for A race
   let targetCTL = currentCTL;
-  let targetTSBAtRace = 0; // Slightly positive for race day
-
   if (weeksOut > 3) {
-    // We have time to build - aim for meaningful improvement
-    const maxGain = Math.min(weeksOut * 5, 40); // Max ~5 CTL/week, cap at 40 total
-    targetCTL = currentCTL + Math.min(maxGain, currentCTL * 0.25); // Or 25% improvement
-    targetCTL = Math.max(targetCTL, currentCTL + 10); // At least try for +10 CTL
+    const maxGain = Math.min(weeksOut * 5, 40);
+    targetCTL = currentCTL + Math.min(maxGain, currentCTL * 0.25);
+    targetCTL = Math.max(targetCTL, currentCTL + 10);
   }
 
-  // Calculate required weekly CTL increase
+  // Base weekly TSS calculation
+  const baseWeeklyTSS = Math.round(currentCTL * 7);
+
+  // Try AI-driven advice first
+  try {
+    const aiAdvice = generateAITrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellness);
+
+    if (aiAdvice && aiAdvice.rampRateCategory && aiAdvice.personalizedAdvice) {
+      Logger.log("AI Training Load Advice: " + JSON.stringify(aiAdvice));
+
+      // Calculate TSS based on AI recommendation
+      const tssMultiplier = aiAdvice.weeklyTSSMultiplier || 1.0;
+      const recommendedWeeklyTSS = Math.round(baseWeeklyTSS * tssMultiplier);
+      const tssMin = Math.round(recommendedWeeklyTSS * 0.9);
+      const tssMax = Math.round(recommendedWeeklyTSS * 1.1);
+
+      return {
+        currentCTL: currentCTL,
+        targetCTL: Math.round(targetCTL),
+        weeksToGoal: weeksOut,
+        recommendedWeeklyTSS: recommendedWeeklyTSS,
+        tssRange: { min: tssMin, max: tssMax },
+        dailyTSSRange: { min: Math.round(recommendedWeeklyTSS / 6), max: Math.round(recommendedWeeklyTSS / 5) },
+        rampRateAdvice: aiAdvice.rampRateCategory,
+        loadAdvice: aiAdvice.personalizedAdvice,
+        warning: aiAdvice.warnings && aiAdvice.warnings.length > 0 ? aiAdvice.warnings.join(". ") : null,
+        requiredWeeklyIncrease: aiAdvice.recommendedRampRate,
+        aiEnhanced: true,
+        aiConfidence: aiAdvice.confidence || 'medium'
+      };
+    }
+  } catch (e) {
+    Logger.log("AI training load advice failed, using fallback: " + e.toString());
+  }
+
+  // ===== FALLBACK: Fixed threshold logic =====
+  Logger.log("Using fallback fixed-threshold training load advice");
+
   const ctlGapToTarget = targetCTL - currentCTL;
-  const buildWeeks = Math.max(weeksOut - 2, 1); // Leave 2 weeks for taper
+  const buildWeeks = Math.max(weeksOut - 2, 1);
   const requiredWeeklyIncrease = ctlGapToTarget / buildWeeks;
 
-  // Define safe ramp rate limits
   const SAFE_RAMP_MIN = 3;
   const SAFE_RAMP_MAX = 5;
   const AGGRESSIVE_RAMP_MAX = 7;
-  const MAX_SUSTAINABLE_RAMP = 8;
 
-  // Calculate recommended weekly TSS
-  // TSS per week ≈ CTL × 7 (simplified, since CTL is ~42 day average)
   let recommendedWeeklyTSS;
   let rampRateAdvice;
   let loadAdvice;
   let warning = null;
 
-  // Phase-based adjustments
   if (phaseInfo.phaseName.includes("Taper") || phaseInfo.phaseName.includes("Race Week")) {
-    // Taper: reduce volume significantly
-    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.5); // 50% reduction
+    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.5);
     rampRateAdvice = "Reduce";
-    loadAdvice = "Focus on freshness. Reduce volume by 40-50%, keep some intensity for sharpness.";
+    loadAdvice = "Fallback: Focus on freshness. Reduce volume by 40-50%.";
   } else if (phaseInfo.phaseName.includes("Peak")) {
-    // Peak/late taper: moderate reduction
-    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.7); // 30% reduction
+    recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.7);
     rampRateAdvice = "Reduce";
-    loadAdvice = "Begin tapering. Reduce volume by 20-30%, maintain intensity.";
+    loadAdvice = "Fallback: Begin tapering. Reduce volume by 20-30%.";
   } else if (phaseInfo.phaseName.includes("Transition")) {
-    // Off-season: easy recovery
     recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.4);
     rampRateAdvice = "Recovery";
-    loadAdvice = "Off-season recovery. Keep active but prioritize rest and fun.";
+    loadAdvice = "Fallback: Off-season recovery.";
   } else {
-    // Building phases (Base, Build, Specialty)
     const targetWeeklyIncrease = Math.min(requiredWeeklyIncrease, SAFE_RAMP_MAX);
     const targetCTLThisWeek = currentCTL + targetWeeklyIncrease;
     recommendedWeeklyTSS = Math.round(targetCTLThisWeek * 7);
 
-    // Determine ramp rate advice
     if (requiredWeeklyIncrease <= SAFE_RAMP_MIN) {
       rampRateAdvice = "Maintain";
-      loadAdvice = "On track. Maintain current load with slight progression.";
+      loadAdvice = "Fallback: On track. Maintain current load.";
     } else if (requiredWeeklyIncrease <= SAFE_RAMP_MAX) {
       rampRateAdvice = "Build";
-      loadAdvice = "Good progression rate. Increase load steadily.";
+      loadAdvice = "Fallback: Good progression rate.";
     } else if (requiredWeeklyIncrease <= AGGRESSIVE_RAMP_MAX) {
       rampRateAdvice = "Aggressive";
-      loadAdvice = "Aggressive build needed. Monitor fatigue closely.";
+      loadAdvice = "Fallback: Aggressive build needed.";
       warning = "High ramp rate - ensure adequate recovery.";
     } else {
       rampRateAdvice = "Caution";
-      loadAdvice = "Goal may be ambitious. Consider adjusting target or extending timeline.";
-      warning = "Required ramp rate exceeds safe limits. Risk of overtraining.";
+      loadAdvice = "Fallback: Goal may be ambitious.";
+      warning = "Required ramp rate exceeds safe limits.";
     }
 
-    // Check current fatigue state
     if (currentTSB < -25) {
-      warning = "High fatigue detected (TSB: " + currentTSB.toFixed(0) + "). Consider a recovery week.";
-      recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.6); // Suggest recovery
-      loadAdvice = "Recovery week recommended due to accumulated fatigue.";
+      warning = "High fatigue detected (TSB: " + currentTSB.toFixed(0) + ").";
+      recommendedWeeklyTSS = Math.round(currentCTL * 7 * 0.6);
+      loadAdvice = "Fallback: Recovery week recommended.";
       rampRateAdvice = "Recover";
-    } else if (currentTSB < -15) {
-      loadAdvice += " Monitor fatigue - approaching limit.";
     }
 
-    // Check if current ramp rate is already high
     if (currentRampRate > AGGRESSIVE_RAMP_MAX) {
-      warning = "Current ramp rate (" + currentRampRate.toFixed(1) + ") is high. Be cautious with further increases.";
+      warning = "Current ramp rate (" + currentRampRate.toFixed(1) + ") is high.";
     }
   }
 
-  // Calculate TSS range (±10%)
   const tssMin = Math.round(recommendedWeeklyTSS * 0.9);
   const tssMax = Math.round(recommendedWeeklyTSS * 1.1);
-
-  // Estimate daily TSS (assuming 5-6 training days)
-  const dailyTSSMin = Math.round(recommendedWeeklyTSS / 6);
-  const dailyTSSMax = Math.round(recommendedWeeklyTSS / 5);
 
   return {
     currentCTL: currentCTL,
@@ -778,11 +794,12 @@ function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals) {
     weeksToGoal: weeksOut,
     recommendedWeeklyTSS: recommendedWeeklyTSS,
     tssRange: { min: tssMin, max: tssMax },
-    dailyTSSRange: { min: dailyTSSMin, max: dailyTSSMax },
+    dailyTSSRange: { min: Math.round(recommendedWeeklyTSS / 6), max: Math.round(recommendedWeeklyTSS / 5) },
     rampRateAdvice: rampRateAdvice,
     loadAdvice: loadAdvice,
     warning: warning,
-    requiredWeeklyIncrease: Math.round(requiredWeeklyIncrease * 10) / 10
+    requiredWeeklyIncrease: Math.round(requiredWeeklyIncrease * 10) / 10,
+    aiEnhanced: false
   };
 }
 

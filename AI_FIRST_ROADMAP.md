@@ -15,6 +15,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Removed AI Labels** - AI-first is default, only label fallbacks
 - [x] **Tests Reorganization** - Moved to dedicated tests.gs
 - [x] **AI Power Profile Analysis** - Replaced hardcoded benchmarks with goal-aware AI analysis
+- [x] **AI Training Load Advisor** - Replaced fixed ramp rates with wellness-aware AI recommendations
 
 ---
 
@@ -25,7 +26,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
 | 1 | **Power Profile Analysis** | Hardcoded benchmarks (sprint=200% FTP, VO2max=120% FTP, etc.) in `power.gs:604-609` | AI interprets power curve considering event type, training history, individual physiology | **Complete** |
-| 2 | **Training Load Advisor** | Fixed ramp rates (3-5-7-8 CTL/week) in `utils.gs:671-674` | AI recommends load based on athlete's response patterns, life stress, season context | Pending |
+| 2 | **Training Load Advisor** | Fixed ramp rates (3-5-7-8 CTL/week) in `utils.gs:671-674` | AI recommends load based on athlete's response patterns, life stress, season context | **Complete** |
 | 3 | **Recovery Assessment** | Fixed thresholds (Green≥67%, Red<34%) in `constants.gs` | AI uses personal baselines, HRV trends, considers cumulative load not just daily score | Pending |
 
 ### Medium Impact
@@ -62,21 +63,20 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - Falls back to hardcoded benchmarks if AI unavailable
 - Returns `aiEnhanced: true/false` flag for tracking
 
-### Feature 2: AI Training Load Advisor
+### Feature 2: AI Training Load Advisor ✅ COMPLETE
 
-**Current code** (`utils.gs:671-674`):
-```javascript
-const SAFE_RAMP_MIN = 3;
-const SAFE_RAMP_MAX = 5;
-const AGGRESSIVE_RAMP_MAX = 7;
-const MAX_SUSTAINABLE_RAMP = 8;
-```
+**Implementation:**
+- Added `generateAITrainingLoadAdvice()` in `prompts.gs` - AI prompt considering wellness trends
+- Modified `calculateTrainingLoadAdvice()` in `utils.gs` to call AI first, fall back to fixed thresholds
+- Updated `emails.gs` to pass wellness data to the function
+- Added `testAITrainingLoadAdvisor()` in `tests.gs`
 
-**AI-first approach**:
-- AI analyzes how athlete has responded to past load increases
-- Consider wellness trends, not just current TSB
-- Factor in life stress indicators (sleep quality, HRV trends)
-- Personalized ramp rate recommendations
+**Key changes:**
+- AI receives fitness metrics + wellness 7-day averages + training phase
+- Returns personalized ramp rate recommendation based on recovery signals
+- Includes warnings for sleep deficits, HRV trends, high fatigue
+- Falls back to fixed thresholds if AI unavailable
+- Returns `aiEnhanced: true/false` flag for tracking
 
 ### Feature 3: AI Recovery Assessment
 
