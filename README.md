@@ -44,6 +44,13 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Duration Control:** Specify duration like `Ride - 90min` or `Run - 45min`
 - **Auto-Replace:** Generated workouts replace placeholder events automatically
 
+### Weekly Planning
+- **AI-Generated Plan:** Creates a 7-day training plan based on current fitness, phase, and recovery
+- **Calendar Sync:** Automatically creates placeholder events in your Intervals.icu calendar
+- **Daily Refresh:** Each day, workouts are regenerated with the latest wellness/fitness data
+- **Smart Limits:** Max 3 rides and 1-2 runs per week (adjustable based on athlete capacity)
+- **Variety Tracking:** Uses 2-week workout history to ensure training variety
+
 ## How It Works
 
 ```
@@ -248,14 +255,22 @@ Once everything works, set up automatic triggers:
 - Type: Day timer
 - Time: 6:00 AM - 7:00 AM
 
-**Trigger 3: Weekly Summary (Optional)**
+**Trigger 3: Weekly Planning (Recommended)**
+- Function: `sendWeeklyPlanningEmail`
+- Event source: Time-driven
+- Type: Week timer
+- Day: Sunday or Monday
+- Time: 6:00 AM - 7:00 AM
+- Creates weekly plan + syncs placeholder events to Intervals.icu calendar
+
+**Trigger 4: Weekly Summary (Optional)**
 - Function: `sendWeeklySummaryEmail`
 - Event source: Time-driven
 - Type: Week timer
 - Day: Sunday
 - Time: 8:00 PM - 9:00 PM
 
-**Trigger 4: Monthly Progress Report (Optional)**
+**Trigger 5: Monthly Progress Report (Optional)**
 - Function: `sendMonthlyProgressEmail`
 - Event source: Time-driven
 - Type: Month timer

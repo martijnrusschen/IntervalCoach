@@ -9,6 +9,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **AI-Driven Workout Selection** - AI chooses optimal workout type
 - [x] **AI Rest Day Assessment** - Full-context rest day decisions
 - [x] **AI Weekly Planning** - Comprehensive weekly plan generation
+- [x] **Weekly Plan Calendar Sync** - Creates placeholders in Intervals.icu, daily refresh with latest data
 - [x] **Simplified Fallback Logic** - Reduced rule-based fallback from 140 to 50 lines
 - [x] **Fixed Intensity Bug** - "Last Workout Intensity (X days ago)" instead of misleading "Yesterday"
 - [x] **Removed AI Labels** - AI-first is default, only label fallbacks
