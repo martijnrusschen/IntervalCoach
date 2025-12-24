@@ -756,3 +756,70 @@ function calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals) {
     requiredWeeklyIncrease: Math.round(requiredWeeklyIncrease * 10) / 10
   };
 }
+
+// =========================================================
+// WEEKLY ACTIVITIES
+// =========================================================
+
+/**
+ * Fetch activities for a given period
+ * @param {number} daysBack - How many days back to start
+ * @param {number} daysOffset - Offset from today (default 0)
+ * @returns {object} Aggregated activity data
+ */
+function fetchWeeklyActivities(daysBack, daysOffset) {
+  daysOffset = daysOffset || 0;
+  const today = new Date();
+  const to = new Date(today);
+  to.setDate(today.getDate() - daysOffset);
+  const from = new Date(to);
+  from.setDate(to.getDate() - daysBack + 1);
+
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
+
+  const result = {
+    totalActivities: 0,
+    rides: 0,
+    runs: 0,
+    totalTime: 0,
+    totalTss: 0,
+    totalDistance: 0,
+    activities: []
+  };
+
+  const apiResult = fetchIcuApi(endpoint);
+
+  if (!apiResult.success) {
+    Logger.log("Error fetching weekly activities: " + apiResult.error);
+    return result;
+  }
+
+  const activities = apiResult.data;
+  if (!Array.isArray(activities)) {
+    return result;
+  }
+
+  activities.forEach(function(a) {
+    result.totalActivities++;
+    result.totalTime += a.moving_time || 0;
+    result.totalTss += a.icu_training_load || 0;
+    result.totalDistance += a.distance || 0;
+
+    if (a.type === 'Ride' || a.type === 'VirtualRide') {
+      result.rides++;
+    } else if (a.type === 'Run' || a.type === 'VirtualRun') {
+      result.runs++;
+    }
+
+    result.activities.push({
+      date: a.start_date_local,
+      name: a.name,
+      type: a.type,
+      duration: a.moving_time,
+      tss: a.icu_training_load,
+      distance: a.distance
+    });
+  });
+
+  return result;
+}

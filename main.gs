@@ -868,3 +868,202 @@ function debugFitnessModelEvents() {
     Logger.log((i+1) + ". " + JSON.stringify(e));
   });
 }
+
+/**
+ * Test dynamic goals from Intervals.icu calendar (A/B/C races)
+ */
+function testGoals() {
+  Logger.log("=== DYNAMIC GOALS TEST ===");
+  const goals = fetchUpcomingGoals();
+
+  if (goals.available) {
+    Logger.log("Primary Goal (A-race):");
+    Logger.log("  Name: " + goals.primaryGoal.name);
+    Logger.log("  Date: " + goals.primaryGoal.date);
+    Logger.log("  Type: " + goals.primaryGoal.type);
+
+    Logger.log("Secondary Goals (B-races): " + goals.secondaryGoals.length);
+    goals.secondaryGoals.forEach(function(g) {
+      Logger.log("  - " + g.name + " (" + g.date + ")");
+    });
+
+    Logger.log("Subgoals (C-races): " + goals.subGoals.length);
+    goals.subGoals.forEach(function(g) {
+      Logger.log("  - " + g.name + " (" + g.date + ")");
+    });
+
+    Logger.log("All Goals:");
+    goals.allGoals.forEach(function(g) {
+      Logger.log("  [" + g.priority + "] " + g.name + " - " + g.date);
+    });
+
+    Logger.log("Generated Description:");
+    Logger.log(buildGoalDescription(goals));
+
+    // Test phase calculation
+    const phaseInfo = calculateTrainingPhase(goals.primaryGoal.date);
+    Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+    Logger.log("Focus: " + phaseInfo.focus);
+  } else {
+    Logger.log("No A/B/C race goals found in calendar");
+    Logger.log("Falling back to manual TARGET_DATE: " + USER_SETTINGS.TARGET_DATE);
+  }
+}
+
+/**
+ * Test running data (Critical Speed, pace curve)
+ */
+function testRunningData() {
+  Logger.log("=== RUNNING DATA TEST ===");
+  const runningData = fetchRunningData();
+
+  if (runningData.available) {
+    Logger.log("Threshold Pace: " + (runningData.thresholdPace || 'N/A'));
+    Logger.log("LTHR: " + (runningData.lthr || 'N/A') + " bpm");
+    Logger.log("Max HR: " + (runningData.maxHr || 'N/A') + " bpm");
+
+    Logger.log("--- Pace Curve Data ---");
+    Logger.log("Critical Speed (42d): " + (runningData.criticalSpeed || 'N/A') + "/km");
+    Logger.log("Critical Speed (m/s): " + (runningData.criticalSpeedMs || 'N/A'));
+    Logger.log("D' (anaerobic): " + (runningData.dPrime ? runningData.dPrime.toFixed(1) + "m" : 'N/A'));
+    Logger.log("Season Best CS: " + (runningData.seasonBestCS || 'N/A') + "/km");
+
+    Logger.log("--- Best Efforts (42d) ---");
+    if (runningData.bestEfforts) {
+      Object.keys(runningData.bestEfforts).forEach(function(dist) {
+        const effort = runningData.bestEfforts[dist];
+        Logger.log(dist + "m: " + effort.time + " (" + effort.pace + "/km)");
+      });
+    }
+
+    // Show calculated zones
+    if (runningData.criticalSpeed) {
+      Logger.log("--- Calculated Zones (based on CS) ---");
+      Logger.log("Z1 (Recovery): " + addPace(runningData.criticalSpeed, 60) + " - " + addPace(runningData.criticalSpeed, 90) + "/km");
+      Logger.log("Z2 (Endurance): " + addPace(runningData.criticalSpeed, 30) + " - " + addPace(runningData.criticalSpeed, 60) + "/km");
+      Logger.log("Z3 (Tempo): " + addPace(runningData.criticalSpeed, 10) + " - " + addPace(runningData.criticalSpeed, 20) + "/km");
+      Logger.log("Z4 (Threshold): " + runningData.criticalSpeed + "/km");
+      Logger.log("Z5 (VO2max): " + subtractPace(runningData.criticalSpeed, 20) + " - " + subtractPace(runningData.criticalSpeed, 10) + "/km");
+    }
+  } else {
+    Logger.log("No running data available");
+  }
+}
+
+/**
+ * Test power profile (eFTP, W', peak powers)
+ */
+function testEftp() {
+  const powerCurve = fetchPowerCurve();
+  Logger.log("=== POWER PROFILE TEST ===");
+  Logger.log("--- FTP Metrics ---");
+  Logger.log("Current eFTP (mmp_model): " + powerCurve.currentEftp + "W");
+  Logger.log("All-time eFTP (powerModels): " + powerCurve.allTimeEftp + "W");
+  Logger.log("Manual FTP (set): " + powerCurve.manualFTP + "W");
+  Logger.log("--- W' (Anaerobic Capacity) ---");
+  Logger.log("Current W': " + (powerCurve.wPrime ? (powerCurve.wPrime/1000).toFixed(1) + "kJ" : 'N/A'));
+  Logger.log("Season W': " + (powerCurve.seasonWPrime ? (powerCurve.seasonWPrime/1000).toFixed(1) + "kJ" : 'N/A'));
+  Logger.log("--- pMax ---");
+  Logger.log("Current pMax: " + (powerCurve.pMax || 'N/A') + "W");
+  Logger.log("Season pMax: " + (powerCurve.seasonPMax || 'N/A') + "W");
+  Logger.log("--- VO2max ---");
+  Logger.log("VO2max (5m est): " + (powerCurve.vo2max5m ? powerCurve.vo2max5m.toFixed(1) : 'N/A'));
+  Logger.log("--- Peak Powers ---");
+  Logger.log("5s: " + powerCurve.peak5s + "W | 10s: " + powerCurve.peak10s + "W | 30s: " + powerCurve.peak30s + "W");
+  Logger.log("1min: " + powerCurve.peak1min + "W | 2min: " + powerCurve.peak2min + "W | 5min: " + powerCurve.peak5min + "W");
+  Logger.log("8min: " + powerCurve.peak8min + "W | 20min: " + powerCurve.peak20min + "W | 30min: " + powerCurve.peak30min + "W | 60min: " + powerCurve.peak60min + "W");
+
+  // Test analyzed profile
+  Logger.log("--- Analyzed Profile ---");
+  const profile = analyzePowerProfile(powerCurve);
+  if (profile.available) {
+    Logger.log("W' Status: " + (profile.wPrimeStatus || 'N/A'));
+    Logger.log("TTE Estimate: " + (profile.tteEstimate || 'N/A') + "min");
+    Logger.log("Strengths: " + (profile.strengths.join(", ") || 'None'));
+    Logger.log("Weaknesses: " + (profile.weaknesses.join(", ") || 'None'));
+    Logger.log("Recommendations: " + (profile.recommendations.join("; ") || 'None'));
+  }
+  Logger.log("Manual FTP: " + powerCurve.manualFTP);
+  Logger.log("Effective FTP (used for zones): " + powerCurve.ftp);
+  Logger.log("Weight: " + powerCurve.weight + "kg");
+  if (powerCurve.weight && powerCurve.ftp) {
+    Logger.log("W/kg: " + (powerCurve.ftp / powerCurve.weight).toFixed(2));
+  }
+
+  Logger.log("=== FITNESS METRICS TEST ===");
+  const fitness = fetchFitnessMetrics();
+  Logger.log("CTL: " + fitness.ctl);
+  Logger.log("ATL: " + fitness.atl);
+  Logger.log("TSB: " + fitness.tsb);
+  Logger.log("Ramp Rate: " + fitness.rampRate);
+}
+
+/**
+ * Test monthly progress report
+ */
+function testMonthlyProgress() {
+  Logger.log("=== MONTHLY PROGRESS TEST ===");
+
+  // Fetch current month (previous complete month) and previous month
+  const currentMonth = fetchMonthlyProgressData(0);
+  const previousMonth = fetchMonthlyProgressData(1);
+
+  Logger.log("\n=== " + currentMonth.monthName + " " + currentMonth.monthYear + " ===");
+  Logger.log("Period: " + currentMonth.periodStart + " to " + currentMonth.periodEnd);
+
+  Logger.log("\n--- Month-over-Month Comparison ---");
+  Logger.log("vs " + previousMonth.monthName + " " + previousMonth.monthYear);
+  const activityChange = currentMonth.totals.activities - previousMonth.totals.activities;
+  const tssChange = currentMonth.totals.tss - previousMonth.totals.tss;
+  const ctlChange = currentMonth.fitness.ctlEnd - previousMonth.fitness.ctlEnd;
+  Logger.log("Activities: " + currentMonth.totals.activities + " (" + (activityChange >= 0 ? '+' : '') + activityChange + ")");
+  Logger.log("Total TSS: " + currentMonth.totals.tss.toFixed(0) + " (" + (tssChange >= 0 ? '+' : '') + tssChange.toFixed(0) + ")");
+  Logger.log("CTL: " + currentMonth.fitness.ctlEnd.toFixed(1) + " (" + (ctlChange >= 0 ? '+' : '') + ctlChange.toFixed(1) + ")");
+  if (currentMonth.fitness.eftpEnd && previousMonth.fitness.eftpEnd) {
+    const eftpChange = currentMonth.fitness.eftpEnd - previousMonth.fitness.eftpEnd;
+    Logger.log("eFTP: " + currentMonth.fitness.eftpEnd + "W (" + (eftpChange >= 0 ? '+' : '') + eftpChange + "W)");
+  }
+
+  Logger.log("\n--- This Month's Fitness Trend ---");
+  Logger.log("CTL: " + currentMonth.fitness.ctlStart.toFixed(1) + " -> " + currentMonth.fitness.ctlEnd.toFixed(1));
+  if (currentMonth.fitness.eftpStart) {
+    Logger.log("eFTP: " + currentMonth.fitness.eftpStart + "W -> " + currentMonth.fitness.eftpEnd + "W");
+  }
+
+  Logger.log("\n--- Weekly Breakdown ---");
+  currentMonth.weeklyData.forEach((w, i) => {
+    Logger.log("Week " + (i + 1) + ": " + w.activities + " activities, " + w.totalTss.toFixed(0) + " TSS, CTL " + w.ctl.toFixed(1) + ", eFTP " + (w.eftp || 'N/A'));
+  });
+
+  Logger.log("\n--- Totals ---");
+  Logger.log("Total Activities: " + currentMonth.totals.activities);
+  Logger.log("Total TSS: " + currentMonth.totals.tss.toFixed(0));
+  Logger.log("Avg Weekly TSS: " + currentMonth.totals.avgWeeklyTss.toFixed(0));
+  Logger.log("Avg Weekly Time: " + formatDuration(currentMonth.totals.avgWeeklyTime));
+
+  Logger.log("\n--- Consistency ---");
+  Logger.log("Weeks Trained: " + currentMonth.consistency.weeksWithTraining + "/" + currentMonth.weeks + " (" + currentMonth.consistency.consistencyPercent + "%)");
+}
+
+/**
+ * Test weekly summary
+ */
+function testWeeklySummary() {
+  Logger.log("=== WEEKLY SUMMARY TEST ===");
+
+  const weekData = fetchWeeklyActivities(7);
+  Logger.log("This Week:");
+  Logger.log("  Activities: " + weekData.totalActivities);
+  Logger.log("  Rides: " + weekData.rides);
+  Logger.log("  Runs: " + weekData.runs);
+  Logger.log("  Total Time: " + formatDuration(weekData.totalTime));
+  Logger.log("  Total TSS: " + weekData.totalTss.toFixed(0));
+  Logger.log("  Total Distance: " + (weekData.totalDistance / 1000).toFixed(1) + " km");
+
+  const prevWeekData = fetchWeeklyActivities(7, 7);
+  Logger.log("\nPrevious Week:");
+  Logger.log("  Activities: " + prevWeekData.totalActivities);
+  Logger.log("  Total TSS: " + prevWeekData.totalTss.toFixed(0));
+
+  Logger.log("\nTo send the actual email, run sendWeeklySummaryEmail()");
+}
