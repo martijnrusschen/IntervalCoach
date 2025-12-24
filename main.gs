@@ -159,6 +159,13 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
   Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
 
+  // Get 2-week stimulus history for AI variety check
+  const twoWeekHistory = getTwoWeekWorkoutHistory();
+  const sportStimuli = isRun ? twoWeekHistory.recentStimuli.run : twoWeekHistory.recentStimuli.ride;
+  if (sportStimuli && sportStimuli.length > 0) {
+    Logger.log("Recent stimuli (2 weeks): " + sportStimuli.join(", "));
+  }
+
   // Recalculate phase with full context (now that we have all data)
   const phaseContext = {
     goalDescription: goalDescription,
@@ -299,6 +306,9 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Weekly plan hint - AI may adjust based on current conditions
     suggestedType: availability.suggestedType,
     isWeeklyPlan: availability.isWeeklyPlan,
+    // Stimulus variety tracking (AI-first variety check)
+    recentStimuli: twoWeekHistory.recentStimuli,
+    stimulusCounts: twoWeekHistory.stimulusCounts,
     enableAI: true
   });
 

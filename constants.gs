@@ -88,6 +88,7 @@ const WORKOUT_TYPES = {
     Recovery_Easy: {
       intensity: 1,
       zones: "Z1",
+      stimulus: "recovery",  // Training effect category for variety tracking
       description: "Very easy spinning, active recovery",
       phases: ["Base", "Build", "Specialty", "Taper", "Race Week"],
       tsbRange: [-50, 50],
@@ -96,6 +97,7 @@ const WORKOUT_TYPES = {
     Endurance_Z2: {
       intensity: 2,
       zones: "Z2",
+      stimulus: "aerobic",
       description: "Steady aerobic endurance, fat burning",
       phases: ["Base", "Build", "Specialty", "Taper"],
       tsbRange: [-30, 50],
@@ -104,6 +106,7 @@ const WORKOUT_TYPES = {
     Endurance_Tempo: {
       intensity: 3,
       zones: "Z2-Z3",
+      stimulus: "tempo",
       description: "Endurance with tempo blocks",
       phases: ["Base", "Build"],
       tsbRange: [-20, 40],
@@ -113,6 +116,7 @@ const WORKOUT_TYPES = {
     SweetSpot: {
       intensity: 3,
       zones: "88-94% FTP",
+      stimulus: "subthreshold",  // Similar to Tempo_Sustained
       description: "Efficient threshold development",
       phases: ["Base", "Build"],
       tsbRange: [-15, 30],
@@ -121,6 +125,7 @@ const WORKOUT_TYPES = {
     Tempo_Sustained: {
       intensity: 3,
       zones: "Z3",
+      stimulus: "subthreshold",  // Similar to SweetSpot
       description: "Sustained tempo effort",
       phases: ["Base", "Build"],
       tsbRange: [-15, 30],
@@ -130,6 +135,7 @@ const WORKOUT_TYPES = {
     FTP_Threshold: {
       intensity: 4,
       zones: "Z4 (95-105% FTP)",
+      stimulus: "threshold",
       description: "Threshold intervals, FTP development",
       phases: ["Build", "Specialty"],
       tsbRange: [-10, 25],
@@ -138,6 +144,7 @@ const WORKOUT_TYPES = {
     Over_Unders: {
       intensity: 4,
       zones: "Z4 +/- 5%",
+      stimulus: "threshold",  // Similar to FTP_Threshold
       description: "Threshold tolerance, lactate clearing",
       phases: ["Build", "Specialty"],
       tsbRange: [-10, 25],
@@ -147,6 +154,7 @@ const WORKOUT_TYPES = {
     VO2max_Intervals: {
       intensity: 5,
       zones: "Z5 (105-120% FTP)",
+      stimulus: "vo2max",
       description: "3-5 min hard intervals, VO2max development",
       phases: ["Specialty", "Build"],
       tsbRange: [0, 20],
@@ -155,6 +163,7 @@ const WORKOUT_TYPES = {
     Anaerobic_Sprints: {
       intensity: 5,
       zones: "Z6-Z7",
+      stimulus: "anaerobic",
       description: "Short max efforts, neuromuscular power",
       phases: ["Specialty", "Race Week"],
       tsbRange: [5, 30],
@@ -168,6 +177,7 @@ const WORKOUT_TYPES = {
     Run_Recovery: {
       intensity: 1,
       zones: "Z1",
+      stimulus: "recovery",
       description: "Very easy jog, regeneration",
       phases: ["Base", "Build", "Specialty", "Taper", "Race Week"],
       tsbRange: [-50, 50],
@@ -176,6 +186,7 @@ const WORKOUT_TYPES = {
     Run_Easy: {
       intensity: 2,
       zones: "Z1-Z2",
+      stimulus: "aerobic",
       description: "Easy run, conversational pace",
       phases: ["Base", "Build", "Specialty", "Taper"],
       tsbRange: [-30, 50],
@@ -184,6 +195,7 @@ const WORKOUT_TYPES = {
     Run_Long: {
       intensity: 2,
       zones: "Z2",
+      stimulus: "aerobic",  // Similar to Run_Easy
       description: "Extended easy run, aerobic endurance",
       phases: ["Base", "Build"],
       tsbRange: [-20, 40],
@@ -193,6 +205,7 @@ const WORKOUT_TYPES = {
     Run_Tempo: {
       intensity: 3,
       zones: "Z3",
+      stimulus: "tempo",
       description: "Sustained tempo effort",
       phases: ["Base", "Build", "Specialty"],
       tsbRange: [-15, 30],
@@ -201,6 +214,7 @@ const WORKOUT_TYPES = {
     Run_Fartlek: {
       intensity: 3,
       zones: "Mixed",
+      stimulus: "mixed",  // Unique - varied stimulus
       description: "Playful speed variations",
       phases: ["Base", "Build", "Specialty"],
       tsbRange: [-15, 30],
@@ -210,6 +224,7 @@ const WORKOUT_TYPES = {
     Run_Threshold: {
       intensity: 4,
       zones: "Z4",
+      stimulus: "threshold",
       description: "Lactate threshold pace intervals",
       phases: ["Build", "Specialty"],
       tsbRange: [-10, 25],
@@ -219,6 +234,7 @@ const WORKOUT_TYPES = {
     Run_Intervals: {
       intensity: 5,
       zones: "Z5",
+      stimulus: "vo2max",
       description: "VO2max repeats, 400m-1km efforts",
       phases: ["Specialty", "Build"],
       tsbRange: [0, 20],
@@ -227,6 +243,7 @@ const WORKOUT_TYPES = {
     Run_Strides: {
       intensity: 4,
       zones: "Z5 (short)",
+      stimulus: "neuromuscular",  // Short, form-focused
       description: "Short accelerations after easy run",
       phases: ["Base", "Build", "Specialty", "Taper"],
       tsbRange: [-20, 40],

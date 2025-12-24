@@ -349,6 +349,64 @@ Include:
 }
 
 // =========================================================
+// AI EMAIL SUBJECT LINE
+// =========================================================
+
+/**
+ * Generate an engaging AI-powered email subject line
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} workout - Selected workout details
+ * @param {object} wellness - Wellness data
+ * @returns {string} AI-generated subject line
+ */
+function generateAIEmailSubject(phaseInfo, workout, wellness) {
+  const language = USER_SETTINGS.LANGUAGE || 'en';
+  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
+  const langName = langMap[language] || 'English';
+
+  // Build context for AI
+  let recoveryContext = 'Unknown';
+  if (wellness?.available) {
+    if (wellness.recoveryStatus.includes("Green") || wellness.recoveryStatus.includes("Primed")) {
+      recoveryContext = 'Excellent (green/primed)';
+    } else if (wellness.recoveryStatus.includes("Yellow") || wellness.recoveryStatus.includes("Normal")) {
+      recoveryContext = 'Moderate (yellow/normal)';
+    } else if (wellness.recoveryStatus.includes("Red") || wellness.recoveryStatus.includes("Fatigued")) {
+      recoveryContext = 'Low (red/fatigued)';
+    }
+  }
+
+  const prompt = `Generate a SHORT, engaging email subject line for a cycling/running workout email.
+
+Context:
+- Workout type: ${workout.type}
+- Training phase: ${phaseInfo.phaseName}
+- Recovery status: ${recoveryContext}
+- Goal: ${phaseInfo.goalDescription || 'General fitness'}
+
+Requirements:
+- Write in ${langName}
+- Maximum 50 characters (STRICT LIMIT)
+- Be motivating and specific to the workout
+- NO brackets, NO tags like [GREEN]
+- Examples: "Base building: Z2 duurrit", "Hersteldag: rustig aan", "Topvorm! VO2max intervals"
+
+Return ONLY the subject line, nothing else.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response && response.trim().length > 0 && response.trim().length <= 60) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("AI subject generation failed: " + e.toString());
+  }
+
+  // Fallback to simple format
+  return workout.type;
+}
+
+// =========================================================
 // COACHING NOTE GENERATION
 // =========================================================
 

@@ -39,8 +39,8 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
-| 7 | **Email Subject Lines** | Fixed "[GREEN] Workout" format in `emails.gs:23-32` | AI writes engaging subject (e.g., "Build day: Sweet Spot intervals") | Pending |
-| 8 | **Workout Variety Check** | Count-based (avoid repeats) | AI considers training effect and stimulus, not just type names | Pending |
+| 7 | **Email Subject Lines** | Fixed "[GREEN] Workout" format in `emails.gs:23-32` | AI writes engaging subject (e.g., "Build day: Sweet Spot intervals") | **Complete** |
+| 8 | **Workout Variety Check** | Count-based (avoid repeats) | AI considers training effect and stimulus, not just type names | **Complete** |
 
 ---
 

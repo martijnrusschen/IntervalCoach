@@ -385,8 +385,8 @@ function getRecentWorkoutTypes(daysBack = 7) {
 }
 
 /**
- * Get 2-week workout history with frequency analysis for variety planning
- * @returns {object} { rideTypes, runTypes, mostFrequent, typeCounts }
+ * Get 2-week workout history with frequency and stimulus analysis for variety planning
+ * @returns {object} { rideTypes, runTypes, mostFrequent, typeCounts, stimulusCounts, recentStimuli }
  */
 function getTwoWeekWorkoutHistory() {
   const twoWeekTypes = getRecentWorkoutTypes(14);
@@ -396,6 +396,53 @@ function getTwoWeekWorkoutHistory() {
   const typeCounts = {};
   allTypes.forEach(function(t) {
     typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+
+  // Count frequency of each training stimulus (for AI variety check)
+  const stimulusCounts = { ride: {}, run: {} };
+  const recentStimuli = { ride: [], run: [] };
+
+  // Helper to find workout definition with flexible name matching
+  function findWorkoutDef(catalog, typeName) {
+    // Direct match first
+    if (catalog[typeName]) return catalog[typeName];
+
+    // Try with underscores (e.g., "FTPThreshold" → "FTP_Threshold")
+    const withUnderscores = typeName.replace(/([a-z])([A-Z])/g, '$1_$2');
+    if (catalog[withUnderscores]) return catalog[withUnderscores];
+
+    // Try case-insensitive match
+    const lowerName = typeName.toLowerCase();
+    for (const key in catalog) {
+      if (key.toLowerCase() === lowerName ||
+          key.toLowerCase().replace(/_/g, '') === lowerName.replace(/_/g, '')) {
+        return catalog[key];
+      }
+    }
+    return null;
+  }
+
+  // Map workout types to their stimulus
+  twoWeekTypes.rides.forEach(function(typeName) {
+    const workoutDef = findWorkoutDef(WORKOUT_TYPES.ride, typeName);
+    if (workoutDef && workoutDef.stimulus) {
+      const stim = workoutDef.stimulus;
+      stimulusCounts.ride[stim] = (stimulusCounts.ride[stim] || 0) + 1;
+      if (recentStimuli.ride.indexOf(stim) === -1) {
+        recentStimuli.ride.push(stim);
+      }
+    }
+  });
+
+  twoWeekTypes.runs.forEach(function(typeName) {
+    const workoutDef = findWorkoutDef(WORKOUT_TYPES.run, typeName);
+    if (workoutDef && workoutDef.stimulus) {
+      const stim = workoutDef.stimulus;
+      stimulusCounts.run[stim] = (stimulusCounts.run[stim] || 0) + 1;
+      if (recentStimuli.run.indexOf(stim) === -1) {
+        recentStimuli.run.push(stim);
+      }
+    }
   });
 
   // Find most frequent
@@ -416,7 +463,9 @@ function getTwoWeekWorkoutHistory() {
     rideTypes: uniqueRides,
     runTypes: uniqueRuns,
     mostFrequent: mostFrequent ? mostFrequent + ' (' + maxCount + 'x)' : null,
-    typeCounts: typeCounts
+    typeCounts: typeCounts,
+    stimulusCounts: stimulusCounts,
+    recentStimuli: recentStimuli
   };
 }
 
@@ -433,11 +482,11 @@ function generateAIWorkoutDecision(context) {
   const isRun = context.activityType === "Run";
   const catalogType = isRun ? "run" : "ride";
 
-  // Build workout options for the AI
+  // Build workout options for the AI (now includes training stimulus)
   const catalog = isRun ? WORKOUT_TYPES.run : WORKOUT_TYPES.ride;
   const workoutOptions = Object.keys(catalog).map(function(name) {
     const type = catalog[name];
-    return name + " (intensity: " + type.intensity + "/5, zones: " + type.zones + ", phases: " + type.phases.join("/") + ")";
+    return name + " (intensity: " + type.intensity + "/5, zones: " + type.zones + ", stimulus: " + type.stimulus + ", phases: " + type.phases.join("/") + ")";
   }).join("\n");
 
   // Build recent workout context
@@ -445,6 +494,20 @@ function generateAIWorkoutDecision(context) {
     ? (context.recentWorkouts?.runs || [])
     : (context.recentWorkouts?.rides || []);
   const recentStr = recentList.length > 0 ? recentList.join(", ") : "None in last 7 days";
+
+  // Build recent stimulus exposure for AI variety check
+  const recentStimuli = context.recentStimuli || {};
+  const stimulusCounts = context.stimulusCounts || {};
+  const sportStimuli = isRun ? recentStimuli.run : recentStimuli.ride;
+  const sportStimulusCounts = isRun ? stimulusCounts.run : stimulusCounts.ride;
+
+  let stimulusStr = "None tracked";
+  if (sportStimuli && sportStimuli.length > 0) {
+    stimulusStr = sportStimuli.map(function(stim) {
+      const count = sportStimulusCounts[stim] || 0;
+      return stim + " (" + count + "x)";
+    }).join(", ");
+  }
 
   const prompt = `You are an expert cycling/running coach making a training decision for today.
 
@@ -467,6 +530,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 **RECENT TRAINING (for variety):**
 - Recent ${context.activityType}s: ${recentStr}
 - Last Workout Intensity: ${context.lastIntensity || 0}/5 (${context.daysSinceLastWorkout || 0} days ago)
+- Recent Stimulus Exposure (2 weeks): ${stimulusStr}
 
 **DURATION WINDOW:** ${context.duration?.min || 45}-${context.duration?.max || 60} minutes
 ${context.suggestedType ? `
@@ -488,7 +552,9 @@ ${workoutOptions}
 7. If recovery is Yellow (<50%): Max intensity 3
 8. If last workout was intensity 4-5 AND was yesterday/2 days ago: Today should be 1-3
 9. If 4+ days since last workout: Athlete is fresh, any intensity appropriate
-10. Prioritize variety - avoid repeating recent workout types
+10. Prioritize STIMULUS variety - avoid repeating the same training effect (stimulus field), not just workout names.
+    E.g., SweetSpot and Tempo_Sustained both have "subthreshold" stimulus = same physiological stress = avoid back-to-back.
+    If a stimulus was done 3+ times in 2 weeks, prioritize a different one.
 11. Match workout to training phase
 
 **YOUR TASK:**
@@ -593,7 +659,10 @@ function selectWorkoutTypes(params) {
         duration: params.duration,
         // Weekly plan hint (may be adjusted based on current conditions)
         suggestedType: params.suggestedType,
-        isWeeklyPlan: params.isWeeklyPlan
+        isWeeklyPlan: params.isWeeklyPlan,
+        // Stimulus variety tracking (AI-first variety check)
+        recentStimuli: params.recentStimuli || {},
+        stimulusCounts: params.stimulusCounts || {}
       };
 
       const aiDecision = generateAIWorkoutDecision(aiContext);
@@ -619,8 +688,9 @@ function selectWorkoutTypes(params) {
   }
 
   // ===== SIMPLIFIED FALLBACK =====
-  // AI-first approach: this only runs if AI fails, so keep it simple and safe
-  Logger.log("Using fallback workout selection");
+  // AI-first approach: this only runs if AI fails or is disabled
+  const fallbackReason = params.enableAI === false ? "AI disabled" : "AI failed";
+  Logger.log("Using fallback workout selection (" + fallbackReason + ")");
 
   // Simple intensity cap based on critical factors only
   let maxIntensity = 3; // Default to moderate when AI unavailable

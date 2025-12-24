@@ -678,6 +678,9 @@ function testAIWorkoutDecision() {
   const powerProfile = analyzePowerProfile(fetchPowerCurve());
   const recentTypes = getRecentWorkoutTypes(7);
 
+  // Get 2-week stimulus history for variety check
+  const twoWeekHistory = getTwoWeekWorkoutHistory();
+
   const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
   const goals = goalsResult.success && goalsResult.data ? {
     available: true,
@@ -704,7 +707,19 @@ function testAIWorkoutDecision() {
   Logger.log("Phase: " + phaseInfo.phaseName);
   Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
 
-  // AI selection
+  // Log stimulus variety info
+  Logger.log("\n--- Stimulus Variety (2 weeks) ---");
+  Logger.log("Recent ride types: " + (twoWeekHistory.rideTypes.length > 0 ? twoWeekHistory.rideTypes.join(", ") : "None"));
+  const rideStimuli = twoWeekHistory.recentStimuli.ride || [];
+  const rideStimulusCounts = twoWeekHistory.stimulusCounts.ride || {};
+  if (rideStimuli.length > 0) {
+    const stimulusDisplay = rideStimuli.map(s => s + " (" + (rideStimulusCounts[s] || 0) + "x)").join(", ");
+    Logger.log("Ride stimulus exposure: " + stimulusDisplay);
+  } else {
+    Logger.log("Ride stimulus exposure: None tracked");
+  }
+
+  // AI selection with stimulus data
   Logger.log("\n--- AI Workout Decision ---");
   const aiSelection = selectWorkoutTypes({
     wellness: wellness,
@@ -718,6 +733,8 @@ function testAIWorkoutDecision() {
     duration: 60,
     goals: goals,
     powerProfile: powerProfile,
+    recentStimuli: twoWeekHistory.recentStimuli,
+    stimulusCounts: twoWeekHistory.stimulusCounts,
     enableAI: true
   });
 

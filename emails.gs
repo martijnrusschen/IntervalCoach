@@ -19,19 +19,10 @@
 function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfile) {
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
 
-  // Add recovery indicator to subject
-  let recoveryTag = "";
-  if (wellness && wellness.available) {
-    if (wellness.recoveryStatus.includes("Green") || wellness.recoveryStatus.includes("Primed") || wellness.recoveryStatus.includes("Well Recovered")) {
-      recoveryTag = "[GREEN] ";
-    } else if (wellness.recoveryStatus.includes("Yellow") || wellness.recoveryStatus.includes("Normal")) {
-      recoveryTag = "[YELLOW] ";
-    } else if (wellness.recoveryStatus.includes("Red") || wellness.recoveryStatus.includes("Fatigued")) {
-      recoveryTag = "[RED] ";
-    }
-  }
-
-  const subject = t.subject_prefix + recoveryTag + workout.type + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+  // Generate AI-powered subject line
+  const aiSubject = generateAIEmailSubject(phaseInfo, workout, wellness);
+  const dateStr = Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd");
+  const subject = `[IntervalCoach] ${aiSubject} (${dateStr})`;
 
   let body = `${t.greeting}\n\n`;
 
