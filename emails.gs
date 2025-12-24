@@ -319,8 +319,8 @@ ${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.re
 ${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}${recoveryChange}`;
   }
 
-  // Training Load Advice
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+  // Training Load Advice (AI-enhanced with wellness data)
+  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
   body += `
 
 -----------------------------------

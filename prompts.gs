@@ -856,3 +856,113 @@ function generateAIPowerProfileAnalysis(powerData, goals) {
   }
 }
 
+// =========================================================
+// AI TRAINING LOAD ADVISOR
+// =========================================================
+
+/**
+ * Generate AI-driven training load advice
+ * Replaces fixed ramp rate thresholds with personalized recommendations
+ * @param {object} fitnessMetrics - Current CTL, ATL, TSB, rampRate
+ * @param {object} phaseInfo - Training phase info (weeksOut, phaseName)
+ * @param {object} goals - Goal information
+ * @param {object} wellness - Wellness data with averages
+ * @returns {object} { recommendedRampRate, rampRateCategory, personalizedAdvice, warnings, confidence }
+ */
+function generateAITrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellness) {
+  const currentCTL = fitnessMetrics.ctl || 0;
+  const currentATL = fitnessMetrics.atl || 0;
+  const currentTSB = fitnessMetrics.tsb || 0;
+  const currentRampRate = fitnessMetrics.rampRate || 0;
+  const weeksOut = phaseInfo.weeksOut || 12;
+
+  // Build goal context
+  let goalContext = 'General fitness improvement';
+  if (goals && goals.available && goals.primaryGoal) {
+    goalContext = goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')';
+    if (goals.primaryGoal.type) {
+      goalContext += ' - ' + goals.primaryGoal.type;
+    }
+  }
+
+  // Build wellness context
+  let wellnessContext = 'No wellness data available';
+  if (wellness && wellness.available && wellness.averages) {
+    const avg = wellness.averages;
+    wellnessContext = `7-day averages:
+- Sleep: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${avg.hrv ? avg.hrv.toFixed(0) + ' ms' : 'N/A'}
+- Resting HR: ${avg.restingHR ? avg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+- Recovery Score: ${avg.recovery ? avg.recovery.toFixed(0) + '%' : 'N/A'}`;
+
+    // Add trend indicators if today's data available
+    if (wellness.today) {
+      const t = wellness.today;
+      if (t.hrv && avg.hrv) {
+        const hrvDiff = t.hrv - avg.hrv;
+        wellnessContext += `\nToday vs avg: HRV ${hrvDiff >= 0 ? '+' : ''}${hrvDiff.toFixed(0)} ms`;
+      }
+      if (t.sleep && avg.sleep) {
+        const sleepDiff = t.sleep - avg.sleep;
+        wellnessContext += `, Sleep ${sleepDiff >= 0 ? '+' : ''}${sleepDiff.toFixed(1)}h`;
+      }
+    }
+  }
+
+  const prompt = `You are an expert cycling coach advising on training load progression.
+
+**Current Fitness State:**
+- CTL (Chronic Training Load): ${currentCTL.toFixed(1)}
+- ATL (Acute Training Load): ${currentATL.toFixed(1)}
+- TSB (Training Stress Balance): ${currentTSB.toFixed(1)} ${currentTSB > 5 ? '(Fresh)' : currentTSB < -15 ? '(Fatigued)' : '(Balanced)'}
+- Current Ramp Rate: ${currentRampRate.toFixed(1)} CTL/week
+
+**Training Context:**
+- Phase: ${phaseInfo.phaseName}
+- Weeks to Goal: ${weeksOut}
+- Goal: ${goalContext}
+
+**Wellness/Recovery Data:**
+${wellnessContext}
+
+**Standard Ramp Rate Guidelines (for reference):**
+- Maintain: 0-3 CTL/week (on track, minimal stress)
+- Build: 3-5 CTL/week (sustainable progression)
+- Aggressive: 5-7 CTL/week (monitor closely)
+- Caution: >7 CTL/week (risk of overtraining)
+
+**Your Task:**
+Based on the athlete's current state, wellness trends, and training context:
+1. Recommend an appropriate ramp rate for the coming week
+2. Consider wellness signals - poor sleep/HRV suggests conservative approach
+3. Factor in TSB - high fatigue may warrant recovery week
+4. Account for training phase - taper phases need reduction, not building
+
+**Output JSON only (no markdown wrapping):**
+{
+  "recommendedRampRate": <number between -5 and 8>,
+  "rampRateCategory": "Recovery|Maintain|Build|Aggressive|Reduce",
+  "personalizedAdvice": "1-2 sentence personalized recommendation based on their specific data",
+  "warnings": ["Array of specific warnings if any, empty array if none"],
+  "weeklyTSSMultiplier": <number 0.4-1.1 to adjust base weekly TSS>,
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI training load advice: No response from Gemini");
+      return null;
+    }
+
+    // Parse JSON from response
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI training load advice: " + e.toString());
+    return null;
+  }
+}
+

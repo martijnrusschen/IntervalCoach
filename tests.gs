@@ -192,6 +192,74 @@ function testTrainingLoadAdvisor() {
   }
 }
 
+/**
+ * Test AI-enhanced training load advisor with wellness context
+ */
+function testAITrainingLoadAdvisor() {
+  Logger.log("=== AI TRAINING LOAD ADVISOR TEST ===");
+
+  // Fetch fitness metrics
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("\n--- Current Fitness ---");
+  Logger.log("CTL: " + fitnessMetrics.ctl.toFixed(1));
+  Logger.log("ATL: " + fitnessMetrics.atl.toFixed(1));
+  Logger.log("TSB: " + fitnessMetrics.tsb.toFixed(1));
+  Logger.log("Ramp Rate: " + (fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A') + " CTL/week");
+
+  // Fetch goals and phase
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals?.available && goals?.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  Logger.log("\n--- Training Context ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+  if (goals?.primaryGoal) {
+    Logger.log("Goal: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+  }
+
+  // Fetch wellness data
+  const wellness = fetchWellnessData();
+  const wellnessSummary = createWellnessSummary(wellness);
+
+  Logger.log("\n--- Wellness Data ---");
+  if (wellnessSummary.available) {
+    const avg = wellnessSummary.averages;
+    Logger.log("7-day Avg Sleep: " + (avg.sleep ? avg.sleep.toFixed(1) + "h" : "N/A"));
+    Logger.log("7-day Avg HRV: " + (avg.hrv ? avg.hrv.toFixed(0) + " ms" : "N/A"));
+    Logger.log("7-day Avg Recovery: " + (avg.recovery ? avg.recovery.toFixed(0) + "%" : "N/A"));
+  } else {
+    Logger.log("No wellness data available");
+  }
+
+  // Test AI-enhanced advice
+  Logger.log("\n--- AI Training Load Advice ---");
+  const advice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
+
+  Logger.log("AI Enhanced: " + (advice.aiEnhanced ? "YES" : "NO (fallback)"));
+  if (advice.aiConfidence) {
+    Logger.log("AI Confidence: " + advice.aiConfidence);
+  }
+  Logger.log("Ramp Rate Advice: " + advice.rampRateAdvice);
+  Logger.log("Recommended Ramp: " + advice.requiredWeeklyIncrease + " CTL/week");
+  Logger.log("Weekly TSS Target: " + advice.recommendedWeeklyTSS + " (" + advice.tssRange.min + "-" + advice.tssRange.max + ")");
+  Logger.log("Advice: " + advice.loadAdvice);
+  if (advice.warning) {
+    Logger.log("Warning: " + advice.warning);
+  }
+
+  // Compare with fallback
+  Logger.log("\n--- Comparison: Fallback Advice ---");
+  const fallbackAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, null);
+  if (!fallbackAdvice.aiEnhanced) {
+    Logger.log("Fallback Ramp Advice: " + fallbackAdvice.rampRateAdvice);
+    Logger.log("Fallback Weekly TSS: " + fallbackAdvice.recommendedWeeklyTSS);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
 // =========================================================
 // EMAIL TESTS
 // =========================================================
