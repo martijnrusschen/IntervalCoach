@@ -557,143 +557,52 @@ function selectWorkoutTypes(params) {
     }
   }
 
-  // ===== FALLBACK: RULE-BASED SELECTION =====
+  // ===== SIMPLIFIED FALLBACK =====
+  // AI-first approach: this only runs if AI fails, so keep it simple and safe
   Logger.log("Using fallback workout selection");
 
-  // Determine reasons for selection
-  const reasons = [];
+  // Simple intensity cap based on critical factors only
+  let maxIntensity = 3; // Default to moderate when AI unavailable
 
-  // ===== DETERMINE MAX INTENSITY ALLOWED =====
-  let maxIntensity = 5; // Start with all intensities allowed
-
-  // 1. Event tomorrow = recovery only (stricter for A/B, moderate for C)
+  // Event tomorrow = easy
   if (eventTomorrow.hasEvent) {
-    if (eventTomorrow.category === "A" || eventTomorrow.category === "B") {
-      maxIntensity = 2;
-      reasons.push(eventTomorrow.category + " event tomorrow - recovery/easy only");
+    maxIntensity = eventTomorrow.category === "C" ? 3 : 2;
+  }
+
+  // Very fatigued = easy
+  if (tsb < -15) {
+    maxIntensity = 2;
+  }
+
+  // Low recovery = easy
+  if (recoveryScore < TRAINING_CONSTANTS.RECOVERY.YELLOW_THRESHOLD) {
+    maxIntensity = 2;
+  }
+
+  // Select safe default based on intensity cap
+  let fallbackType, reason;
+
+  if (maxIntensity <= 2) {
+    fallbackType = isRun ? "Run_Easy" : "Endurance_Z2";
+    reason = "Fallback: conservative selection due to fatigue/recovery/event";
+  } else {
+    // Moderate intensity - pick phase-appropriate workout
+    if (phaseName === "Base") {
+      fallbackType = isRun ? "Run_Easy" : "Endurance_Tempo";
+    } else if (phaseName === "Build") {
+      fallbackType = isRun ? "Run_Tempo" : "SweetSpot_Standard";
     } else {
-      maxIntensity = 3;
-      reasons.push("C event tomorrow - moderate/easy workout");
+      fallbackType = isRun ? "Run_Tempo" : "Endurance_Tempo";
     }
-  }
-
-  // 2. Event yesterday = recovery (A/B = easy, C = moderate)
-  if (eventYesterday.hadEvent) {
-    if (eventYesterday.category === "A" || eventYesterday.category === "B") {
-      maxIntensity = Math.min(maxIntensity, 2);
-      reasons.push(eventYesterday.category + " event yesterday - recovery day");
-    } else {
-      maxIntensity = Math.min(maxIntensity, 3);
-      reasons.push("C event yesterday - easier workout");
-    }
-  }
-
-  // 3. Very negative TSB = easy workouts
-  if (tsb < -20) {
-    maxIntensity = Math.min(maxIntensity, 2);
-    reasons.push("High fatigue (TSB=" + tsb.toFixed(0) + ") - easy workouts");
-  } else if (tsb < -10) {
-    maxIntensity = Math.min(maxIntensity, 3);
-    reasons.push("Moderate fatigue (TSB=" + tsb.toFixed(0) + ") - limit intensity");
-  }
-
-  // 4. Day after hard workout = easier day
-  if (recentWorkouts.lastIntensity >= 4) {
-    maxIntensity = Math.min(maxIntensity, 3);
-    reasons.push("Recovery from yesterday's hard effort");
-  }
-
-  // 5. Yellow recovery = moderate only
-  if (wellness?.available && recoveryScore < TRAINING_CONSTANTS.RECOVERY.YELLOW_THRESHOLD) {
-    maxIntensity = Math.min(maxIntensity, 3);
-    reasons.push("Yellow recovery (" + recoveryScore + "%) - moderate intensity");
-  }
-
-  // ===== FILTER WORKOUT TYPES =====
-  const suitableTypes = [];
-
-  Object.keys(catalog).forEach(function(typeName) {
-    const type = catalog[typeName];
-
-    // Check intensity
-    if (type.intensity > maxIntensity) return;
-
-    // Check phase suitability
-    if (!type.phases.includes(phaseName) && !type.phases.includes("Base")) return;
-
-    // Check TSB range
-    if (tsb < type.tsbRange[0] || tsb > type.tsbRange[1]) return;
-
-    // Check minimum recovery
-    if (recoveryScore < type.minRecovery) return;
-
-    suitableTypes.push({
-      name: typeName,
-      intensity: type.intensity,
-      description: type.description
-    });
-  });
-
-  // ===== VARIETY CHECK =====
-  const recentTypeList = isRun
-    ? (recentWorkouts.types?.runs || [])
-    : (recentWorkouts.types?.rides || []);
-
-  // Count recent types
-  const typeCounts = {};
-  recentTypeList.forEach(function(t) {
-    typeCounts[t] = (typeCounts[t] || 0) + 1;
-  });
-
-  // Prefer types not done recently, but keep all as options
-  suitableTypes.sort(function(a, b) {
-    const countA = typeCounts[a.name] || 0;
-    const countB = typeCounts[b.name] || 0;
-    // Prefer less frequent types, then sort by intensity (moderate first for variety)
-    if (countA !== countB) return countA - countB;
-    // Prefer moderate intensity (3) over extremes
-    const distA = Math.abs(a.intensity - 3);
-    const distB = Math.abs(b.intensity - 3);
-    return distA - distB;
-  });
-
-  // ===== ENSURE VARIETY: Add easy options if only hard types selected =====
-  const hasEasyOption = suitableTypes.some(t => t.intensity <= 2);
-  if (!hasEasyOption && maxIntensity >= 2) {
-    // Add an easy workout option
-    const easyType = isRun ? "Run_Easy" : "Endurance_Z2";
-    if (catalog[easyType]) {
-      suitableTypes.push({
-        name: easyType,
-        intensity: 2,
-        description: catalog[easyType].description
-      });
-    }
-  }
-
-  // ===== BUILD RESULT =====
-  if (suitableTypes.length === 0) {
-    // Fallback to easy workouts
-    const fallback = isRun ? ["Run_Easy", "Run_Recovery"] : ["Endurance_Z2", "Recovery_Easy"];
-    return {
-      types: fallback,
-      reason: "No suitable workouts for current conditions - defaulting to easy",
-      maxIntensity: 2
-    };
-  }
-
-  const selectedTypes = suitableTypes.map(t => t.name);
-
-  // Add phase-specific reason if no other reasons
-  if (reasons.length === 0) {
-    reasons.push(phaseName + " phase - balanced selection");
+    reason = "Fallback: " + phaseName + " phase default";
   }
 
   return {
-    types: selectedTypes,
-    reason: reasons.join("; "),
+    types: [fallbackType],
+    reason: reason,
     maxIntensity: maxIntensity,
-    isRestDay: false
+    isRestDay: false,
+    aiEnhanced: false
   };
 }
 
