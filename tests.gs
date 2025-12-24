@@ -511,6 +511,66 @@ function testEftp() {
 }
 
 /**
+ * Test AI-enhanced power profile analysis
+ * Tests the new goal-aware AI analysis vs fallback benchmarks
+ */
+function testAIPowerProfileAnalysis() {
+  Logger.log("=== AI POWER PROFILE ANALYSIS TEST ===");
+
+  // Fetch power curve
+  const powerCurve = fetchPowerCurve();
+  if (!powerCurve.available) {
+    Logger.log("ERROR: Power curve not available");
+    return;
+  }
+
+  Logger.log("\n--- Raw Power Data ---");
+  Logger.log("eFTP: " + (powerCurve.currentEftp || powerCurve.eFTP) + "W");
+  Logger.log("Peak 5s: " + powerCurve.peak5s + "W | 1min: " + powerCurve.peak1min + "W");
+  Logger.log("Peak 5min: " + powerCurve.peak5min + "W | 20min: " + powerCurve.peak20min + "W");
+
+  // Fetch goals to provide context
+  const goals = fetchUpcomingGoals();
+  Logger.log("\n--- Goal Context ---");
+  if (goals.available && goals.primaryGoal) {
+    Logger.log("Primary Goal: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+    Logger.log("Event Type: " + (goals.primaryGoal.type || 'Unknown'));
+  } else {
+    Logger.log("No goals set - will use general fitness context");
+  }
+
+  // Test AI-enhanced analysis
+  Logger.log("\n--- AI Power Profile Analysis ---");
+  const profile = analyzePowerProfile(powerCurve, goals);
+
+  if (profile.available) {
+    Logger.log("AI Enhanced: " + (profile.aiEnhanced ? "YES" : "NO (fallback)"));
+    if (profile.aiConfidence) {
+      Logger.log("AI Confidence: " + profile.aiConfidence);
+    }
+    Logger.log("Strengths: " + (profile.strengths.length > 0 ? profile.strengths.join(", ") : 'None identified'));
+    Logger.log("Weaknesses: " + (profile.weaknesses.length > 0 ? profile.weaknesses.join(", ") : 'None identified'));
+    Logger.log("Recommendations: " + (profile.recommendations.length > 0 ? profile.recommendations.join("; ") : 'None'));
+    if (profile.eventRelevance) {
+      Logger.log("Event Relevance: " + profile.eventRelevance);
+    }
+    Logger.log("Summary: " + profile.summary);
+  } else {
+    Logger.log("ERROR: Profile analysis failed");
+  }
+
+  // Compare with fallback (force fallback by passing null goals)
+  Logger.log("\n--- Comparison: Fallback Analysis ---");
+  const fallbackProfile = analyzePowerProfile(powerCurve, null);
+  if (fallbackProfile.available && !fallbackProfile.aiEnhanced) {
+    Logger.log("Fallback Strengths: " + (fallbackProfile.strengths.length > 0 ? fallbackProfile.strengths.join(", ") : 'None'));
+    Logger.log("Fallback Weaknesses: " + (fallbackProfile.weaknesses.length > 0 ? fallbackProfile.weaknesses.join(", ") : 'None'));
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test monthly progress report
  */
 function testMonthlyProgress() {

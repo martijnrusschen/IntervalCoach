@@ -111,7 +111,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     }
   } else {
     const powerCurve = fetchPowerCurve();
-    powerProfile = analyzePowerProfile(powerCurve);
+    powerProfile = analyzePowerProfile(powerCurve, goals);
   }
 
   Logger.log("Athlete Summary: TSB=" + summary.tsb_current.toFixed(1));
@@ -140,7 +140,11 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     }
     Logger.log(physioLog);
 
-    Logger.log("Power Analysis: " + powerProfile.summary);
+    const analysisLabel = powerProfile.aiEnhanced ? "AI Power Analysis" : "Power Analysis (fallback)";
+    Logger.log(analysisLabel + ": " + powerProfile.summary);
+    if (powerProfile.eventRelevance) {
+      Logger.log("Event Relevance: " + powerProfile.eventRelevance);
+    }
   }
   Logger.log("Target Duration: " + availability.duration.min + "-" + availability.duration.max + " min");
 
