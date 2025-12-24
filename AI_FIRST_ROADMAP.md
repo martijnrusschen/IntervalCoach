@@ -17,6 +17,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **AI Power Profile Analysis** - Replaced hardcoded benchmarks with goal-aware AI analysis
 - [x] **AI Training Load Advisor** - Replaced fixed ramp rates with wellness-aware AI recommendations
 - [x] **AI Recovery Assessment** - Replaced fixed thresholds with personal baseline analysis
+- [x] **AI Weekly Email Summary** - Enhanced coaching narrative with load advice and next week preview
 
 ---
 
@@ -34,7 +35,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
-| 4 | **Weekly Email Summary** | Template with fixed sections in `emails.gs` | AI writes personalized narrative summarizing week and previewing next | Pending |
+| 4 | **Weekly Email Summary** | Template with fixed sections in `emails.gs` | AI writes personalized narrative summarizing week and previewing next | **Complete** |
 | 5 | **Training Gap Analysis** | Rule-based (2-3 days = stale, 4+ = detraining) in `utils.gs:259` | AI considers context (planned rest vs unplanned, recovery scores, phase) | Pending |
 | 6 | **eFTP Trajectory Analysis** | Simple current vs target comparison | AI predicts if athlete is on track, suggests adjustments to hit peak | Pending |
 
@@ -93,6 +94,26 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - Returns personalized reason explaining the assessment
 - Falls back to fixed thresholds if AI unavailable
 - Returns `aiEnhanced: true/false` flag for tracking
+
+### Feature 4: AI Weekly Email Summary ✅ COMPLETE
+
+**Implementation:**
+- Enhanced `generateWeeklyInsight()` in `prompts.gs` - expanded from 3-4 sentences to 5-7 sentence coaching letter
+- Modified `sendWeeklySummaryEmail()` in `emails.gs` to pass load advice and upcoming placeholders
+- Added "Coach's Letter" header to make AI narrative more prominent
+
+**Key changes:**
+- AI now receives `loadAdvice` (training load recommendations) for context
+- AI now receives `upcomingPlaceholders` (next week's planned sessions) for preview
+- Expanded prompt instructions for comprehensive coaching narrative:
+  - Opens with acknowledgment of the athlete's week
+  - Highlights significant metric changes
+  - Connects progress to goal (Marmotte/A race)
+  - Addresses concerns with reassurance
+  - Previews next week with coaching intent
+  - Closes with genuine encouragement
+- Warm, conversational tone using "you" and "your"
+- Email layout restructured with prominent "Coach's Letter" section
 
 ---
 
