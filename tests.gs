@@ -881,8 +881,8 @@ function testAIWeeklyPlan() {
     avgSleep: wellness.available ? wellness.averages?.sleep : null,
     goals: goals,
     lastWeek: {
-      totalTss: lastWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0),
-      activities: lastWeekActivities.length,
+      totalTss: lastWeekActivities.totalTss || 0,
+      activities: lastWeekActivities.totalActivities || 0,
       rideTypes: recentTypes.rides,
       runTypes: recentTypes.runs
     },
