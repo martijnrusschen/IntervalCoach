@@ -17,28 +17,44 @@ IntervalCoach is an AI-powered cycling and running coach built on Google Apps Sc
 ```
 Intervals.icu (Calendar, Power/Pace Curves, Wellness)
     ↓
-Code.gs (fetch data → analyze → generate via Gemini → upload)
+IntervalCoach (fetch data → analyze → generate via Gemini → upload)
     ↓
 Google Drive (.zwo files) + Intervals.icu (workout upload) + Email
 ```
 
 ### File Structure
 
-- `Code.gs` - Main application (2,848 lines): data fetching, analysis, workout generation, email
-- `config.sample.gs` - Configuration template with API keys and user settings
-- `config.gs` - User-specific config (gitignored, created from sample)
+The codebase is organized into modular files by domain:
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `main.gs` | Entry points & tests | `generateOptimalZwiftWorkoutsAutoByGemini()`, `fetchAndLogActivities()`, test functions |
+| `constants.gs` | Configuration constants | `SYSTEM_SETTINGS`, `TRAINING_CONSTANTS`, `WORKOUT_TYPES`, `HEADERS_FIXED` |
+| `translations.gs` | Localization (5 languages) | `TRANSLATIONS` (en, nl, ja, es, fr) |
+| `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
+| `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `createWellnessSummary()`, `isRestDayRecommended()` |
+| `workouts.gs` | Workout selection logic | `checkAvailability()`, `selectWorkoutTypes()`, `uploadWorkoutToIntervals()` |
+| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()` |
+| `prompts.gs` | AI prompt construction | `createPrompt()`, `createRunPrompt()`, `generatePersonalizedCoachingNote()` |
+| `emails.gs` | Email sending | `sendSmartSummaryEmail()`, `sendRestDayEmail()`, `sendWeeklySummaryEmail()` |
+| `utils.gs` | Helper functions | `formatDateISO()`, `average()`, `sum()`, `getAdaptiveTrainingContext()` |
+| `config.gs` | User config (gitignored) | API keys, user settings |
+| `config.sample.gs` | Config template | Copy to create config.gs |
 
 ### Key Functions
 
-**Entry Points:**
-- `generateOptimalZwiftWorkoutsAutoByGemini()` - Main daily workout generation (line 1978)
+**Entry Points (in main.gs):**
+- `generateOptimalZwiftWorkoutsAutoByGemini()` - Main daily workout generation
 - `fetchAndLogActivities()` - Activity sync to Google Sheets
 
 **Test Functions (run in Apps Script editor):**
-- `testEftp()` - Verify cycling power data
-- `testRunningData()` - Verify running pace data
-- `testGoals()` - Verify A/B race detection
-- `debugEvents()`, `debugPowerCurve()`, `debugPaceCurve()` - API debugging
+- `testApiUtilities()` - Verify API connections
+- `testAdaptiveTraining()` - Test RPE/Feel feedback analysis
+- `testTrainingLoadAdvisor()` - Test training load recommendations
+- `testWorkoutSelection()` - Test workout type selection logic
+- `testCoachingNote()` - Test AI coaching note generation
+- `testRestDayEmail()` - Test rest day email functionality
+- `testTrainingProposal()` - Test weekly training proposal
 
 ### Core Data Structures
 
@@ -48,19 +64,24 @@ Google Drive (.zwo files) + Intervals.icu (workout upload) + Email
 
 ## Development Workflow
 
-This is a Google Apps Script project - no traditional build system, package.json, or CLI commands.
+This is a Google Apps Script project using clasp for deployment.
 
 **Git Workflow:**
 - For every new feature, create a branch and open a pull request before merging to main.
 - Always test features in Google Apps Script before committing and pushing.
 - Always update README.md when adding new features, functions, or configuration options.
 
-**Deployment:**
-1. Open Google Sheet → Extensions → Apps Script
-2. Copy `Code.gs` content into the Code file
-3. Create `config.gs` from `config.sample.gs` with your API keys
-4. Save and run test functions to verify setup
-5. Set up triggers in the Triggers panel for automation
+**Deployment with clasp:**
+```bash
+# Push local changes to Google Apps Script
+clasp push
+
+# Pull remote changes (if edited in web UI)
+clasp pull
+
+# Open the script in browser
+clasp open
+```
 
 **Testing:**
 Run test functions manually in the Apps Script editor (Run button or Ctrl+R)
@@ -79,7 +100,9 @@ Required in `config.gs`:
 ## Important Notes
 
 - `config.gs` is gitignored - never commit API keys
+- `.claspignore` excludes `config.sample.gs` from push to avoid duplicate declarations
 - Gemini API uses JSON response mode with temperature 0.3
-- Training phase calculated automatically from `TARGET_DATE` setting
+- Training phase calculated automatically from `TARGET_DATE` setting or A/B/C races in calendar
 - Placeholder activities ("Ride", "Run") in Intervals.icu calendar trigger workout generation
 - Duration can be specified in placeholder name: "Ride - 90min"
+- Red recovery status (Whoop < 34%) triggers rest day email instead of workout
