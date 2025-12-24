@@ -312,6 +312,25 @@ eFTP: ${fitnessMetrics.eftp}W${eftpChange}`;
 eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
   }
 
+  // eFTP Trajectory Analysis (AI-enhanced)
+  if (powerProfile && powerProfile.available && powerProfile.manualFTP) {
+    try {
+      const trajectoryAnalysis = generateAIEftpTrajectoryAnalysis(powerProfile, fitnessMetrics, phaseInfo, goals);
+      if (trajectoryAnalysis) {
+        Logger.log("AI eFTP Trajectory: " + JSON.stringify(trajectoryAnalysis));
+        const statusEmoji = trajectoryAnalysis.onTrack ? '✓' : '⚠';
+        body += `
+${statusEmoji} ${t.eftp_trajectory || 'FTP Trajectory'}: ${trajectoryAnalysis.assessment}`;
+        if (trajectoryAnalysis.adjustments && trajectoryAnalysis.adjustments.length > 0) {
+          body += `
+  → ${trajectoryAnalysis.adjustments[0]}`;
+        }
+      }
+    } catch (e) {
+      Logger.log("eFTP trajectory analysis failed: " + e.toString());
+    }
+  }
+
   // Health & Recovery
   if (wellnessSummary.available) {
     const prevAvg = prevWellnessSummary.available ? prevWellnessSummary.averages : {};
