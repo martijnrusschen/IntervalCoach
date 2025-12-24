@@ -20,16 +20,24 @@ function formatDateISO(date) {
 /**
  * Format duration in seconds to human readable string
  * @param {number} seconds - Duration in seconds
- * @returns {string} Formatted duration (e.g., "1h 23m")
+ * @param {boolean} showSign - Whether to show +/- sign for differences
+ * @returns {string} Formatted duration (e.g., "1h 23m" or "+45m")
  */
-function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return "0m";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
+function formatDuration(seconds, showSign) {
+  if (seconds == null) return "0m";
+
+  const sign = showSign ? (seconds >= 0 ? "+" : "-") : "";
+  const absSeconds = Math.abs(seconds);
+
+  if (absSeconds < 60) return sign + "0m";
+
+  const hours = Math.floor(absSeconds / 3600);
+  const minutes = Math.floor((absSeconds % 3600) / 60);
+
   if (hours > 0) {
-    return hours + "h " + minutes + "m";
+    return sign + hours + "h " + minutes + "m";
   }
-  return minutes + "m";
+  return sign + minutes + "m";
 }
 
 /**

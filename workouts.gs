@@ -1173,38 +1173,55 @@ function createWeeklyPlanEvents(weeklyPlan) {
 
     // Check if there's already an event on this date
     const existingCheck = fetchIcuApi("/athlete/" + athleteId + "/events?oldest=" + day.date + "&newest=" + day.date);
+    let existingEventId = null;
+
     if (existingCheck.success && existingCheck.data?.length > 0) {
-      // Check if any are IntervalCoach events or user-created workouts
-      const hasExisting = existingCheck.data.some(e =>
-        e.category === 'WORKOUT' ||
-        e.name?.includes('IntervalCoach') ||
-        (e.name && !['Ride', 'Run'].includes(e.name))
+      // Look for existing weekly plan placeholder or simple Ride/Run to update
+      const existingPlaceholder = existingCheck.data.find(e =>
+        e.description?.includes('[Weekly Plan]') ||
+        (e.category === 'WORKOUT' && ['Ride', 'Run'].includes(e.name?.split(' - ')[0]))
       );
-      if (hasExisting) {
-        Logger.log(` -> ${day.date} (${day.dayName}): Event exists - skipping`);
-        results.skipped++;
-        continue;
+
+      if (existingPlaceholder) {
+        existingEventId = existingPlaceholder.id;
+        Logger.log(` -> ${day.date} (${day.dayName}): Updating existing placeholder`);
+      } else {
+        // Check if there's a real workout (not a placeholder)
+        const hasRealWorkout = existingCheck.data.some(e =>
+          e.category === 'WORKOUT' &&
+          e.name &&
+          !['Ride', 'Run'].includes(e.name) &&
+          !e.description?.includes('[Weekly Plan]')
+        );
+        if (hasRealWorkout) {
+          Logger.log(` -> ${day.date} (${day.dayName}): Real workout exists - skipping`);
+          results.skipped++;
+          continue;
+        }
       }
     }
 
-    // Create placeholder event
+    // Create event with workout type in name
     const isRun = day.activity === 'Run';
-    const placeholderName = isRun
-      ? `Run - ${day.duration}min`
-      : `Ride - ${day.duration}min`;
+    const workoutLabel = day.workoutType || (isRun ? 'Run' : 'Ride');
+    const eventName = `${workoutLabel} - ${day.duration}min`;
 
     const payload = {
       category: "WORKOUT",
       type: day.activity,
-      name: placeholderName,
-      description: `[Weekly Plan]\n${day.workoutType}\n${day.focus}\n\nTSS Target: ~${day.estimatedTSS}\n\nThis placeholder will be replaced with a detailed workout on the day.`,
+      name: eventName,
+      description: `[Weekly Plan]\n\n${day.focus}\n\nTSS Target: ~${day.estimatedTSS}\nDuration: ${day.duration} min\n\nThis workout will be refined with detailed intervals when generated.`,
       start_date_local: day.date + "T10:00:00",
       moving_time: day.duration * 60
     };
 
-    const url = "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
+    // Use PUT to update if event exists, POST to create new
+    const url = existingEventId
+      ? "https://intervals.icu/api/v1/athlete/" + athleteId + "/events/" + existingEventId
+      : "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
+
     const options = {
-      method: "post",
+      method: existingEventId ? "put" : "post",
       headers: {
         "Authorization": getIcuAuthHeader(),
         "Content-Type": "application/json"
@@ -1217,14 +1234,15 @@ function createWeeklyPlanEvents(weeklyPlan) {
       const response = UrlFetchApp.fetch(url, options);
       const code = response.getResponseCode();
       if (code === 200 || code === 201) {
-        Logger.log(` -> ${day.date} (${day.dayName}): Created ${day.activity} placeholder (${day.workoutType})`);
+        const action = existingEventId ? 'Updated' : 'Created';
+        Logger.log(` -> ${day.date} (${day.dayName}): ${action} ${eventName}`);
         results.created++;
       } else {
-        Logger.log(` -> ${day.date}: Failed to create event - ${response.getContentText().substring(0, 100)}`);
+        Logger.log(` -> ${day.date}: Failed to create/update event - ${response.getContentText().substring(0, 100)}`);
         results.errors++;
       }
     } catch (e) {
-      Logger.log(` -> ${day.date}: Error creating event - ${e.toString()}`);
+      Logger.log(` -> ${day.date}: Error creating/updating event - ${e.toString()}`);
       results.errors++;
     }
 

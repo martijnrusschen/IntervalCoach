@@ -275,14 +275,13 @@ ${t.total_distance}: ${(weekData.totalDistance / 1000).toFixed(1)} km
     const tssDiff = weekData.totalTss - prevWeekData.totalTss;
     const timeDiff = weekData.totalTime - prevWeekData.totalTime;
     const tssSign = tssDiff >= 0 ? "+" : "";
-    const timeSign = timeDiff >= 0 ? "+" : "";
 
     body += `
 -----------------------------------
 ${t.weekly_comparison}
 -----------------------------------
 TSS: ${tssSign}${tssDiff.toFixed(0)} (${prevWeekData.totalTss.toFixed(0)} → ${weekData.totalTss.toFixed(0)})
-${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
+${t.total_time}: ${formatDuration(timeDiff, true)} (${formatDuration(prevWeekData.totalTime)} → ${formatDuration(weekData.totalTime)})
 `;
   }
 

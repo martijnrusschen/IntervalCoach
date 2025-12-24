@@ -712,43 +712,48 @@ function analyzePowerProfile(powerCurve) {
 // =========================================================
 
 /**
- * Fetch current fitness metrics (CTL, ATL, TSB) from Intervals.icu
- * @returns {object} { ctl, atl, tsb, rampRate }
+ * Fetch fitness metrics (CTL, ATL, TSB) from Intervals.icu for a specific date
+ * @param {Date} targetDate - Optional date to fetch metrics for (defaults to today)
+ * @returns {object} { ctl, atl, tsb, rampRate, eftp }
  */
-function fetchFitnessMetrics() {
-  const today = new Date();
-  const todayStr = formatDateISO(today);
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-  const weekAgoStr = formatDateISO(weekAgo);
+function fetchFitnessMetrics(targetDate) {
+  const date = targetDate || new Date();
+  const dateStr = formatDateISO(date);
+  const weekBefore = new Date(date);
+  weekBefore.setDate(date.getDate() - 7);
+  const weekBeforeStr = formatDateISO(weekBefore);
 
-  // Fetch today's fitness
-  const todayResult = fetchIcuApi("/athlete/0/wellness/" + todayStr);
-  const weekAgoResult = fetchIcuApi("/athlete/0/wellness/" + weekAgoStr);
+  // Fetch wellness data for target date
+  const dateResult = fetchIcuApi("/athlete/0/wellness/" + dateStr);
+  const weekBeforeResult = fetchIcuApi("/athlete/0/wellness/" + weekBeforeStr);
 
-  let ctl = null, atl = null, tsb = null, rampRate = null;
+  let ctl = null, atl = null, tsb = null, rampRate = null, eftp = null;
 
-  if (todayResult.success && todayResult.data) {
-    ctl = todayResult.data.ctl;
-    atl = todayResult.data.atl;
+  if (dateResult.success && dateResult.data) {
+    ctl = dateResult.data.ctl;
+    atl = dateResult.data.atl;
     if (ctl != null && atl != null) {
       tsb = ctl - atl;
     }
   }
 
   // Calculate ramp rate (CTL change per week)
-  if (weekAgoResult.success && weekAgoResult.data && ctl != null) {
-    const oldCtl = weekAgoResult.data.ctl;
+  if (weekBeforeResult.success && weekBeforeResult.data && ctl != null) {
+    const oldCtl = weekBeforeResult.data.ctl;
     if (oldCtl != null) {
       rampRate = ctl - oldCtl;
     }
   }
 
+  // Fetch eFTP for the target date
+  eftp = fetchHistoricalEftp(date);
+
   return {
     ctl: ctl,
     atl: atl,
     tsb: tsb,
-    rampRate: rampRate
+    rampRate: rampRate,
+    eftp: eftp
   };
 }
 
