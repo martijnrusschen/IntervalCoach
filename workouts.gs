@@ -315,11 +315,114 @@ function getRecentWorkoutTypes(daysBack = 7) {
 }
 
 // =========================================================
+// AI-DRIVEN WORKOUT DECISION
+// =========================================================
+
+/**
+ * Generate AI-powered workout decision based on full context
+ * @param {object} context - Full context for decision
+ * @returns {object|null} { workoutType, intensity, reasoning, shouldTrain } or null if AI fails
+ */
+function generateAIWorkoutDecision(context) {
+  const isRun = context.activityType === "Run";
+  const catalogType = isRun ? "run" : "ride";
+
+  // Build workout options for the AI
+  const catalog = isRun ? WORKOUT_TYPES.run : WORKOUT_TYPES.ride;
+  const workoutOptions = Object.keys(catalog).map(function(name) {
+    const type = catalog[name];
+    return name + " (intensity: " + type.intensity + "/5, zones: " + type.zones + ", phases: " + type.phases.join("/") + ")";
+  }).join("\n");
+
+  // Build recent workout context
+  const recentList = isRun
+    ? (context.recentWorkouts?.runs || [])
+    : (context.recentWorkouts?.rides || []);
+  const recentStr = recentList.length > 0 ? recentList.join(", ") : "None in last 7 days";
+
+  const prompt = `You are an expert cycling/running coach making a training decision for today.
+
+**ATHLETE CONTEXT:**
+- Activity Type: ${context.activityType}
+- Training Phase: ${context.phase} (${context.weeksOut} weeks to goal)
+- Phase Focus: ${context.phaseFocus || 'Not specified'}
+- Goal: ${context.goalDescription || 'General fitness'}
+${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : ''}
+
+**FITNESS & FATIGUE:**
+- CTL (Fitness): ${context.ctl ? context.ctl.toFixed(0) : 'N/A'}
+- TSB (Form): ${context.tsb ? context.tsb.toFixed(1) : 'N/A'} ${context.tsb < -20 ? '(VERY FATIGUED)' : context.tsb < -10 ? '(fatigued)' : context.tsb > 10 ? '(fresh)' : '(balanced)'}
+- Recovery Status: ${context.recoveryStatus || 'Unknown'}${context.recoveryScore ? ' (' + context.recoveryScore + '%)' : ''}
+
+**EVENT CONTEXT:**
+- Event Tomorrow: ${context.eventTomorrow?.hasEvent ? context.eventTomorrow.category + ' priority event' : 'No'}
+- Event Yesterday: ${context.eventYesterday?.hadEvent ? context.eventYesterday.category + ' priority event' : 'No'}
+
+**RECENT TRAINING (for variety):**
+- Recent ${context.activityType}s: ${recentStr}
+- Yesterday's Intensity: ${context.lastIntensity || 0}/5
+
+**DURATION WINDOW:** ${context.duration?.min || 45}-${context.duration?.max || 60} minutes
+
+**AVAILABLE WORKOUT TYPES:**
+${workoutOptions}
+
+**DECISION RULES:**
+1. If event tomorrow (A/B): Only intensity 1-2 (recovery/easy)
+2. If event tomorrow (C): Max intensity 3
+3. If event yesterday (A/B): Max intensity 2
+4. If event yesterday (C): Max intensity 3
+5. If TSB < -20: Max intensity 2 (very fatigued)
+6. If TSB < -10: Max intensity 3 (fatigued)
+7. If recovery is Yellow (<50%): Max intensity 3
+8. If yesterday was intensity 4-5: Today should be 1-3
+9. Prioritize variety - avoid repeating recent workout types
+10. Match workout to training phase
+
+**YOUR TASK:**
+Recommend ONE specific workout type from the list above. Consider all factors holistically.
+
+**Output JSON only (no markdown):**
+{
+  "shouldTrain": true,
+  "workoutType": "exact_workout_name_from_list",
+  "intensity": 1-5,
+  "reasoning": "2-3 sentence explanation of why this workout",
+  "varietyNote": "optional note about avoiding recently done types"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+
+  if (!response) {
+    Logger.log("AI workout decision: No response from Gemini");
+    return null;
+  }
+
+  try {
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    const decision = JSON.parse(cleaned);
+
+    // Validate the workout type exists
+    if (decision.workoutType && catalog[decision.workoutType]) {
+      return decision;
+    } else {
+      Logger.log("AI suggested unknown workout type: " + decision.workoutType);
+      return null;
+    }
+  } catch (e) {
+    Logger.log("Failed to parse AI workout decision: " + e.toString());
+    Logger.log("Raw response: " + response.substring(0, 500));
+    return null;
+  }
+}
+
+// =========================================================
 // SMART WORKOUT SELECTION
 // =========================================================
 
 /**
- * Smart workout type selection based on multiple factors
+ * Smart workout type selection - AI-enhanced with rule-based fallback
  * @param {object} params - Selection parameters
  * @returns {object} { types, reason, maxIntensity, isRestDay }
  */
@@ -355,6 +458,52 @@ function selectWorkoutTypes(params) {
 
   // Get recovery score (default to 70 if not available)
   const recoveryScore = wellness?.today?.recovery ?? 70;
+
+  // ===== TRY AI-DRIVEN DECISION FIRST =====
+  if (params.enableAI !== false) {
+    try {
+      const aiContext = {
+        activityType: activityType,
+        phase: phaseName,
+        weeksOut: phaseInfo.weeksOut,
+        phaseFocus: phaseInfo.focus,
+        phaseReasoning: phaseInfo.reasoning,
+        goalDescription: phaseInfo.goalDescription,
+        ctl: params.ctl,
+        tsb: tsb,
+        recoveryStatus: wellness?.recoveryStatus || 'Unknown',
+        recoveryScore: recoveryScore,
+        eventTomorrow: eventTomorrow,
+        eventYesterday: eventYesterday,
+        recentWorkouts: recentWorkouts.types,
+        lastIntensity: recentWorkouts.lastIntensity,
+        duration: params.duration
+      };
+
+      const aiDecision = generateAIWorkoutDecision(aiContext);
+
+      if (aiDecision && aiDecision.workoutType) {
+        Logger.log("AI Workout Decision: " + aiDecision.workoutType + " (intensity " + aiDecision.intensity + "/5)");
+        Logger.log("  Reasoning: " + aiDecision.reasoning);
+        if (aiDecision.varietyNote) {
+          Logger.log("  Variety: " + aiDecision.varietyNote);
+        }
+
+        return {
+          types: [aiDecision.workoutType],
+          reason: "AI: " + aiDecision.reasoning,
+          maxIntensity: aiDecision.intensity,
+          isRestDay: !aiDecision.shouldTrain,
+          aiEnhanced: true
+        };
+      }
+    } catch (e) {
+      Logger.log("AI workout decision failed, using rule-based fallback: " + e.toString());
+    }
+  }
+
+  // ===== FALLBACK: RULE-BASED SELECTION =====
+  Logger.log("Using rule-based workout selection");
 
   // Determine reasons for selection
   const reasons = [];

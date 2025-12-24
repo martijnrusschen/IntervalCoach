@@ -229,6 +229,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   }
 
   // Select workout types based on phase, TSB, recovery, events, and variety
+  // Now AI-enhanced with fallback to rule-based selection
   const typeSelection = selectWorkoutTypes({
     wellness: wellness,
     recentWorkouts: {
@@ -239,9 +240,20 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     phaseInfo: phaseInfo,
     tsb: summary.tsb_current,
     eventTomorrow: eventTomorrow,
-    eventYesterday: eventYesterday
+    eventYesterday: eventYesterday,
+    // Additional context for AI-driven decision
+    ctl: summary.ctl_90,
+    duration: availability.duration,
+    goals: goals,
+    powerProfile: powerProfile,
+    enableAI: true
   });
-  Logger.log("Type selection: " + typeSelection.reason);
+
+  if (typeSelection.aiEnhanced) {
+    Logger.log("Type selection (AI): " + typeSelection.reason);
+  } else {
+    Logger.log("Type selection (rules): " + typeSelection.reason);
+  }
 
   if (typeSelection.isRestDay) {
     Logger.log("*** REST DAY RECOMMENDED - generating easy workout ***");
@@ -1282,4 +1294,111 @@ function testAIPeriodization() {
   }
 
   Logger.log("\n=== AI PERIODIZATION TEST COMPLETE ===");
+}
+
+/**
+ * Test AI-driven workout type selection
+ */
+function testAIWorkoutDecision() {
+  Logger.log("=== AI WORKOUT DECISION TEST ===");
+  requireValidConfig();
+
+  // Get real data for realistic test
+  const today = new Date();
+  const summary = fetchFitnessMetrics();
+  const wellness = fetchWellnessData();
+  const powerProfile = analyzePowerProfile(fetchPowerCurve());
+  const recentTypes = getRecentWorkoutTypes(7);
+
+  // Get goals from Intervals.icu
+  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
+  const goals = goalsResult.success && goalsResult.data ? {
+    available: true,
+    allGoals: goalsResult.data,
+    primaryGoal: goalsResult.data.find(g => g.priority === 'A'),
+    secondaryGoals: goalsResult.data.filter(g => g.priority === 'B'),
+    subGoals: goalsResult.data.filter(g => g.priority === 'C')
+  } : { available: false };
+
+  // Calculate phase with AI
+  const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
+    (USER_SETTINGS.TARGET_DATE || Utilities.formatDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), SYSTEM_SETTINGS.TIMEZONE, "yyyy-MM-dd"));
+  const phaseInfo = calculateTrainingPhase(targetDate, {
+    goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
+    goals: goals,
+    ctl: summary.ctl_90,
+    tsb: summary.tsb_current,
+    enableAI: true
+  });
+
+  Logger.log("\n--- Current State ---");
+  Logger.log("CTL: " + summary.ctl_90.toFixed(1) + " | TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Phase: " + phaseInfo.phaseName + (phaseInfo.aiEnhanced ? " (AI)" : " (rules)"));
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
+  Logger.log("Recent runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
+
+  // Test AI-driven workout selection for Ride
+  Logger.log("\n--- Testing AI Workout Decision (Ride) ---");
+
+  const rideSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: {
+      types: recentTypes,
+      lastIntensity: getYesterdayIntensity(recentTypes)
+    },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: false,
+    eventYesterday: false,
+    ctl: summary.ctl_90,
+    duration: 60,
+    goals: goals,
+    powerProfile: powerProfile,
+    enableAI: true
+  });
+
+  Logger.log("AI Enhanced: " + (rideSelection.aiEnhanced || false));
+  Logger.log("Selected Type: " + rideSelection.types[0]);
+  Logger.log("Reason: " + rideSelection.reason);
+  if (rideSelection.varietyNote) {
+    Logger.log("Variety Note: " + rideSelection.varietyNote);
+  }
+  if (rideSelection.isRestDay) {
+    Logger.log("*** REST DAY RECOMMENDED ***");
+  }
+
+  // Test rule-based fallback
+  Logger.log("\n--- Testing Rule-Based Fallback (Ride) ---");
+
+  const ruleBasedSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: {
+      types: recentTypes,
+      lastIntensity: getYesterdayIntensity(recentTypes)
+    },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: false,
+    eventYesterday: false,
+    enableAI: false  // Force rule-based
+  });
+
+  Logger.log("AI Enhanced: " + (ruleBasedSelection.aiEnhanced || false));
+  Logger.log("Selected Type: " + ruleBasedSelection.types[0]);
+  Logger.log("Reason: " + ruleBasedSelection.reason);
+
+  // Compare decisions
+  Logger.log("\n--- Comparison ---");
+  Logger.log("AI chose: " + rideSelection.types[0]);
+  Logger.log("Rules chose: " + ruleBasedSelection.types[0]);
+  if (rideSelection.types[0] !== ruleBasedSelection.types[0]) {
+    Logger.log("*** DIFFERENT DECISIONS - AI overriding rules ***");
+  } else {
+    Logger.log("Decisions aligned");
+  }
+
+  Logger.log("\n=== AI WORKOUT DECISION TEST COMPLETE ===");
 }
