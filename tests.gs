@@ -1158,3 +1158,121 @@ function debugFitnessModelEvents() {
     });
   }
 }
+
+// =========================================================
+// AI TRAINING GAP ANALYSIS TEST
+// =========================================================
+
+/**
+ * Test AI-driven training gap analysis
+ * Tests context-aware gap interpretation
+ */
+function testAITrainingGapAnalysis() {
+  Logger.log("=== AI TRAINING GAP ANALYSIS TEST ===\n");
+  requireValidConfig();
+
+  // Fetch real data
+  const gapData = getDaysSinceLastWorkout();
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+
+  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
+  const goals = goalsResult.success && goalsResult.data ? {
+    available: true,
+    primaryGoal: goalsResult.data.find(g => g.priority === 'A')
+  } : { available: false };
+
+  const phaseInfo = calculateTrainingPhase(
+    goals.primaryGoal?.date || USER_SETTINGS.TARGET_DATE
+  );
+
+  Logger.log("--- Gap Data ---");
+  Logger.log("Days since last workout: " + gapData.daysSinceLastWorkout);
+  Logger.log("Last workout type: " + (gapData.lastWorkoutType || 'Unknown'));
+  Logger.log("Last intensity: " + (gapData.lastIntensity || 'Unknown'));
+
+  Logger.log("\n--- Wellness Context ---");
+  Logger.log("Recovery Status: " + (wellness.available ? wellness.recoveryStatus : 'N/A'));
+  Logger.log("Today's Recovery: " + (wellness.today?.recovery || 'N/A') + "%");
+
+  Logger.log("\n--- Fitness Context ---");
+  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
+  Logger.log("TSB: " + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+  Logger.log("Phase: " + phaseInfo.phaseName);
+
+  // Run analysis
+  Logger.log("\n--- AI Training Gap Analysis ---");
+  const analysis = analyzeTrainingGap(gapData, wellness, phaseInfo, fitnessMetrics);
+
+  Logger.log("AI Enhanced: " + analysis.aiEnhanced);
+  Logger.log("Interpretation: " + analysis.interpretation);
+  Logger.log("Intensity Modifier: " + analysis.intensityModifier);
+  Logger.log("Fitness Impact: " + (analysis.fitnessImpact || 'N/A'));
+  Logger.log("Recommendation: " + analysis.recommendation);
+  Logger.log("Reasoning: " + JSON.stringify(analysis.reasoning));
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
+// AI EFTP TRAJECTORY ANALYSIS TEST
+// =========================================================
+
+/**
+ * Test AI-driven eFTP trajectory analysis
+ * Tests FTP progress prediction toward goal
+ */
+function testAIEftpTrajectoryAnalysis() {
+  Logger.log("=== AI EFTP TRAJECTORY ANALYSIS TEST ===\n");
+  requireValidConfig();
+
+  // Fetch real data
+  const powerProfile = fetchPowerCurve();
+  const fitnessMetrics = fetchFitnessMetrics();
+
+  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
+  const goals = goalsResult.success && goalsResult.data ? {
+    available: true,
+    primaryGoal: goalsResult.data.find(g => g.priority === 'A')
+  } : { available: false };
+
+  const phaseInfo = calculateTrainingPhase(
+    goals.primaryGoal?.date || USER_SETTINGS.TARGET_DATE
+  );
+
+  Logger.log("--- Power Profile ---");
+  Logger.log("Current eFTP: " + (powerProfile.currentEftp || powerProfile.ftp || 'N/A') + "W");
+  Logger.log("Target FTP: " + (powerProfile.manualFTP || 'N/A') + "W");
+  if (powerProfile.currentEftp && powerProfile.manualFTP) {
+    Logger.log("Gap: " + (powerProfile.manualFTP - powerProfile.currentEftp) + "W");
+  }
+
+  Logger.log("\n--- Timeline ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+  Logger.log("Goal: " + (goals.primaryGoal?.name || 'General fitness'));
+
+  Logger.log("\n--- Fitness Trend ---");
+  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
+  Logger.log("Ramp Rate: " + (fitnessMetrics.rampRate?.toFixed(2) || 'N/A') + " CTL/week");
+
+  // Run analysis
+  Logger.log("\n--- AI eFTP Trajectory Analysis ---");
+  const analysis = generateAIEftpTrajectoryAnalysis(powerProfile, fitnessMetrics, phaseInfo, goals);
+
+  if (analysis) {
+    Logger.log("On Track: " + analysis.onTrack);
+    Logger.log("Status: " + analysis.trajectoryStatus);
+    Logger.log("Projected eFTP: " + analysis.projectedEftp + "W");
+    Logger.log("Projected Gap: " + analysis.projectedGap + "W");
+    Logger.log("Assessment: " + analysis.assessment);
+    Logger.log("Recommendation: " + analysis.recommendation);
+    Logger.log("Adjustments: " + JSON.stringify(analysis.adjustments));
+    Logger.log("Confidence: " + analysis.confidence);
+  } else {
+    Logger.log("Analysis returned null - check if power profile and target FTP are available");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

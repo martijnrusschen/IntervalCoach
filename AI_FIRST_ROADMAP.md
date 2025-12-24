@@ -18,6 +18,8 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **AI Training Load Advisor** - Replaced fixed ramp rates with wellness-aware AI recommendations
 - [x] **AI Recovery Assessment** - Replaced fixed thresholds with personal baseline analysis
 - [x] **AI Weekly Email Summary** - Enhanced coaching narrative with load advice and next week preview
+- [x] **AI Training Gap Analysis** - Context-aware gap interpretation (planned rest vs illness vs life)
+- [x] **AI eFTP Trajectory Analysis** - Predicts if athlete is on track to hit target FTP
 
 ---
 
@@ -36,8 +38,8 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
 | 4 | **Weekly Email Summary** | Template with fixed sections in `emails.gs` | AI writes personalized narrative summarizing week and previewing next | **Complete** |
-| 5 | **Training Gap Analysis** | Rule-based (2-3 days = stale, 4+ = detraining) in `utils.gs:259` | AI considers context (planned rest vs unplanned, recovery scores, phase) | Pending |
-| 6 | **eFTP Trajectory Analysis** | Simple current vs target comparison | AI predicts if athlete is on track, suggests adjustments to hit peak | Pending |
+| 5 | **Training Gap Analysis** | Rule-based (2-3 days = stale, 4+ = detraining) in `utils.gs:259` | AI considers context (planned rest vs unplanned, recovery scores, phase) | **Complete** |
+| 6 | **eFTP Trajectory Analysis** | Simple current vs target comparison | AI predicts if athlete is on track, suggests adjustments to hit peak | **Complete** |
 
 ### Lower Impact (Easy Wins)
 
@@ -114,6 +116,36 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
   - Closes with genuine encouragement
 - Warm, conversational tone using "you" and "your"
 - Email layout restructured with prominent "Coach's Letter" section
+
+### Feature 5: AI Training Gap Analysis ✅ COMPLETE
+
+**Implementation:**
+- Added `generateAITrainingGapAnalysis()` in `prompts.gs` - AI prompt considering wellness, phase, and fitness
+- Modified `analyzeTrainingGap()` in `utils.gs` to call AI first, fall back to rule-based logic
+- Added `testAITrainingGapAnalysis()` in `tests.gs`
+
+**Key changes:**
+- AI receives gap duration + wellness context + fitness state + training phase
+- Distinguishes between: planned_rest, returning_from_illness, life_interference, taper
+- Returns context-aware intensity modifier and recommendations
+- Includes `fitnessImpact` assessment (none/minimal/moderate)
+- Falls back to rule-based thresholds if AI unavailable
+- Returns `aiEnhanced: true/false` flag for tracking
+
+### Feature 6: AI eFTP Trajectory Analysis ✅ COMPLETE
+
+**Implementation:**
+- Added `generateAIEftpTrajectoryAnalysis()` in `prompts.gs` - AI prompt predicting FTP progress
+- Added trajectory section to `sendWeeklySummaryEmail()` in `emails.gs`
+- Added `testAIEftpTrajectoryAnalysis()` in `tests.gs`
+
+**Key changes:**
+- AI receives current eFTP, target FTP, weeks remaining, CTL trend
+- Calculates required weekly gain and assesses feasibility
+- Returns `onTrack` boolean + `trajectoryStatus` (ahead/on_track/behind)
+- Provides projected eFTP at goal date
+- Includes specific training adjustments if behind schedule
+- Shows trajectory status in weekly email fitness section
 
 ---
 

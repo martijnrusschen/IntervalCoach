@@ -281,11 +281,14 @@ function getDaysSinceLastWorkout() {
 
 /**
  * Analyze training gap combined with wellness data
+ * AI-enhanced with context-aware interpretation
  * @param {object} gapData - From getDaysSinceLastWorkout()
  * @param {object} wellness - Wellness data with recovery status
+ * @param {object} phaseInfo - Training phase info (optional)
+ * @param {object} fitnessMetrics - Fitness metrics (optional)
  * @returns {object} Interpretation and recommendations
  */
-function analyzeTrainingGap(gapData, wellness) {
+function analyzeTrainingGap(gapData, wellness, phaseInfo, fitnessMetrics) {
   const days = gapData.daysSinceLastWorkout;
 
   const result = {
@@ -294,14 +297,47 @@ function analyzeTrainingGap(gapData, wellness) {
     interpretation: 'normal',
     intensityModifier: 1.0,
     recommendation: '',
-    reasoning: []
+    reasoning: [],
+    aiEnhanced: false
   };
 
   // No significant gap
-  if (days === null || days < 4) {
+  if (days === null || days < 3) {
     result.interpretation = 'normal';
     result.recommendation = 'Continue with planned training';
     result.reasoning.push(`${days || 0} days since last workout - normal training rhythm`);
+    return result;
+  }
+
+  // Try AI-driven analysis first
+  try {
+    const aiAnalysis = generateAITrainingGapAnalysis(gapData, wellness, phaseInfo, fitnessMetrics);
+
+    if (aiAnalysis && aiAnalysis.interpretation) {
+      Logger.log("AI Training Gap Analysis: " + JSON.stringify(aiAnalysis));
+      result.hasSignificantGap = days >= 4;
+      result.interpretation = aiAnalysis.interpretation;
+      result.intensityModifier = aiAnalysis.intensityModifier || 1.0;
+      result.recommendation = aiAnalysis.recommendation || '';
+      result.reasoning = aiAnalysis.reasoning || [];
+      result.fitnessImpact = aiAnalysis.fitnessImpact || 'none';
+      result.aiEnhanced = true;
+      return result;
+    }
+  } catch (e) {
+    Logger.log("AI training gap analysis failed, using fallback: " + e.toString());
+  }
+
+  // ===== FALLBACK: Rule-based logic =====
+  Logger.log("Using fallback rule-based training gap analysis");
+
+  // Significant gap (4+ days) - set flag
+  result.hasSignificantGap = days >= 4;
+
+  if (days < 4) {
+    result.interpretation = 'normal';
+    result.recommendation = 'Continue with planned training';
+    result.reasoning.push(`${days} days since last workout - normal training rhythm`);
     return result;
   }
 

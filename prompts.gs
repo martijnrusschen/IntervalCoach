@@ -1101,3 +1101,199 @@ Write the "personalizedReason" in ${langName}.
   }
 }
 
+// =========================================================
+// AI TRAINING GAP ANALYSIS
+// =========================================================
+
+/**
+ * Generate AI-driven training gap analysis
+ * Replaces rule-based gap interpretation with context-aware analysis
+ * @param {object} gapData - From getDaysSinceLastWorkout() { daysSinceLastWorkout, lastWorkoutType, lastIntensity }
+ * @param {object} wellness - Wellness summary with recovery status and trends
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} fitnessMetrics - CTL, ATL, TSB
+ * @returns {object} { interpretation, intensityModifier, recommendation, reasoning, confidence }
+ */
+function generateAITrainingGapAnalysis(gapData, wellness, phaseInfo, fitnessMetrics) {
+  const langName = getPromptLanguage();
+  const days = gapData?.daysSinceLastWorkout;
+
+  // Skip AI for normal training rhythm (< 3 days)
+  if (days === null || days < 3) {
+    return null;
+  }
+
+  // Build wellness context
+  let wellnessContext = 'No wellness data available';
+  if (wellness && wellness.available) {
+    wellnessContext = `- Recovery Status: ${wellness.recoveryStatus}
+- Today's Recovery Score: ${wellness.today?.recovery != null ? wellness.today.recovery + '%' : 'N/A'}
+- 7-day Avg Recovery: ${wellness.averages?.recovery ? wellness.averages.recovery.toFixed(0) + '%' : 'N/A'}
+- Sleep: ${wellness.today?.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'} (avg: ${wellness.averages?.sleep ? wellness.averages.sleep.toFixed(1) + 'h' : 'N/A'})
+- HRV trend: ${wellness.today?.hrv && wellness.averages?.hrv ? (wellness.today.hrv > wellness.averages.hrv ? 'Above' : 'Below') + ' baseline' : 'Unknown'}`;
+  }
+
+  // Build fitness context
+  let fitnessContext = 'No fitness data available';
+  if (fitnessMetrics) {
+    fitnessContext = `- CTL (Fitness): ${fitnessMetrics.ctl?.toFixed(1) || 'N/A'}
+- ATL (Fatigue): ${fitnessMetrics.atl?.toFixed(1) || 'N/A'}
+- TSB (Form): ${fitnessMetrics.tsb?.toFixed(1) || 'N/A'} ${fitnessMetrics.tsb > 10 ? '(Very Fresh)' : fitnessMetrics.tsb > 0 ? '(Fresh)' : fitnessMetrics.tsb > -10 ? '(Neutral)' : '(Fatigued)'}`;
+  }
+
+  const prompt = `You are an expert cycling/running coach analyzing an athlete's training gap to determine the best return-to-training approach.
+
+**Training Gap:**
+- Days since last workout: ${days}
+- Last workout type: ${gapData.lastWorkoutType || 'Unknown'}
+- Last workout intensity: ${gapData.lastIntensity || 'Unknown'}/5
+
+**Wellness/Recovery:**
+${wellnessContext}
+
+**Fitness State:**
+${fitnessContext}
+
+**Training Context:**
+- Phase: ${phaseInfo?.phaseName || 'Unknown'}
+- Weeks to Goal: ${phaseInfo?.weeksOut || 'Unknown'}
+
+**Your Analysis Task:**
+Determine if this training gap was:
+1. **Planned rest** - Good recovery scores suggest intentional recovery block
+2. **Illness/stress** - Poor recovery, elevated RHR, low HRV suggest the athlete was unwell
+3. **Life interference** - Moderate recovery but gap suggests schedule disruption
+4. **Taper** - If in taper phase, gap is expected and beneficial
+
+Consider:
+- Is the athlete returning fresh and ready for intensity?
+- Should they ease back in to avoid injury/setback?
+- Has there been any fitness loss (unlikely if < 10 days)?
+- What does their current form (TSB) suggest about readiness?
+
+**Output JSON only (no markdown wrapping):**
+Write "recommendation" and "reasoning" in ${langName}.
+{
+  "interpretation": "planned_rest|returning_from_illness|life_interference|taper|unknown",
+  "intensityModifier": <number 0.6-1.0>,
+  "recommendation": "1-2 sentence recommendation in ${langName}",
+  "reasoning": ["Array of 2-3 reasoning points in ${langName}"],
+  "fitnessImpact": "none|minimal|moderate",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI training gap analysis: No response from Gemini");
+      return null;
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI training gap analysis: " + e.toString());
+    return null;
+  }
+}
+
+// =========================================================
+// AI EFTP TRAJECTORY ANALYSIS
+// =========================================================
+
+/**
+ * Generate AI-driven eFTP trajectory analysis
+ * Predicts if athlete is on track to hit target FTP by goal date
+ * @param {object} powerData - Current power profile with eFTP history
+ * @param {object} fitnessMetrics - CTL trend data
+ * @param {object} phaseInfo - Training phase and weeks to goal
+ * @param {object} goals - Goal event information
+ * @returns {object} { onTrack, projectedEftp, gap, recommendation, adjustments, confidence }
+ */
+function generateAIEftpTrajectoryAnalysis(powerData, fitnessMetrics, phaseInfo, goals) {
+  const langName = getPromptLanguage();
+
+  if (!powerData || !powerData.available) {
+    return null;
+  }
+
+  const currentEftp = powerData.currentEftp || powerData.eFTP || powerData.ftp;
+  const targetFtp = powerData.manualFTP || null;
+  const weeksOut = phaseInfo?.weeksOut || 12;
+
+  if (!currentEftp || !targetFtp) {
+    return null;
+  }
+
+  const gap = targetFtp - currentEftp;
+  const weeklyGainNeeded = weeksOut > 0 ? gap / weeksOut : gap;
+
+  // Build goal context
+  let goalContext = 'General fitness';
+  if (goals && goals.available && goals.primaryGoal) {
+    goalContext = `${goals.primaryGoal.name} (${goals.primaryGoal.date})`;
+    if (goals.primaryGoal.type) {
+      goalContext += ` - ${goals.primaryGoal.type}`;
+    }
+  }
+
+  const prompt = `You are an expert cycling coach analyzing an athlete's FTP trajectory to determine if they're on track to peak for their goal event.
+
+**Current Power:**
+- Current eFTP: ${currentEftp}W
+- Target FTP: ${targetFtp}W
+- Gap to Target: ${gap}W (${gap > 0 ? 'below target' : 'at or above target'})
+- W/kg: ${powerData.weight ? (currentEftp / powerData.weight).toFixed(2) : 'N/A'}
+
+**Timeline:**
+- Weeks to Goal: ${weeksOut}
+- Required weekly gain: ${weeklyGainNeeded.toFixed(1)}W/week ${weeklyGainNeeded > 2 ? '(AGGRESSIVE)' : weeklyGainNeeded > 1 ? '(challenging)' : '(achievable)'}
+- Phase: ${phaseInfo?.phaseName || 'Unknown'}
+
+**Fitness Trend:**
+- CTL: ${fitnessMetrics?.ctl?.toFixed(1) || 'N/A'}
+- Ramp Rate: ${fitnessMetrics?.rampRate?.toFixed(2) || 'N/A'} CTL/week
+- CTL Trend: ${fitnessMetrics?.rampRate > 0.5 ? 'Building' : fitnessMetrics?.rampRate < -0.5 ? 'Declining' : 'Stable'}
+
+**Goal Event:**
+${goalContext}
+
+**Analysis Guidelines:**
+- Typical FTP gains: 1-2W/week with consistent training, 2-4W/week during focused blocks
+- Athletes can gain ~5-8% FTP over a 12-week block with optimal training
+- Late-phase gains slow down as athlete approaches genetic ceiling
+- Taper adds 2-5% through freshness, not actual FTP gains
+- Consider: Is the gap realistic given time remaining?
+
+**Output JSON only (no markdown wrapping):**
+Write "assessment", "recommendation", and "adjustments" in ${langName}.
+{
+  "onTrack": true|false,
+  "trajectoryStatus": "ahead|on_track|slightly_behind|significantly_behind|at_target",
+  "projectedEftp": <estimated FTP at goal date>,
+  "projectedGap": <projected gap to target at goal date>,
+  "assessment": "1-2 sentence assessment in ${langName}",
+  "recommendation": "1-2 sentence recommendation in ${langName}",
+  "adjustments": ["Array of 1-3 specific training adjustments in ${langName}"],
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI eFTP trajectory analysis: No response from Gemini");
+      return null;
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI eFTP trajectory analysis: " + e.toString());
+    return null;
+  }
+}
+
