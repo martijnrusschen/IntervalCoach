@@ -50,7 +50,7 @@ ${coachNote}
   body += `
 ===================================
 ${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit})
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
 ${t.focus}: ${phaseInfo.focus}
 ===================================
 ${t.goal_section}
@@ -132,24 +132,28 @@ ${workout.workoutDescription}
 // =========================================================
 
 /**
- * Send rest day email when recovery is red
+ * Send rest day email when recovery is red or AI recommends rest
  * @param {object} wellness - Wellness summary
  * @param {object} phaseInfo - Training phase info
+ * @param {object} aiAssessment - Optional AI rest day assessment with reasoning
  */
-function sendRestDayEmail(wellness, phaseInfo) {
+function sendRestDayEmail(wellness, phaseInfo, aiAssessment) {
   const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
 
-  const subject = t.rest_day_subject + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+  // Indicate if this is an AI-recommended rest day
+  const isAIRecommended = aiAssessment && aiAssessment.isRestDay;
+  const subjectSuffix = isAIRecommended ? " (AI Recommended)" : "";
+  const subject = t.rest_day_subject + subjectSuffix + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
-  // Generate AI advice
-  const aiAdvice = generateRestDayAdvice(wellness);
+  // Generate AI advice (fallback if no assessment provided)
+  const aiAdvice = isAIRecommended ? null : generateRestDayAdvice(wellness);
 
   let body = `${t.rest_day_greeting}\n\n`;
 
   // Phase info
   body += `===================================
 ${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit})
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
 ===================================\n`;
 
   // Recovery section
@@ -172,7 +176,16 @@ ${t.rest_day_title}
 ===================================
 `;
 
-  if (aiAdvice) {
+  if (isAIRecommended) {
+    // Use AI assessment reasoning
+    body += `**Why rest today?**
+${aiAssessment.reasoning}
+
+**Confidence:** ${aiAssessment.confidence}
+
+**Recommended alternatives:**
+${aiAssessment.alternatives}`;
+  } else if (aiAdvice) {
     body += aiAdvice;
   } else {
     body += `${t.rest_day_reason}
@@ -187,7 +200,7 @@ ${t.rest_day_note}`;
   body += `\n\n${t.rest_day_footer}`;
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Rest day email sent successfully.");
+  Logger.log("Rest day email sent successfully" + (isAIRecommended ? " (AI recommended)" : "") + ".");
 }
 
 // =========================================================
@@ -262,14 +275,13 @@ ${t.total_distance}: ${(weekData.totalDistance / 1000).toFixed(1)} km
     const tssDiff = weekData.totalTss - prevWeekData.totalTss;
     const timeDiff = weekData.totalTime - prevWeekData.totalTime;
     const tssSign = tssDiff >= 0 ? "+" : "";
-    const timeSign = timeDiff >= 0 ? "+" : "";
 
     body += `
 -----------------------------------
 ${t.weekly_comparison}
 -----------------------------------
 TSS: ${tssSign}${tssDiff.toFixed(0)} (${prevWeekData.totalTss.toFixed(0)} → ${weekData.totalTss.toFixed(0)})
-${t.total_time}: ${timeSign}${formatDuration(timeDiff)}
+${t.total_time}: ${formatDuration(timeDiff, true)} (${formatDuration(prevWeekData.totalTime)} → ${formatDuration(weekData.totalTime)})
 `;
   }
 
@@ -330,7 +342,7 @@ ${t.load_advice}: ${loadAdvice.loadAdvice}`;
 
   if (loadAdvice.warning) {
     body += `
-⚠️ ${loadAdvice.warning}`;
+WARNING: ${loadAdvice.warning}`;
   }
 
   // Phase & Goal
@@ -340,38 +352,154 @@ ${t.load_advice}: ${loadAdvice.loadAdvice}`;
 ${t.phase_title}: ${phaseInfo.phaseName}
 -----------------------------------
 ${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
-${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
 ${t.focus}: ${phaseInfo.focus}
 `;
   }
 
-  // Training Proposal
-  const upcoming = fetchUpcomingPlaceholders(7);
-  if (upcoming.length > 0) {
-    const trainingProposal = generateWeeklyTrainingProposal({
-      upcoming: upcoming,
-      phaseInfo: phaseInfo,
-      fitnessMetrics: fitnessMetrics,
-      goals: goals,
-      wellness: wellnessSummary,
-      loadAdvice: loadAdvice
-    });
+  // ===================================
+  // WEEKLY PLAN SECTION (Forward-looking)
+  // ===================================
 
-    if (trainingProposal) {
+  const upcoming = fetchUpcomingPlaceholders(7);
+
+  // Get recent workout types for variety
+  const recentTypes = getRecentWorkoutTypes(7);
+
+  // Build context for AI planning - start from tomorrow, not today
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const planContext = {
+    startDate: formatDateISO(tomorrow),
+    phase: phaseInfo.phaseName,
+    weeksOut: phaseInfo.weeksOut,
+    phaseFocus: phaseInfo.focus,
+    phaseReasoning: phaseInfo.reasoning,
+    ctl: fitnessMetrics.ctl,
+    atl: fitnessMetrics.atl,
+    tsb: fitnessMetrics.tsb,
+    eftp: powerProfile && powerProfile.available ? powerProfile.currentEftp : null,
+    ctlTrend: fitnessMetrics.rampRate > 0.5 ? 'increasing' : fitnessMetrics.rampRate < -0.5 ? 'decreasing' : 'stable',
+    recoveryStatus: wellnessSummary.available ? wellnessSummary.recoveryStatus : 'Unknown',
+    avgRecovery: wellnessSummary.available ? wellnessSummary.averages?.recovery : null,
+    avgSleep: wellnessSummary.available ? wellnessSummary.averages?.sleep : null,
+    goals: goals,
+    lastWeek: {
+      totalTss: weekData.totalTss,
+      activities: weekData.totalActivities,
+      rideTypes: recentTypes.rides,
+      runTypes: recentTypes.runs,
+      highIntensityDays: recentTypes.all.filter(t => {
+        const catalog = { ...WORKOUT_TYPES.ride, ...WORKOUT_TYPES.run };
+        return catalog[t]?.intensity >= 4;
+      }).length
+    },
+    scheduledDays: upcoming.filter(d => d.activityType),
+    tssTarget: loadAdvice.tssRange,
+    dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax },
+    twoWeekHistory: getTwoWeekWorkoutHistory()
+  };
+
+  // Get upcoming events (races)
+  const upcomingEvents = [];
+  for (let i = 0; i < 7; i++) {
+    const eventCheck = hasEventInDays(i);
+    if (eventCheck.hasEvent) {
+      const eventDate = new Date();
+      eventDate.setDate(eventDate.getDate() + i);
+      upcomingEvents.push({
+        date: formatDateISO(eventDate),
+        dayName: Utilities.formatDate(eventDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE"),
+        eventCategory: eventCheck.category
+      });
+    }
+  }
+  planContext.upcomingEvents = upcomingEvents;
+
+  // Get existing scheduled workouts for next 7 days
+  const existingWorkouts = [];
+  for (let i = 1; i <= 7; i++) {  // Start from tomorrow (i=1)
+    const checkDate = new Date(today);
+    checkDate.setDate(today.getDate() + i);
+    const dateStr = formatDateISO(checkDate);
+    const dayName = Utilities.formatDate(checkDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+
+    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr);
+    if (eventsResult.success && eventsResult.data?.length > 0) {
+      const workout = eventsResult.data.find(e => e.category === 'WORKOUT');
+      if (workout) {
+        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workout.name || '');
+        const isWeeklyPlan = workout.description?.includes('[Weekly Plan]');
+        if (!isSimplePlaceholder && !isWeeklyPlan) {
+          // User has a specific workout scheduled
+          existingWorkouts.push({
+            date: dateStr,
+            dayName: dayName,
+            name: workout.name,
+            duration: workout.moving_time ? Math.round(workout.moving_time / 60) : null,
+            type: workout.type || (workout.name?.toLowerCase().includes('run') ? 'Run' : 'Ride')
+          });
+        }
+      }
+    }
+  }
+  planContext.existingWorkouts = existingWorkouts;
+
+  // Generate AI weekly plan
+  Logger.log("Generating weekly training plan...");
+  const weeklyPlan = generateAIWeeklyPlan(planContext);
+
+  if (weeklyPlan) {
+    // Create calendar events from the weekly plan
+    const calendarResults = createWeeklyPlanEvents(weeklyPlan);
+
+    // Add plan section to email
+    body += `
+===================================
+${t.weekly_plan_title || 'WEEK AHEAD PLAN'}
+===================================
+${weeklyPlan.weeklyStrategy}
+
+Target TSS: ${weeklyPlan.totalPlannedTSS}
+Intensity Mix: ${weeklyPlan.intensityDistribution.high} hard | ${weeklyPlan.intensityDistribution.medium} medium | ${weeklyPlan.intensityDistribution.low} easy | ${weeklyPlan.intensityDistribution.rest} rest
+
+`;
+
+    // Day by day plan
+    for (const day of weeklyPlan.days) {
+      body += `${day.dayName} (${day.date})
+${day.activity}${day.workoutType ? ': ' + day.workoutType : ''}
+${day.activity !== 'Rest' ? 'TSS: ~' + day.estimatedTSS + ' | ' + day.duration + ' min' : ''}
+${day.focus}
+
+`;
+    }
+
+    // Key workouts
+    if (weeklyPlan.keyWorkouts && weeklyPlan.keyWorkouts.length > 0) {
+      body += `Key Workouts This Week:
+`;
+      weeklyPlan.keyWorkouts.forEach(kw => {
+        body += `• ${kw}\n`;
+      });
+    }
+
+    // Recovery notes
+    if (weeklyPlan.recoveryNotes) {
       body += `
------------------------------------
-${t.training_proposal_title}
------------------------------------
-${trainingProposal}
+Recovery Notes: ${weeklyPlan.recoveryNotes}
+`;
+    }
+
+    // Calendar sync info
+    if (calendarResults.created > 0) {
+      body += `
+${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
 `;
     }
   } else {
-    body += `
------------------------------------
-${t.training_proposal_title}
------------------------------------
-${t.training_proposal_no_placeholders}
-`;
+    Logger.log("Failed to generate weekly plan");
   }
 
   body += `\n${t.weekly_footer}`;
@@ -603,7 +731,7 @@ ${t.monthly_weeks_trained}: ${currentMonth.consistency.weeksWithTraining}/${curr
 ${t.phase_title}: ${phaseInfo.phaseName}
 -----------------------------------
 ${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
-${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
 `;
   }
 

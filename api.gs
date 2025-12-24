@@ -260,7 +260,7 @@ function callGeminiAPIText(prompt) {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 2048
+      maxOutputTokens: 8192
     }
   };
 
@@ -277,10 +277,14 @@ function callGeminiAPIText(prompt) {
 
     if (responseCode === 200) {
       const data = JSON.parse(responseText);
-      if (data.candidates?.[0]?.content?.parts?.[0]) {
+      if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
         return data.candidates[0].content.parts[0].text;
+      } else if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        Logger.log("Gemini API: Response blocked by safety filter");
+      } else if (data.candidates?.length === 0) {
+        Logger.log("Gemini API: No candidates returned");
       } else {
-        Logger.log("Gemini API: Unexpected response structure");
+        Logger.log("Gemini API: Unexpected response structure: " + JSON.stringify(data).substring(0, 500));
       }
     } else {
       Logger.log("Gemini API error " + responseCode + ": " + responseText.substring(0, 500));
@@ -290,6 +294,94 @@ function callGeminiAPIText(prompt) {
   }
 
   return null;
+}
+
+// =========================================================
+// WORKOUT GENERATION WITH FEEDBACK LOOP
+// =========================================================
+
+/**
+ * Generate workout with feedback loop - regenerate if score < threshold
+ * @param {string} prompt - Initial prompt
+ * @param {object} context - Context for regeneration (workoutType, recoveryStatus, tsb, phase, duration)
+ * @param {number} maxAttempts - Maximum generation attempts (default 2)
+ * @param {number} minScore - Minimum acceptable score (default 6)
+ * @returns {object} Best workout result
+ */
+function generateWorkoutWithFeedback(prompt, context, maxAttempts, minScore) {
+  maxAttempts = maxAttempts || 2;
+  minScore = minScore || 6;
+
+  let bestResult = null;
+  let bestScore = 0;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const currentPrompt = attempt === 1 ? prompt : buildRegenerationPrompt(prompt, bestResult, context);
+    const result = callGeminiAPI(currentPrompt);
+
+    if (!result.success) {
+      Logger.log(`Generation attempt ${attempt} failed: ${result.error}`);
+      if (bestResult) return bestResult; // Return previous best if current fails
+      continue;
+    }
+
+    const score = result.recommendationScore || 5;
+    Logger.log(`Generation attempt ${attempt}: Score ${score}/10`);
+
+    // Track best result
+    if (score > bestScore) {
+      bestResult = result;
+      bestScore = score;
+    }
+
+    // Accept if meets threshold
+    if (score >= minScore) {
+      Logger.log(`Accepted workout with score ${score} (meets threshold ${minScore})`);
+      return result;
+    }
+
+    // If not last attempt, will regenerate
+    if (attempt < maxAttempts) {
+      Logger.log(`Score ${score} below threshold ${minScore}, regenerating...`);
+    }
+  }
+
+  // Return best we got (with warning)
+  if (bestResult) {
+    Logger.log(`Using best available workout (score: ${bestScore}) after ${maxAttempts} attempts`);
+    return bestResult;
+  }
+
+  return { success: false, error: "All generation attempts failed" };
+}
+
+/**
+ * Build regeneration prompt with feedback about why previous was low-scored
+ * @param {string} originalPrompt - Original workout prompt
+ * @param {object} previousResult - Previous generation result
+ * @param {object} context - Context for regeneration
+ * @returns {string} Enhanced prompt for regeneration
+ */
+function buildRegenerationPrompt(originalPrompt, previousResult, context) {
+  const feedback = `
+
+--- REGENERATION REQUEST ---
+The previous workout attempt scored ${previousResult.recommendationScore}/10.
+Reason given: ${previousResult.recommendationReason || 'Not specified'}
+
+ISSUE: The workout type "${context.workoutType}" may not be optimal for current conditions.
+Consider alternative intensities or structures that better match:
+- Recovery status: ${context.recoveryStatus || 'Unknown'}
+- TSB: ${context.tsb || 'Unknown'}
+- Phase: ${context.phase || 'Unknown'}
+
+Generate an IMPROVED workout that addresses these concerns.
+If the original workout type truly isn't suitable for today, you may suggest a more appropriate alternative within the same general category (e.g., if Threshold scores low, consider Tempo or Sweet Spot instead).
+
+IMPORTANT: Your new recommendation_score should reflect the improved suitability of this workout.
+`;
+
+  return originalPrompt + feedback;
 }
 
 // =========================================================

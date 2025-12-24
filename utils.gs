@@ -20,28 +20,57 @@ function formatDateISO(date) {
 /**
  * Format duration in seconds to human readable string
  * @param {number} seconds - Duration in seconds
- * @returns {string} Formatted duration (e.g., "1h 23m")
+ * @param {boolean} showSign - Whether to show +/- sign for differences
+ * @returns {string} Formatted duration (e.g., "1h 23m" or "+45m")
  */
-function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return "0m";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
+function formatDuration(seconds, showSign) {
+  if (seconds == null) return "0m";
+
+  const sign = showSign ? (seconds >= 0 ? "+" : "-") : "";
+  const absSeconds = Math.abs(seconds);
+
+  if (absSeconds < 60) return sign + "0m";
+
+  const hours = Math.floor(absSeconds / 3600);
+  const minutes = Math.floor((absSeconds % 3600) / 60);
+
   if (hours > 0) {
-    return hours + "h " + minutes + "m";
+    return sign + hours + "h " + minutes + "m";
   }
-  return minutes + "m";
+  return sign + minutes + "m";
 }
 
 /**
  * Format a number change with + or - prefix
- * @param {number} value - The change value
+ * Supports two calling patterns:
+ *   formatChange(changeValue, decimals) - formats pre-calculated change
+ *   formatChange(current, previous, decimals, unit) - calculates and formats change
+ * @param {number} currentOrChange - Current value or pre-calculated change
+ * @param {number} prevOrDecimals - Previous value or decimals
  * @param {number} decimals - Number of decimal places (default 1)
- * @returns {string} Formatted change (e.g., "+5.2" or "-3.1")
+ * @param {string} unit - Optional unit suffix (e.g., 'W', '%', 'h')
+ * @returns {string} Formatted change (e.g., "+5.2" or "-3.1W")
  */
-function formatChange(value, decimals) {
-  decimals = decimals || 1;
-  const sign = value >= 0 ? "+" : "";
-  return sign + value.toFixed(decimals);
+function formatChange(currentOrChange, prevOrDecimals, decimals, unit) {
+  // Detect calling pattern: if 3rd arg exists, it's (current, prev, decimals, unit)
+  if (decimals !== undefined) {
+    // Pattern: formatChange(current, previous, decimals, unit)
+    const current = currentOrChange;
+    const previous = prevOrDecimals;
+    if (current == null || previous == null) return '';
+    const change = current - previous;
+    const dec = typeof decimals === 'number' ? decimals : 1;
+    const sign = change >= 0 ? "+" : "";
+    const suffix = unit ? unit : '';
+    return ` (${sign}${change.toFixed(dec)}${suffix})`;
+  } else {
+    // Pattern: formatChange(changeValue, decimals)
+    const value = currentOrChange;
+    if (value == null) return '';
+    const dec = typeof prevOrDecimals === 'number' && prevOrDecimals !== false ? prevOrDecimals : 1;
+    const sign = value >= 0 ? "+" : "";
+    return sign + value.toFixed(dec);
+  }
 }
 
 /**

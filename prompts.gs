@@ -595,3 +595,114 @@ Keep it conversational, insightful, and motivating. Do NOT wrap your response in
   return null;
 }
 
+// =========================================================
+// AI-DRIVEN PERIODIZATION
+// =========================================================
+
+/**
+ * Generate AI-driven training phase assessment
+ * Considers fitness trajectory, events, wellness trends, and workout patterns
+ * @param {object} context - Full athlete context
+ * @returns {object} { phaseName, focus, reasoning, adjustments, confidenceLevel, phaseOverride, upcomingEventNote }
+ */
+function generateAIPhaseAssessment(context) {
+  // Build events context string
+  let eventsContext = '';
+  if (context.goals && context.goals.available) {
+    const g = context.goals;
+    const primaryStr = g.primaryGoal
+      ? g.primaryGoal.name + ' (' + g.primaryGoal.date + ', ' + (g.primaryGoal.type || 'Unknown type') + ')'
+      : 'None set';
+    const bRacesStr = g.secondaryGoals && g.secondaryGoals.length > 0
+      ? g.secondaryGoals.map(function(r) { return r.name + ' (' + r.date + ')'; }).join(', ')
+      : '';
+    const cRacesStr = g.subGoals && g.subGoals.length > 0
+      ? g.subGoals.map(function(r) { return r.name + ' (' + r.date + ')'; }).join(', ')
+      : '';
+
+    eventsContext = `
+**Race Calendar & Events:**
+- **Primary Goal (A-Race):** ${primaryStr}
+${bRacesStr ? '- **B-Races:** ' + bRacesStr : ''}
+${cRacesStr ? '- **C-Races (Stepping Stones):** ' + cRacesStr : ''}
+- **Total Events Planned:** ${g.allGoals ? g.allGoals.length : 0}
+`;
+  }
+
+  // Build recent workouts pattern
+  let workoutPatternContext = '';
+  if (context.recentWorkouts) {
+    const rw = context.recentWorkouts;
+    const ridesStr = rw.rides && rw.rides.length > 0 ? rw.rides.join(', ') : 'None';
+    const runsStr = rw.runs && rw.runs.length > 0 ? rw.runs.join(', ') : 'None';
+    const daysAgo = rw.daysSinceLastWorkout != null ? rw.daysSinceLastWorkout : 'Unknown';
+    workoutPatternContext = `
+**Recent Workout Patterns (7 days):**
+- Rides: ${ridesStr}
+- Runs: ${runsStr}
+- Last Workout Intensity: ${rw.lastIntensity || 'Unknown'}/5 (${daysAgo} days ago)
+`;
+  }
+
+  const prompt = `You are an expert cycling coach analyzing an athlete's current training phase.
+
+**Date-Based Reference:**
+- Target Event: ${context.goalDescription || 'Not specified'}
+- Weeks to Event: ${context.weeksOut}
+- Traditional Phase (by date): ${context.traditionalPhase}
+${eventsContext}
+**Fitness Trajectory:**
+- Current CTL: ${context.ctl ? context.ctl.toFixed(1) : 'N/A'} | Weekly Ramp: ${context.rampRate ? context.rampRate.toFixed(2) : 'N/A'}/week
+- Current eFTP: ${context.currentEftp || 'N/A'}W | Target FTP: ${context.targetFtp || 'N/A'}W
+- eFTP Gap to Peak: ${context.eftpGap !== null && context.eftpGap !== undefined ? context.eftpGap + 'W' : 'N/A'}
+
+**Recovery Trends (7-day averages):**
+- HRV: ${context.hrvAvg ? context.hrvAvg.toFixed(0) + 'ms' : 'N/A'}
+- Sleep: ${context.sleepAvg ? context.sleepAvg.toFixed(1) + 'h' : 'N/A'}
+- Recovery Score: ${context.recoveryAvg ? context.recoveryAvg.toFixed(0) + '%' : 'N/A'}
+- Today's Status: ${context.recoveryStatus || 'Unknown'}
+
+**Recent Training Load:**
+- Recent Z5+ Time: ${context.z5Recent > 1500 ? 'High' : 'Normal'}
+- TSB: ${context.tsb ? context.tsb.toFixed(1) : 'N/A'}
+${workoutPatternContext}
+**Question:** Based on fitness trajectory AND the event calendar (not just weeks to A-race), what phase should this athlete be in?
+
+Consider:
+1. Is CTL building appropriately for the goal timeline?
+2. Is eFTP trending toward target or stalling?
+3. Are recovery metrics supporting the current load?
+4. Should we accelerate, maintain, or ease the progression?
+5. **Are there upcoming B/C races that require mini-tapers or intensity peaks?**
+6. **Is the athlete's current fitness on track for the A-race, or behind/ahead of schedule?**
+
+**Output JSON only (no markdown wrapping):**
+{
+  "phaseName": "Base|Build|Specialty|Taper|Race Week",
+  "focus": "1-sentence phase focus description",
+  "reasoning": "Brief explanation of why this phase (2-3 sentences)",
+  "adjustments": "Any modifications to standard phase approach (e.g., mini-taper for upcoming C-race)",
+  "confidenceLevel": "high|medium|low",
+  "phaseOverride": true or false,
+  "upcomingEventNote": "Note about any near-term B/C races affecting this week's approach (optional, null if none)"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+
+  if (!response) {
+    Logger.log("AI phase assessment: No response from Gemini");
+    return null;
+  }
+
+  try {
+    // Parse JSON from response (handle markdown wrapping if present)
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI phase assessment: " + e.toString());
+    Logger.log("Raw response: " + response.substring(0, 500));
+    return null;
+  }
+}
+
