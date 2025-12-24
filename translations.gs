@@ -86,7 +86,8 @@ const TRANSLATIONS = {
     rest_day_footer: "Your scheduled workout has been removed. Rest up!",
     // Training proposal (weekly)
     training_proposal_title: "Suggested Training Plan",
-    training_proposal_no_placeholders: "No workouts scheduled yet. Add placeholders to your Intervals.icu calendar."
+    training_proposal_no_placeholders: "No workouts scheduled yet. Add placeholders to your Intervals.icu calendar.",
+    weekly_plan_title: "WEEK AHEAD PLAN"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -161,7 +162,8 @@ const TRANSLATIONS = {
     rest_day_footer: "予定されていたワークアウトは削除されました。ゆっくり休んでください！",
     // Training proposal (weekly)
     training_proposal_title: "提案トレーニングプラン",
-    training_proposal_no_placeholders: "予定されたワークアウトがありません。カレンダーにプレースホルダーを追加してください。"
+    training_proposal_no_placeholders: "予定されたワークアウトがありません。カレンダーにプレースホルダーを追加してください。",
+    weekly_plan_title: "来週のトレーニングプラン"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -236,7 +238,8 @@ const TRANSLATIONS = {
     rest_day_footer: "Tu entrenamiento programado ha sido eliminado. ¡Descansa!",
     // Training proposal (weekly)
     training_proposal_title: "Plan de Entrenamiento Sugerido",
-    training_proposal_no_placeholders: "No hay entrenamientos programados. Añade marcadores a tu calendario de Intervals.icu."
+    training_proposal_no_placeholders: "No hay entrenamientos programados. Añade marcadores a tu calendario de Intervals.icu.",
+    weekly_plan_title: "PLAN SEMANAL"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -317,7 +320,8 @@ const TRANSLATIONS = {
     rest_day_footer: "Votre entraînement prévu a été supprimé. Reposez-vous!",
     // Training proposal (weekly)
     training_proposal_title: "Plan d'Entraînement Suggéré",
-    training_proposal_no_placeholders: "Aucun entraînement prévu. Ajoutez des marqueurs à votre calendrier Intervals.icu."
+    training_proposal_no_placeholders: "Aucun entraînement prévu. Ajoutez des marqueurs à votre calendrier Intervals.icu.",
+    weekly_plan_title: "PLAN DE LA SEMAINE"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -399,6 +403,7 @@ const TRANSLATIONS = {
     rest_day_footer: "Je geplande workout is verwijderd. Rust lekker uit!",
     // Training proposal (weekly)
     training_proposal_title: "Voorgesteld Trainingsplan",
-    training_proposal_no_placeholders: "Geen workouts gepland. Voeg placeholders toe aan je Intervals.icu kalender."
+    training_proposal_no_placeholders: "Geen workouts gepland. Voeg placeholders toe aan je Intervals.icu kalender.",
+    weekly_plan_title: "WEEKPLAN"
   }
 };
