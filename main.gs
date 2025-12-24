@@ -1320,19 +1320,23 @@ function testAIWorkoutDecision() {
     subGoals: goalsResult.data.filter(g => g.priority === 'C')
   } : { available: false };
 
+  // Extract CTL/TSB with fallbacks
+  const ctl = summary.ctl_90 || summary.ctl || 0;
+  const tsb = summary.tsb_current || summary.tsb || 0;
+
   // Calculate phase with AI
   const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
     (USER_SETTINGS.TARGET_DATE || Utilities.formatDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), SYSTEM_SETTINGS.TIMEZONE, "yyyy-MM-dd"));
   const phaseInfo = calculateTrainingPhase(targetDate, {
     goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
     goals: goals,
-    ctl: summary.ctl_90,
-    tsb: summary.tsb_current,
+    ctl: ctl,
+    tsb: tsb,
     enableAI: true
   });
 
   Logger.log("\n--- Current State ---");
-  Logger.log("CTL: " + summary.ctl_90.toFixed(1) + " | TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("CTL: " + ctl.toFixed(1) + " | TSB: " + tsb.toFixed(1));
   Logger.log("Phase: " + phaseInfo.phaseName + (phaseInfo.aiEnhanced ? " (AI)" : " (rules)"));
   Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
   Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
@@ -1349,10 +1353,10 @@ function testAIWorkoutDecision() {
     },
     activityType: "Ride",
     phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
+    tsb: tsb,
     eventTomorrow: false,
     eventYesterday: false,
-    ctl: summary.ctl_90,
+    ctl: ctl,
     duration: 60,
     goals: goals,
     powerProfile: powerProfile,
@@ -1380,7 +1384,7 @@ function testAIWorkoutDecision() {
     },
     activityType: "Ride",
     phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
+    tsb: tsb,
     eventTomorrow: false,
     eventYesterday: false,
     enableAI: false  // Force rule-based
