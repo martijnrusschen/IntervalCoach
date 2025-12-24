@@ -1459,7 +1459,8 @@ function testAIRestDayAssessment() {
 
   // Get real data
   const summary = fetchFitnessMetrics();
-  const wellness = fetchWellnessData();
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
   const recentTypes = getRecentWorkoutTypes(7);
   const eventTomorrow = hasEventTomorrow();
   const eventIn2Days = hasEventInDays(2);
