@@ -177,15 +177,17 @@ function buildGoalDescription(goals) {
 // =========================================================
 
 /**
- * Calculate training phase based on target date
+ * Calculate training phase - AI-enhanced with date-based fallback
  * @param {string} targetDate - Target date in yyyy-MM-dd format
- * @returns {object} { phaseName, weeksOut, focus }
+ * @param {object} context - Optional full context for AI assessment
+ * @returns {object} { phaseName, weeksOut, focus, aiEnhanced, reasoning, adjustments, upcomingEventNote }
  */
-function calculateTrainingPhase(targetDate) {
+function calculateTrainingPhase(targetDate, context) {
   const today = new Date();
   const target = new Date(targetDate);
   const weeksOut = Math.ceil((target - today) / (7 * 24 * 60 * 60 * 1000));
 
+  // Date-based fallback (always calculated)
   let phaseName, focus;
 
   if (weeksOut >= TRAINING_CONSTANTS.PHASE.BASE_START) {
@@ -205,11 +207,59 @@ function calculateTrainingPhase(targetDate) {
     focus = "Sharpness, short openers";
   }
 
-  return {
+  const result = {
     phaseName: phaseName,
     weeksOut: weeksOut,
-    focus: focus
+    focus: focus,
+    aiEnhanced: false,
+    reasoning: "Date-based calculation"
   };
+
+  // If context provided, attempt AI enhancement
+  if (context && context.enableAI !== false) {
+    try {
+      const aiContext = {
+        weeksOut: weeksOut,
+        traditionalPhase: phaseName,
+        goalDescription: context.goalDescription,
+        goals: context.goals,
+        ctl: context.ctl || 0,
+        rampRate: context.rampRate,
+        currentEftp: context.currentEftp,
+        targetFtp: context.targetFtp,
+        eftpGap: context.targetFtp && context.currentEftp ? context.targetFtp - context.currentEftp : null,
+        hrvAvg: context.wellnessAverages?.hrv,
+        sleepAvg: context.wellnessAverages?.sleep,
+        recoveryAvg: context.wellnessAverages?.recovery,
+        recoveryStatus: context.recoveryStatus,
+        z5Recent: context.z5Recent || 0,
+        tsb: context.tsb || 0,
+        recentWorkouts: context.recentWorkouts
+      };
+
+      const aiAssessment = generateAIPhaseAssessment(aiContext);
+
+      if (aiAssessment && aiAssessment.phaseName) {
+        result.phaseName = aiAssessment.phaseName;
+        result.focus = aiAssessment.focus || focus;
+        result.aiEnhanced = true;
+        result.reasoning = aiAssessment.reasoning;
+        result.adjustments = aiAssessment.adjustments;
+        result.confidenceLevel = aiAssessment.confidenceLevel;
+        result.phaseOverride = aiAssessment.phaseOverride;
+        result.upcomingEventNote = aiAssessment.upcomingEventNote;
+
+        if (aiAssessment.phaseOverride) {
+          Logger.log("AI Phase Override: " + phaseName + " -> " + aiAssessment.phaseName);
+          Logger.log("Reason: " + aiAssessment.reasoning);
+        }
+      }
+    } catch (e) {
+      Logger.log("AI phase assessment failed, using date-based: " + e.toString());
+    }
+  }
+
+  return result;
 }
 
 // =========================================================

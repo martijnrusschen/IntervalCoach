@@ -158,6 +158,47 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
   Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
 
+  // Recalculate phase with full AI context (now that we have all data)
+  const phaseContext = {
+    goalDescription: goalDescription,
+    goals: goals,
+    ctl: summary.ctl_90,
+    rampRate: summary.rampRate,
+    currentEftp: powerProfile.available ? powerProfile.currentEftp : null,
+    targetFtp: powerProfile.available ? powerProfile.manualFTP : null,
+    tsb: summary.tsb_current,
+    z5Recent: summary.z5_recent_total,
+    wellnessAverages: wellness.available ? wellness.averages : null,
+    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
+    recentWorkouts: {
+      rides: recentTypes.rides,
+      runs: recentTypes.runs,
+      lastIntensity: getYesterdayIntensity(recentTypes)
+    },
+    enableAI: true
+  };
+
+  // Update phaseInfo with AI-enhanced assessment
+  const aiPhaseInfo = calculateTrainingPhase(targetDate, phaseContext);
+  // Preserve goalDescription and update phaseInfo properties
+  phaseInfo.phaseName = aiPhaseInfo.phaseName;
+  phaseInfo.focus = aiPhaseInfo.focus;
+  phaseInfo.aiEnhanced = aiPhaseInfo.aiEnhanced;
+  phaseInfo.reasoning = aiPhaseInfo.reasoning;
+  phaseInfo.adjustments = aiPhaseInfo.adjustments;
+  phaseInfo.upcomingEventNote = aiPhaseInfo.upcomingEventNote;
+
+  if (phaseInfo.aiEnhanced) {
+    Logger.log("Phase (AI-enhanced): " + phaseInfo.phaseName);
+    Logger.log("  Reasoning: " + phaseInfo.reasoning);
+    if (phaseInfo.adjustments) {
+      Logger.log("  Adjustments: " + phaseInfo.adjustments);
+    }
+    if (phaseInfo.upcomingEventNote) {
+      Logger.log("  Event Note: " + phaseInfo.upcomingEventNote);
+    }
+  }
+
   // Check for events around today (affects workout intensity selection)
   const eventTomorrow = hasEventTomorrow();
   const eventYesterday = hasEventYesterday();
@@ -220,7 +261,17 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext)
     : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext);
 
-  const result = callGeminiAPI(prompt);
+  // Build context for regeneration feedback loop
+  const regenerationContext = {
+    workoutType: selectedType,
+    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
+    tsb: summary.tsb_current,
+    phase: phaseInfo.phaseName,
+    duration: availability.duration
+  };
+
+  // Generate workout with feedback loop - regenerate if score < 6
+  const result = generateWorkoutWithFeedback(prompt, regenerationContext, 2, 6);
 
   if (!result.success) {
     Logger.log("Failed to generate workout: " + result.error);
@@ -1066,4 +1117,169 @@ function testWeeklySummary() {
   Logger.log("  Total TSS: " + prevWeekData.totalTss.toFixed(0));
 
   Logger.log("\nTo send the actual email, run sendWeeklySummaryEmail()");
+}
+
+/**
+ * Test recommendation feedback loop
+ * Generates a workout and shows if regeneration was triggered
+ */
+function testRecommendationFeedback() {
+  Logger.log("=== RECOMMENDATION FEEDBACK TEST ===\n");
+
+  // Fetch real data for context
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  Logger.log("--- Current Context ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("eFTP: " + (powerProfile.currentEftp || 'N/A') + "W");
+
+  // Test with a workout type that might score low given context
+  const testType = "VO2max_Short";
+  Logger.log("\n--- Testing workout type: " + testType + " ---");
+  Logger.log("(This type may trigger regeneration if recovery is poor)\n");
+
+  const dateStr = Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MMdd");
+  const duration = { min: 45, max: 60 };
+
+  const prompt = createPrompt(testType, summary, phaseInfo, dateStr, duration, wellness, powerProfile, null);
+
+  const regenerationContext = {
+    workoutType: testType,
+    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
+    tsb: summary.tsb_current,
+    phase: phaseInfo.phaseName,
+    duration: duration
+  };
+
+  Logger.log("Calling generateWorkoutWithFeedback...\n");
+  const result = generateWorkoutWithFeedback(prompt, regenerationContext, 2, 6);
+
+  if (result.success) {
+    Logger.log("\n--- Result ---");
+    Logger.log("Success: true");
+    Logger.log("Final Score: " + result.recommendationScore + "/10");
+    Logger.log("Reason: " + result.recommendationReason);
+    Logger.log("Explanation preview: " + (result.explanation || '').substring(0, 200) + "...");
+  } else {
+    Logger.log("\n--- Result ---");
+    Logger.log("Success: false");
+    Logger.log("Error: " + result.error);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test AI-driven periodization
+ * Shows AI phase assessment vs date-based calculation
+ */
+function testAIPeriodization() {
+  Logger.log("=== AI PERIODIZATION TEST ===\n");
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  const recentTypes = getRecentWorkoutTypes(7);
+
+  Logger.log("--- Current Context ---");
+  Logger.log("Target: " + targetDate);
+  Logger.log("Goal: " + (goalDescription || 'Not specified').substring(0, 100) + "...");
+  Logger.log("CTL: " + summary.ctl_90.toFixed(1) + " | TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Ramp Rate: " + (summary.rampRate ? summary.rampRate.toFixed(2) : 'N/A') + "/week");
+  Logger.log("eFTP: " + (powerProfile.currentEftp || 'N/A') + "W | Target FTP: " + (powerProfile.manualFTP || 'N/A') + "W");
+  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("Recent Rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
+
+  if (goals?.available) {
+    Logger.log("\n--- Race Calendar ---");
+    if (goals.primaryGoal) {
+      Logger.log("A-Race: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+    }
+    if (goals.secondaryGoals && goals.secondaryGoals.length > 0) {
+      Logger.log("B-Races: " + goals.secondaryGoals.map(function(g) { return g.name + " (" + g.date + ")"; }).join(", "));
+    }
+    if (goals.subGoals && goals.subGoals.length > 0) {
+      Logger.log("C-Races: " + goals.subGoals.map(function(g) { return g.name + " (" + g.date + ")"; }).join(", "));
+    }
+  }
+
+  // Calculate date-based phase first
+  Logger.log("\n--- Date-Based Phase (Traditional) ---");
+  const dateBasedPhase = calculateTrainingPhase(targetDate);
+  Logger.log("Phase: " + dateBasedPhase.phaseName);
+  Logger.log("Weeks Out: " + dateBasedPhase.weeksOut);
+  Logger.log("Focus: " + dateBasedPhase.focus);
+
+  // Now calculate AI-enhanced phase
+  Logger.log("\n--- AI-Enhanced Phase ---");
+  const phaseContext = {
+    goalDescription: goalDescription,
+    goals: goals,
+    ctl: summary.ctl_90,
+    rampRate: summary.rampRate,
+    currentEftp: powerProfile.available ? powerProfile.currentEftp : null,
+    targetFtp: powerProfile.available ? powerProfile.manualFTP : null,
+    tsb: summary.tsb_current,
+    z5Recent: summary.z5_recent_total,
+    wellnessAverages: wellness.available ? wellness.averages : null,
+    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
+    recentWorkouts: {
+      rides: recentTypes.rides,
+      runs: recentTypes.runs,
+      lastIntensity: getYesterdayIntensity(recentTypes)
+    },
+    enableAI: true
+  };
+
+  const aiPhase = calculateTrainingPhase(targetDate, phaseContext);
+
+  Logger.log("Phase: " + aiPhase.phaseName);
+  Logger.log("AI Enhanced: " + aiPhase.aiEnhanced);
+  Logger.log("Focus: " + aiPhase.focus);
+
+  if (aiPhase.aiEnhanced) {
+    Logger.log("Reasoning: " + aiPhase.reasoning);
+    if (aiPhase.adjustments) {
+      Logger.log("Adjustments: " + aiPhase.adjustments);
+    }
+    if (aiPhase.upcomingEventNote) {
+      Logger.log("Event Note: " + aiPhase.upcomingEventNote);
+    }
+    Logger.log("Confidence: " + (aiPhase.confidenceLevel || 'N/A'));
+    if (aiPhase.phaseOverride) {
+      Logger.log("*** PHASE OVERRIDE: AI changed " + dateBasedPhase.phaseName + " -> " + aiPhase.phaseName + " ***");
+    }
+  } else {
+    Logger.log("(AI assessment failed, using date-based fallback)");
+  }
+
+  Logger.log("\n=== AI PERIODIZATION TEST COMPLETE ===");
 }
