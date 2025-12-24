@@ -933,7 +933,14 @@ function generateAIWeeklyPlan(context) {
 `;
   }
 
+  // Get user's language for localized output
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
+  const langName = langMap[lang] || 'English';
+
   const prompt = `You are an expert cycling and running coach creating a WEEKLY TRAINING PLAN.
+
+**IMPORTANT: Write ALL text output (weeklyStrategy, focus, keyWorkouts, recoveryNotes) in ${langName}.**
 
 **ATHLETE STATUS:**
 - Training Phase: ${context.phase || 'Build'} (${context.weeksOut || '?'} weeks to goal)
@@ -975,7 +982,7 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
 
 **YOUR TASK:**
-Create a 7-day plan starting from ${context.startDate || 'today'}. For each day provide:
+Create a 7-day plan starting from TOMORROW (skip today - ${context.startDate || 'unknown'}). For each day provide:
 - Recommended activity (Ride/Run/Rest)
 - Specific workout type (from list above)
 - Estimated TSS
@@ -1163,7 +1170,16 @@ function createWeeklyPlanEvents(weeklyPlan) {
 
   Logger.log("Creating calendar events from weekly plan...");
 
+  const todayStr = formatDateISO(new Date());
+
   for (const day of weeklyPlan.days) {
+    // Skip today - weekly plan is for future days
+    if (day.date === todayStr) {
+      Logger.log(` -> ${day.date} (${day.dayName}): Today - skipping`);
+      results.skipped++;
+      continue;
+    }
+
     // Skip rest days
     if (day.activity === 'Rest') {
       Logger.log(` -> ${day.date} (${day.dayName}): Rest day - skipping`);

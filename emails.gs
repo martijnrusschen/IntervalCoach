@@ -342,7 +342,7 @@ ${t.load_advice}: ${loadAdvice.loadAdvice}`;
 
   if (loadAdvice.warning) {
     body += `
-⚠️ ${loadAdvice.warning}`;
+WARNING: ${loadAdvice.warning}`;
   }
 
   // Phase & Goal
@@ -366,9 +366,12 @@ ${t.focus}: ${phaseInfo.focus}
   // Get recent workout types for variety
   const recentTypes = getRecentWorkoutTypes(7);
 
-  // Build context for AI planning
+  // Build context for AI planning - start from tomorrow, not today
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
   const planContext = {
-    startDate: formatDateISO(today),
+    startDate: formatDateISO(tomorrow),
     phase: phaseInfo.phaseName,
     weeksOut: phaseInfo.weeksOut,
     phaseFocus: phaseInfo.focus,
@@ -436,9 +439,8 @@ Intensity Mix: ${weeklyPlan.intensityDistribution.high} hard | ${weeklyPlan.inte
 
     // Day by day plan
     for (const day of weeklyPlan.days) {
-      const activityIcon = day.activity === 'Rest' ? '🛋️' : day.activity === 'Ride' ? '🚴' : '🏃';
       body += `${day.dayName} (${day.date})
-${activityIcon} ${day.activity}${day.workoutType ? ': ' + day.workoutType : ''}
+${day.activity}${day.workoutType ? ': ' + day.workoutType : ''}
 ${day.activity !== 'Rest' ? 'TSS: ~' + day.estimatedTSS + ' | ' + day.duration + ' min' : ''}
 ${day.focus}
 
@@ -464,7 +466,7 @@ Recovery Notes: ${weeklyPlan.recoveryNotes}
     // Calendar sync info
     if (calendarResults.created > 0) {
       body += `
-📅 ${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
+${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
 `;
     }
   } else {
