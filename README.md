@@ -327,6 +327,7 @@ clasp pull
 | `testWeeklySummary()` | Weekly activity aggregation |
 | `testTrainingLoadAdvisor()` | Training load recommendations |
 | `testAITrainingLoadAdvisor()` | AI-enhanced training load with wellness context |
+| `testAIRecoveryAssessment()` | AI recovery status using personal baselines |
 | `testMonthlyProgress()` | 8-week progress trends (CTL, eFTP, volume) |
 | `testApiUtilities()` | API connectivity, auth, and historical eFTP |
 | `testWorkoutSelection()` | Smart workout type selection logic |
