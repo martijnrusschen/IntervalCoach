@@ -329,6 +329,7 @@ clasp pull
 | `testMonthlyProgress()` | 8-week progress trends (CTL, eFTP, volume) |
 | `testApiUtilities()` | API connectivity, auth, and historical eFTP |
 | `testWorkoutSelection()` | Smart workout type selection logic |
+| `testAIPowerProfileAnalysis()` | AI-driven power profile analysis with goal context |
 | `testTrainingProposal()` | Weekly training proposal generation |
 | `testCoachingNote()` | Personalized coaching note generation |
 | `debugPowerCurve()` | Raw power curve API response |

@@ -581,10 +581,12 @@ function fetchPowerCurve() {
 
 /**
  * Analyze power curve to identify strengths and weaknesses
+ * AI-enhanced with goal-aware analysis, falls back to benchmarks if AI unavailable
  * @param {object} powerCurve - Power curve data
+ * @param {object} goals - Optional goal events from fetchUpcomingGoals()
  * @returns {object} Analysis with strengths, weaknesses, and recommendations
  */
-function analyzePowerProfile(powerCurve) {
+function analyzePowerProfile(powerCurve, goals) {
   if (!powerCurve || !powerCurve.available) {
     return { available: false };
   }
@@ -592,66 +594,12 @@ function analyzePowerProfile(powerCurve) {
   // Use current eFTP for analysis (rolling daily value), fallback to other sources
   const ftp = powerCurve.currentEftp || powerCurve.eFTP || powerCurve.ftp;
 
-  // Calculate ratios (as % of current FTP)
-  const ratios = {
-    peak5s: powerCurve.peak5s / ftp,
-    peak1min: powerCurve.peak1min / ftp,
-    peak5min: powerCurve.peak5min / ftp,
-    peak20min: powerCurve.peak20min / ftp
-  };
-
-  // Typical ratios for well-rounded cyclist
-  const benchmarks = {
-    peak5s: 2.0,    // Sprint ~200% of FTP
-    peak1min: 1.5,  // Anaerobic ~150% of FTP
-    peak5min: 1.2,  // VO2max ~120% of FTP
-    peak20min: 1.05 // ~105% of FTP
-  };
-
-  const strengths = [];
-  const weaknesses = [];
-  const recommendations = [];
-
-  // Analyze each duration
-  if (ratios.peak5s > benchmarks.peak5s * 1.1) {
-    strengths.push("Sprint power (5s)");
-  } else if (ratios.peak5s < benchmarks.peak5s * 0.9) {
-    weaknesses.push("Sprint power (5s)");
-    recommendations.push("Include neuromuscular sprints");
-  }
-
-  if (ratios.peak1min > benchmarks.peak1min * 1.1) {
-    strengths.push("Anaerobic capacity (1min)");
-  } else if (ratios.peak1min < benchmarks.peak1min * 0.9) {
-    weaknesses.push("Anaerobic capacity (1min)");
-    recommendations.push("Add 1-minute max efforts");
-  }
-
-  if (ratios.peak5min > benchmarks.peak5min * 1.05) {
-    strengths.push("VO2max power (5min)");
-  } else if (ratios.peak5min < benchmarks.peak5min * 0.95) {
-    weaknesses.push("VO2max power (5min)");
-    recommendations.push("Focus on 3-5 minute intervals at 105-120% FTP");
-  }
-
-  if (ratios.peak20min > benchmarks.peak20min * 1.02) {
-    strengths.push("Threshold endurance (20min)");
-  } else if (ratios.peak20min < benchmarks.peak20min * 0.98) {
-    weaknesses.push("Threshold endurance (20min)");
-    recommendations.push("Include longer threshold intervals (2x20min)");
-  }
-
-  // For climbing events, check 5-20min power specifically
-  const climbingPower = (powerCurve.peak5min + powerCurve.peak20min) / 2;
-  const climbingStrength = climbingPower / ftp > 1.1 ? "Strong climber" : null;
-
   // Analyze W' (anaerobic capacity) trend
   let wPrimeStatus = null;
   if (powerCurve.wPrime && powerCurve.seasonWPrime) {
     const wPrimeRatio = powerCurve.wPrime / powerCurve.seasonWPrime;
     if (wPrimeRatio < TRAINING_CONSTANTS.POWER.W_PRIME_LOW) {
       wPrimeStatus = "Low (needs anaerobic work)";
-      recommendations.push("Build W' with hard 30s-2min efforts");
     } else if (wPrimeRatio > TRAINING_CONSTANTS.POWER.W_PRIME_HIGH) {
       wPrimeStatus = "Strong";
     } else {
@@ -662,11 +610,11 @@ function analyzePowerProfile(powerCurve) {
   // Calculate TTE estimate (time to exhaustion at FTP)
   let tteEstimate = null;
   if (powerCurve.wPrime && ftp) {
-    // Rough TTE in minutes based on W' (higher W' = longer TTE)
-    tteEstimate = Math.round(powerCurve.wPrime / 500); // Simplified formula
+    tteEstimate = Math.round(powerCurve.wPrime / 500);
   }
 
-  return {
+  // Build base result with power data
+  const baseResult = {
     available: true,
     ftp: ftp,
     currentEftp: powerCurve.currentEftp,
@@ -695,16 +643,98 @@ function analyzePowerProfile(powerCurve) {
     seasonPMax: powerCurve.seasonPMax,
     // VO2max & TTE
     vo2max: powerCurve.vo2max5m,
-    tteEstimate: tteEstimate,
-    // Analysis
+    tteEstimate: tteEstimate
+  };
+
+  // Try AI-driven analysis first
+  try {
+    const aiAnalysis = generateAIPowerProfileAnalysis(powerCurve, goals);
+
+    if (aiAnalysis && aiAnalysis.strengths && aiAnalysis.weaknesses) {
+      Logger.log("AI Power Profile Analysis: " + JSON.stringify(aiAnalysis));
+      return Object.assign({}, baseResult, {
+        strengths: aiAnalysis.strengths,
+        weaknesses: aiAnalysis.weaknesses,
+        recommendations: aiAnalysis.recommendations || [],
+        eventRelevance: aiAnalysis.eventRelevance || null,
+        climbingStrength: null, // AI handles this contextually
+        summary: aiAnalysis.weaknesses.length > 0
+          ? "Focus areas: " + aiAnalysis.weaknesses.join(", ")
+          : "Well-rounded power profile",
+        aiEnhanced: true,
+        aiConfidence: aiAnalysis.confidence || 'medium'
+      });
+    }
+  } catch (e) {
+    Logger.log("AI power profile analysis failed, using fallback: " + e.toString());
+  }
+
+  // ===== FALLBACK: Benchmark-based analysis =====
+  Logger.log("Using fallback benchmark-based power profile analysis");
+
+  const ratios = {
+    peak5s: powerCurve.peak5s / ftp,
+    peak1min: powerCurve.peak1min / ftp,
+    peak5min: powerCurve.peak5min / ftp,
+    peak20min: powerCurve.peak20min / ftp
+  };
+
+  const benchmarks = {
+    peak5s: 2.0,
+    peak1min: 1.5,
+    peak5min: 1.2,
+    peak20min: 1.05
+  };
+
+  const strengths = [];
+  const weaknesses = [];
+  const recommendations = [];
+
+  if (ratios.peak5s > benchmarks.peak5s * 1.1) {
+    strengths.push("Sprint power (5s)");
+  } else if (ratios.peak5s < benchmarks.peak5s * 0.9) {
+    weaknesses.push("Sprint power (5s)");
+    recommendations.push("Include neuromuscular sprints");
+  }
+
+  if (ratios.peak1min > benchmarks.peak1min * 1.1) {
+    strengths.push("Anaerobic capacity (1min)");
+  } else if (ratios.peak1min < benchmarks.peak1min * 0.9) {
+    weaknesses.push("Anaerobic capacity (1min)");
+    recommendations.push("Add 1-minute max efforts");
+  }
+
+  if (ratios.peak5min > benchmarks.peak5min * 1.05) {
+    strengths.push("VO2max power (5min)");
+  } else if (ratios.peak5min < benchmarks.peak5min * 0.95) {
+    weaknesses.push("VO2max power (5min)");
+    recommendations.push("Focus on 3-5 minute intervals at 105-120% FTP");
+  }
+
+  if (ratios.peak20min > benchmarks.peak20min * 1.02) {
+    strengths.push("Threshold endurance (20min)");
+  } else if (ratios.peak20min < benchmarks.peak20min * 0.98) {
+    weaknesses.push("Threshold endurance (20min)");
+    recommendations.push("Include longer threshold intervals (2x20min)");
+  }
+
+  if (wPrimeStatus === "Low (needs anaerobic work)") {
+    recommendations.push("Build W' with hard 30s-2min efforts");
+  }
+
+  const climbingPower = (powerCurve.peak5min + powerCurve.peak20min) / 2;
+  const climbingStrength = climbingPower / ftp > 1.1 ? "Strong climber" : null;
+
+  return Object.assign({}, baseResult, {
     strengths: strengths,
     weaknesses: weaknesses,
     recommendations: recommendations,
     climbingStrength: climbingStrength,
     summary: weaknesses.length > 0
-      ? "Focus areas: " + weaknesses.join(", ")
-      : "Well-rounded power profile"
-  };
+      ? "Fallback: " + weaknesses.join(", ")
+      : "Well-rounded power profile",
+    aiEnhanced: false
+  });
 }
 
 // =========================================================

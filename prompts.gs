@@ -764,3 +764,95 @@ Consider:
   }
 }
 
+// =========================================================
+// AI POWER PROFILE ANALYSIS
+// =========================================================
+
+/**
+ * Generate AI-driven power profile analysis
+ * Replaces hardcoded benchmarks with context-aware analysis
+ * @param {object} powerData - Raw power curve data (peak powers, W', pMax, etc.)
+ * @param {object} goals - Goal events from fetchUpcomingGoals()
+ * @returns {object} { strengths, weaknesses, recommendations, eventRelevance, confidence }
+ */
+function generateAIPowerProfileAnalysis(powerData, goals) {
+  if (!powerData || !powerData.available) {
+    return null;
+  }
+
+  const ftp = powerData.currentEftp || powerData.eFTP || powerData.ftp;
+
+  // Build goal context
+  let goalContext = 'General fitness improvement';
+  let eventType = 'Unknown';
+  if (goals && goals.available && goals.primaryGoal) {
+    const g = goals.primaryGoal;
+    goalContext = g.name + ' (' + g.date + ')';
+    eventType = g.type || 'Unknown';
+    if (g.description) {
+      goalContext += '. ' + g.description;
+    }
+  }
+
+  // Calculate ratios for context
+  const ratios = {
+    peak5s: ftp > 0 ? (powerData.peak5s / ftp * 100).toFixed(0) : 'N/A',
+    peak1min: ftp > 0 ? (powerData.peak1min / ftp * 100).toFixed(0) : 'N/A',
+    peak5min: ftp > 0 ? (powerData.peak5min / ftp * 100).toFixed(0) : 'N/A',
+    peak20min: ftp > 0 ? (powerData.peak20min / ftp * 100).toFixed(0) : 'N/A'
+  };
+
+  const prompt = `You are an expert cycling coach analyzing an athlete's power profile to identify strengths, weaknesses, and training priorities.
+
+**Power Profile Data:**
+- **Current eFTP:** ${ftp}W${powerData.weight ? ' (' + (ftp / powerData.weight).toFixed(2) + ' W/kg)' : ''}
+- **Peak Powers (all-time bests):**
+  - 5s: ${powerData.peak5s}W (${ratios.peak5s}% of FTP)
+  - 30s: ${powerData.peak30s}W
+  - 1min: ${powerData.peak1min}W (${ratios.peak1min}% of FTP)
+  - 2min: ${powerData.peak2min}W
+  - 5min: ${powerData.peak5min}W (${ratios.peak5min}% of FTP)
+  - 8min: ${powerData.peak8min}W
+  - 20min: ${powerData.peak20min}W (${ratios.peak20min}% of FTP)
+  - 60min: ${powerData.peak60min || 'N/A'}W
+- **W' (Anaerobic Capacity):** ${powerData.wPrime ? (powerData.wPrime / 1000).toFixed(1) + 'kJ' : 'N/A'}${powerData.seasonWPrime ? ' (season best: ' + (powerData.seasonWPrime / 1000).toFixed(1) + 'kJ)' : ''}
+- **pMax:** ${powerData.pMax || 'N/A'}W${powerData.seasonPMax ? ' (season best: ' + powerData.seasonPMax + 'W)' : ''}
+- **VO2max (est):** ${powerData.vo2max5m ? powerData.vo2max5m.toFixed(1) + ' ml/kg/min' : 'N/A'}
+
+**Goal Event:**
+- ${goalContext}
+- Event Type: ${eventType}
+
+**Your Analysis Task:**
+1. Identify this athlete's STRENGTHS relative to their goal event (not generic benchmarks)
+2. Identify LIMITERS that would hold them back in their target event
+3. Provide SPECIFIC training recommendations to address limiters
+4. Consider the event type: climbing requires 5-20min power, crits need sprints, TTs need threshold endurance
+
+**Output JSON only (no markdown wrapping):**
+{
+  "strengths": ["Concise strength 1", "Concise strength 2"],
+  "weaknesses": ["Concise limiter 1", "Concise limiter 2"],
+  "recommendations": ["Specific training recommendation 1", "Specific training recommendation 2"],
+  "eventRelevance": "1-2 sentence analysis of how this profile matches the goal event",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI power profile analysis: No response from Gemini");
+      return null;
+    }
+
+    // Parse JSON from response (handle markdown wrapping if present)
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI power profile analysis: " + e.toString());
+    return null;
+  }
+}
+

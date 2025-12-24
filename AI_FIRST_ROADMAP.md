@@ -14,6 +14,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Fixed Intensity Bug** - "Last Workout Intensity (X days ago)" instead of misleading "Yesterday"
 - [x] **Removed AI Labels** - AI-first is default, only label fallbacks
 - [x] **Tests Reorganization** - Moved to dedicated tests.gs
+- [x] **AI Power Profile Analysis** - Replaced hardcoded benchmarks with goal-aware AI analysis
 
 ---
 
@@ -23,7 +24,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
-| 1 | **Power Profile Analysis** | Hardcoded benchmarks (sprint=200% FTP, VO2max=120% FTP, etc.) in `power.gs:604-609` | AI interprets power curve considering event type, training history, individual physiology | Pending |
+| 1 | **Power Profile Analysis** | Hardcoded benchmarks (sprint=200% FTP, VO2max=120% FTP, etc.) in `power.gs:604-609` | AI interprets power curve considering event type, training history, individual physiology | **Complete** |
 | 2 | **Training Load Advisor** | Fixed ramp rates (3-5-7-8 CTL/week) in `utils.gs:671-674` | AI recommends load based on athlete's response patterns, life stress, season context | Pending |
 | 3 | **Recovery Assessment** | Fixed thresholds (Green≥67%, Red<34%) in `constants.gs` | AI uses personal baselines, HRV trends, considers cumulative load not just daily score | Pending |
 
@@ -46,29 +47,20 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Implementation Notes
 
-### Feature 1: AI Power Profile Analysis
+### Feature 1: AI Power Profile Analysis ✅ COMPLETE
 
-**Current code** (`power.gs:604-642`):
-```javascript
-// Hardcoded benchmarks
-const benchmarks = {
-  peak5s: 2.0,    // Sprint ~200% of FTP
-  peak1min: 1.5,  // Anaerobic ~150% of FTP
-  peak5min: 1.2,  // VO2max ~120% of FTP
-  peak20min: 1.05 // ~105% of FTP
-};
+**Implementation:**
+- Added `generateAIPowerProfileAnalysis()` in `prompts.gs` - AI prompt that analyzes power curve relative to goal event
+- Modified `analyzePowerProfile()` in `power.gs` to call AI first, fall back to benchmarks if AI fails
+- Updated `main.gs` to pass `goals` from `fetchUpcomingGoals()` to analysis
+- Added `testAIPowerProfileAnalysis()` in `tests.gs`
 
-// Fixed 10% thresholds for strength/weakness
-if (ratios.peak5s > benchmarks.peak5s * 1.1) {
-  strengths.push("Sprint power (5s)");
-}
-```
-
-**AI-first approach**:
-- Pass full power curve + event type + training history to AI
-- AI identifies strengths/weaknesses relative to goal event
-- AI suggests specific workouts to address limiters
-- Consider athlete's age, experience, response to training
+**Key changes:**
+- AI receives full power curve + goal event type + event description
+- Returns context-aware strengths/weaknesses (e.g., "Strong 5-min power for climbing events")
+- Includes `eventRelevance` field explaining how profile matches goal
+- Falls back to hardcoded benchmarks if AI unavailable
+- Returns `aiEnhanced: true/false` flag for tracking
 
 ### Feature 2: AI Training Load Advisor
 
@@ -115,4 +107,4 @@ RECOVERY: {
 
 ---
 
-*Last updated: 2024-12-24*
+*Last updated: 2025-12-24*

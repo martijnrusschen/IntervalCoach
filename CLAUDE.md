@@ -52,6 +52,7 @@ The codebase is organized into modular files by domain:
 - `testAdaptiveTraining()` - Test RPE/Feel feedback analysis
 - `testTrainingLoadAdvisor()` - Test training load recommendations
 - `testWorkoutSelection()` - Test workout type selection logic
+- `testAIPowerProfileAnalysis()` - Test AI power profile analysis with goal context
 - `testCoachingNote()` - Test AI coaching note generation
 - `testRestDayEmail()` - Test rest day email functionality
 - `testTrainingProposal()` - Test weekly training proposal
