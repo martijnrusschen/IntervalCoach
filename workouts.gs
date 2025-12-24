@@ -1192,25 +1192,25 @@ function createWeeklyPlanEvents(weeklyPlan) {
     let existingEventId = null;
 
     if (existingCheck.success && existingCheck.data?.length > 0) {
-      // Look for existing weekly plan placeholder or simple Ride/Run to update
-      const existingPlaceholder = existingCheck.data.find(e =>
-        e.description?.includes('[Weekly Plan]') ||
-        (e.category === 'WORKOUT' && ['Ride', 'Run'].includes(e.name?.split(' - ')[0]))
-      );
+      // Check for ANY existing workout on this day
+      const existingWorkout = existingCheck.data.find(e => e.category === 'WORKOUT');
 
-      if (existingPlaceholder) {
-        existingEventId = existingPlaceholder.id;
-        Logger.log(` -> ${day.date} (${day.dayName}): Updating existing placeholder`);
-      } else {
-        // Check if there's a real workout (not a placeholder)
-        const hasRealWorkout = existingCheck.data.some(e =>
-          e.category === 'WORKOUT' &&
-          e.name &&
-          !['Ride', 'Run'].includes(e.name) &&
-          !e.description?.includes('[Weekly Plan]')
-        );
-        if (hasRealWorkout) {
-          Logger.log(` -> ${day.date} (${day.dayName}): Real workout exists - skipping`);
+      if (existingWorkout) {
+        const workoutName = existingWorkout.name || '';
+        const isWeeklyPlanPlaceholder = existingWorkout.description?.includes('[Weekly Plan]');
+        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workoutName);
+
+        if (isWeeklyPlanPlaceholder) {
+          // Previous Weekly Plan - update it
+          existingEventId = existingWorkout.id;
+          Logger.log(` -> ${day.date} (${day.dayName}): Updating previous weekly plan`);
+        } else if (isSimplePlaceholder) {
+          // Simple "Ride" or "Run - 60min" placeholder - update it
+          existingEventId = existingWorkout.id;
+          Logger.log(` -> ${day.date} (${day.dayName}): Updating simple placeholder`);
+        } else {
+          // User has a specific workout (like "Run_Easy - 40min") - skip
+          Logger.log(` -> ${day.date} (${day.dayName}): User workout exists (${workoutName}) - skipping`);
           results.skipped++;
           continue;
         }
@@ -1231,7 +1231,7 @@ function createWeeklyPlanEvents(weeklyPlan) {
       moving_time: day.duration * 60
     };
 
-    // Use PUT to update if event exists, POST to create new
+    // Use PUT to update if placeholder exists, POST to create new
     const url = existingEventId
       ? "https://intervals.icu/api/v1/athlete/" + athleteId + "/events/" + existingEventId
       : "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
