@@ -635,11 +635,12 @@ ${cRacesStr ? '- **C-Races (Stepping Stones):** ' + cRacesStr : ''}
     const rw = context.recentWorkouts;
     const ridesStr = rw.rides && rw.rides.length > 0 ? rw.rides.join(', ') : 'None';
     const runsStr = rw.runs && rw.runs.length > 0 ? rw.runs.join(', ') : 'None';
+    const daysAgo = rw.daysSinceLastWorkout != null ? rw.daysSinceLastWorkout : 'Unknown';
     workoutPatternContext = `
 **Recent Workout Patterns (7 days):**
 - Rides: ${ridesStr}
 - Runs: ${runsStr}
-- Yesterday's Intensity: ${rw.lastIntensity || 'Unknown'}/5
+- Last Workout Intensity: ${rw.lastIntensity || 'Unknown'}/5 (${daysAgo} days ago)
 `;
   }
 

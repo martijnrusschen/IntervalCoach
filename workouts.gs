@@ -34,8 +34,9 @@ function findIntervalCoachPlaceholder(dateStr) {
   }
 
   // Get all workout type names for matching existing workouts
-  const rideWorkoutTypes = Object.keys(WORKOUT_TYPES.ride).map(t => t.toLowerCase());
-  const runWorkoutTypes = Object.keys(WORKOUT_TYPES.run).map(t => t.toLowerCase());
+  // Normalize by removing underscores for flexible matching
+  const rideWorkoutTypes = Object.keys(WORKOUT_TYPES.ride).map(t => t.toLowerCase().replace(/_/g, ''));
+  const runWorkoutTypes = Object.keys(WORKOUT_TYPES.run).map(t => t.toLowerCase().replace(/_/g, ''));
 
   // First priority: Find placeholder event starting with "Ride", "Run", or "Hardlopen"
   const placeholder = events.find(function(e) {
@@ -64,21 +65,25 @@ function findIntervalCoachPlaceholder(dateStr) {
   // Second priority: Find existing generated workout that can be replaced
   const existingWorkout = events.find(function(e) {
     if (!e.name) return false;
-    const nameLower = e.name.toLowerCase();
+    // Normalize name by removing underscores for flexible matching
+    const nameNormalized = e.name.toLowerCase().replace(/_/g, '');
 
     // Check if it's a workout type we generated (ride or run)
-    const isRideType = rideWorkoutTypes.some(t => nameLower.includes(t));
-    const isRunType = runWorkoutTypes.some(t => nameLower.includes(t));
+    const isRideType = rideWorkoutTypes.some(t => nameNormalized.includes(t));
+    const isRunType = runWorkoutTypes.some(t => nameNormalized.includes(t));
 
     // Also check for workouts with .zwo files (category WORKOUT)
     const isZwoWorkout = e.category === 'WORKOUT' && e.filename && e.filename.endsWith('.zwo');
 
-    return isRideType || isRunType || isZwoWorkout;
+    // Also check for IntervalCoach prefix
+    const hasIntervalCoachPrefix = nameNormalized.includes('intervalcoach');
+
+    return isRideType || isRunType || isZwoWorkout || hasIntervalCoachPrefix;
   });
 
   if (existingWorkout) {
-    const nameLower = existingWorkout.name.toLowerCase();
-    const isRunType = runWorkoutTypes.some(t => nameLower.includes(t));
+    const nameNormalized = existingWorkout.name.toLowerCase().replace(/_/g, '');
+    const isRunType = runWorkoutTypes.some(t => nameNormalized.includes(t));
     const activityType = isRunType ? "Run" : "Ride";
 
     // Try to extract duration from the existing workout or use default
@@ -408,7 +413,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 
 **RECENT TRAINING (for variety):**
 - Recent ${context.activityType}s: ${recentStr}
-- Yesterday's Intensity: ${context.lastIntensity || 0}/5
+- Last Workout Intensity: ${context.lastIntensity || 0}/5 (${context.daysSinceLastWorkout || 0} days ago)
 
 **DURATION WINDOW:** ${context.duration?.min || 45}-${context.duration?.max || 60} minutes
 
@@ -423,9 +428,10 @@ ${workoutOptions}
 5. If TSB < -20: Max intensity 2 (very fatigued)
 6. If TSB < -10: Max intensity 3 (fatigued)
 7. If recovery is Yellow (<50%): Max intensity 3
-8. If yesterday was intensity 4-5: Today should be 1-3
-9. Prioritize variety - avoid repeating recent workout types
-10. Match workout to training phase
+8. If last workout was intensity 4-5 AND was yesterday/2 days ago: Today should be 1-3
+9. If 4+ days since last workout: Athlete is fresh, any intensity appropriate
+10. Prioritize variety - avoid repeating recent workout types
+11. Match workout to training phase
 
 **YOUR TASK:**
 Recommend ONE specific workout type from the list above. Consider all factors holistically.
@@ -525,13 +531,14 @@ function selectWorkoutTypes(params) {
         eventYesterday: eventYesterday,
         recentWorkouts: recentWorkouts.types,
         lastIntensity: recentWorkouts.lastIntensity,
+        daysSinceLastWorkout: params.daysSinceLastWorkout,
         duration: params.duration
       };
 
       const aiDecision = generateAIWorkoutDecision(aiContext);
 
       if (aiDecision && aiDecision.workoutType) {
-        Logger.log("AI Workout Decision: " + aiDecision.workoutType + " (intensity " + aiDecision.intensity + "/5)");
+        Logger.log("Workout Decision: " + aiDecision.workoutType + " (intensity " + aiDecision.intensity + "/5)");
         Logger.log("  Reasoning: " + aiDecision.reasoning);
         if (aiDecision.varietyNote) {
           Logger.log("  Variety: " + aiDecision.varietyNote);
@@ -539,19 +546,19 @@ function selectWorkoutTypes(params) {
 
         return {
           types: [aiDecision.workoutType],
-          reason: "AI: " + aiDecision.reasoning,
+          reason: aiDecision.reasoning,
           maxIntensity: aiDecision.intensity,
           isRestDay: !aiDecision.shouldTrain,
           aiEnhanced: true
         };
       }
     } catch (e) {
-      Logger.log("AI workout decision failed, using rule-based fallback: " + e.toString());
+      Logger.log("Workout decision failed, using fallback: " + e.toString());
     }
   }
 
   // ===== FALLBACK: RULE-BASED SELECTION =====
-  Logger.log("Using rule-based workout selection");
+  Logger.log("Using fallback workout selection");
 
   // Determine reasons for selection
   const reasons = [];
@@ -791,11 +798,13 @@ function hasEventInDays(days) {
 }
 
 /**
- * Get yesterday's workout intensity (1-5 scale)
+ * Get most recent workout's intensity (1-5 scale)
+ * Note: This returns intensity regardless of when workout occurred
+ * Use daysSinceLastWorkout from adaptiveContext for timing info
  * @param {object} recentTypes - Recent workout types data
- * @returns {number} Intensity of yesterday's workout (0 if none)
+ * @returns {number} Intensity of last workout (0 if none)
  */
-function getYesterdayIntensity(recentTypes) {
+function getLastWorkoutIntensity(recentTypes) {
   // Check the most recent workout
   const allRecent = recentTypes.all || [];
   if (allRecent.length === 0) return 0;

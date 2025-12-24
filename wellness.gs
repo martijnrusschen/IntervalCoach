@@ -224,7 +224,7 @@ function generateAIRestDayAssessment(context) {
     trainingContext = `
 - Recent Rides (7d): ${rides.length > 0 ? rides.join(', ') : 'None'}
 - Recent Runs (7d): ${runs.length > 0 ? runs.join(', ') : 'None'}
-- Yesterday's Intensity: ${context.lastIntensity || 0}/5
+- Last Workout Intensity: ${context.lastIntensity || 0}/5 (${context.daysSinceLastWorkout || 0} days ago)
 - Consecutive Training Days: ${context.consecutiveDays || 'Unknown'}`;
   }
 
