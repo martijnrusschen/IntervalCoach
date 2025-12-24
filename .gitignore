@@ -1,2 +1,6 @@
 config.gs
 .DS_Store
+
+# clasp (Apps Script CLI)
+.clasp.json
+.clasprc.json
