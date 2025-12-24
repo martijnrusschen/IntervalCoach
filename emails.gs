@@ -50,7 +50,7 @@ ${coachNote}
   body += `
 ===================================
 ${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit})
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
 ${t.focus}: ${phaseInfo.focus}
 ===================================
 ${t.goal_section}
@@ -153,7 +153,7 @@ function sendRestDayEmail(wellness, phaseInfo, aiAssessment) {
   // Phase info
   body += `===================================
 ${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit})
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
 ===================================\n`;
 
   // Recovery section
@@ -352,7 +352,7 @@ ${t.load_advice}: ${loadAdvice.loadAdvice}`;
 ${t.phase_title}: ${phaseInfo.phaseName}
 -----------------------------------
 ${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
-${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
 ${t.focus}: ${phaseInfo.focus}
 `;
   }
@@ -727,7 +727,7 @@ ${t.monthly_weeks_trained}: ${currentMonth.consistency.weeksWithTraining}/${curr
 ${t.phase_title}: ${phaseInfo.phaseName}
 -----------------------------------
 ${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
-${t.weeks_to_goal}: ${phaseInfo.weeksOut}${t.weeks_unit}
+${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
 `;
   }
 
