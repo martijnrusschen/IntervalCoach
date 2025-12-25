@@ -25,68 +25,28 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Backlog
 
-### High Impact
+All pending features, ordered by impact. Pick from the top for maximum value.
 
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 1 | **Power Profile Analysis** | Hardcoded benchmarks (sprint=200% FTP, VO2max=120% FTP, etc.) in `power.gs:604-609` | AI interprets power curve considering event type, training history, individual physiology | **Complete** |
-| 2 | **Training Load Advisor** | Fixed ramp rates (3-5-7-8 CTL/week) in `utils.gs:671-674` | AI recommends load based on athlete's response patterns, life stress, season context | **Complete** |
-| 3 | **Recovery Assessment** | Fixed thresholds (Green≥67%, Red<34%) in `constants.gs` | AI uses personal baselines, HRV trends, considers cumulative load not just daily score | **Complete** |
-
-### Medium Impact
-
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 4 | **Weekly Email Summary** | Template with fixed sections in `emails.gs` | AI writes personalized narrative summarizing week and previewing next | **Complete** |
-| 5 | **Training Gap Analysis** | Rule-based (2-3 days = stale, 4+ = detraining) in `utils.gs:259` | AI considers context (planned rest vs unplanned, recovery scores, phase) | **Complete** |
-| 6 | **eFTP Trajectory Analysis** | Simple current vs target comparison | AI predicts if athlete is on track, suggests adjustments to hit peak | **Complete** |
-
-### Lower Impact (Easy Wins)
-
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 7 | **Email Subject Lines** | Fixed "[GREEN] Workout" format in `emails.gs:23-32` | AI writes engaging subject (e.g., "Build day: Sweet Spot intervals") | **Complete** |
-| 8 | **Workout Variety Check** | Count-based (avoid repeats) | AI considers training effect and stimulus, not just type names | **Complete** |
-
----
-
-## Phase 2: Advanced AI Features
-
-### High Impact
-
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 9 | **Event-Specific Training** | Simple pre-race intensity rules in `workouts.gs` | AI analyzes race profile (distance, terrain, demands) → custom training emphasis and peaking strategy | **Complete** |
-| 10 | **Cumulative Fatigue Prediction** | 14-day averaging in `utils.gs:489-591` | AI models fatigue trajectory, distinguishes "good" vs "bad" fatigue, predicts recovery timeline | **Complete** |
-| 11 | **Race Outcome Prediction** | None | AI predicts race performance/placement given current fitness, compares to goal time | Pending |
-| 12 | **Closed-Loop Weekly Adaptation** | Static AI weekly plan | AI learns from actual vs planned execution, adapts future plans based on outcomes | **Complete** |
-
-### Medium Impact
-
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 13 | **Personalized Zone Boundaries** | Fixed offsets from CS/FTP in `prompts.gs:245-260` | AI adjusts zones based on athlete's lactate patterns, HRV response, time-at-power distributions | Pending |
-| 14 | **Cross-Sport Zone Equivalency** | Separate cycling/running zones | AI calculates equivalent efforts across sports (cycling FTP ↔ running threshold) | Pending |
-
----
-
-## Phase 3: Platform Expansion
-
-| # | Feature | Current State | AI-First Opportunity | Status |
-|---|---------|---------------|---------------------|--------|
-| 15 | **On-Demand Training App** | Email/cron-based generation only | Web app or iOS app for real-time workout generation with instant AI coaching | Pending |
-
----
-
-## Phase 4: Code Quality & Infrastructure
-
-| # | Feature | Current State | Improvement | Status |
-|---|---------|---------------|-------------|--------|
-| 16 | **Code Cleanup** | Organic growth over time | Refactor, remove dead code, improve structure | Pending |
-| 17 | **Easier Setup** | Manual config.gs creation | Setup wizard, better documentation, env validation | Pending |
-| 18 | **Remove Repetitive Code** | Some duplication across files | DRY refactoring, shared utilities | Pending |
-| 19 | **Whoop API Fallback** | Intervals.icu wellness only | Add Whoop API as alternative/supplementary data source | Pending |
-| 20 | **Post-Workout AI Analysis** | Basic RPE/Feel collection | Hourly check for completed workouts → AI analyzes actual vs predicted difficulty → sends insights email → feeds into next day's adaptive context | **Complete** |
+| Priority | Feature | Description | Source |
+|----------|---------|-------------|--------|
+| 🔴 **HIGH** | **Workout Impact Preview** | Show how today's ride affects TSB/CTL over next 2 weeks | TrainerRoad AI |
+| 🔴 **HIGH** | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | TrainerRoad |
+| 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
+| 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
+| 🟡 **MEDIUM** | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | TrainerRoad AI |
+| 🟡 **MEDIUM** | **Zone Progression Levels** | Track fitness per power zone (not just overall CTL/FTP) | TrainerRoad |
+| 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
+| 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
+| 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
+| 🟡 **MEDIUM** | **Personalized Zone Boundaries** | AI adjusts zones based on lactate patterns, HRV response, time-at-power | AI-First |
+| 🟡 **MEDIUM** | **Cross-Sport Zone Equivalency** | AI calculates equivalent efforts: cycling FTP ↔ running threshold | AI-First |
+| 🟡 **MEDIUM** | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
+| 🟡 **MEDIUM** | **Whoop API Fallback** | Add Whoop API as alternative/supplementary data source | Infrastructure |
+| 🟢 **LOW** | **Training Outcome Simulation** | Simulate multiple workout options before deciding | TrainerRoad AI |
+| 🟢 **LOW** | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | TrainerRoad |
+| 🟢 **LOW** | **Multi-year Plan Builder** | Long-term periodization (2+ years) | TrainerRoad |
+| 🟢 **LOW** | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
+| 🟢 **LOW** | **Remove Repetitive Code** | DRY refactoring, shared utilities | Infrastructure |
 
 ---
 
@@ -147,21 +107,6 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 | Cross-platform apps | ✓ iOS/Android/Mac/Win/Garmin | ✗ Apps Script only | **Phase 3: App** |
 | Outside workouts | ✓ GPS-guided | ✓ Generates for Zwift/.zwo | Partial |
 | Zwift Integration (2025) | ✓ All Zwift activities analyzed | ✓ Native Intervals.icu sync | Similar |
-
-### Features to Add (from competitor analysis)
-
-| # | Feature | Source | Priority |
-|---|---------|--------|----------|
-| 21 | **TrainNow-style Quick Picker** | TrainerRoad | High - on-demand workout selection |
-| 22 | **Zone Progression Levels** | TrainerRoad | Medium - track fitness per power zone |
-| 23 | **Workout Template Library** | JOIN | Medium - curated workout database |
-| 24 | **Workout Difficulty Ratings** | TrainerRoad | Low - granular difficulty levels |
-| 25 | **Visual Analytics Dashboard** | Both | Medium - charts, trends, progress |
-| 26 | **Multi-year Plan Builder** | TrainerRoad | Low - long-term periodization |
-| 27 | **Workout Impact Preview** | TrainerRoad AI | High - show how today's ride affects next 2 weeks |
-| 28 | **Enhanced Workout Feel Prediction** | TrainerRoad AI | Medium - predict how workout will feel beyond 1-5 |
-| 29 | **Multi-Week Forward View** | TrainerRoad AI | Medium - extend weekly plan to 2-4 week visibility |
-| 30 | **Training Outcome Simulation** | TrainerRoad AI | Low - simulate multiple workout options before deciding |
 
 ---
 
@@ -359,4 +304,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-25 (Post-Workout AI Analysis implemented)*
+*Last updated: 2025-12-25 (Unified backlog with TrainerRoad AI competitor analysis)*
