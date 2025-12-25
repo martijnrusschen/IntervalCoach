@@ -1673,3 +1673,91 @@ function testPostWorkoutAnalysis() {
   Logger.log("2. Set up hourly trigger: ScriptApp.newTrigger('checkForCompletedWorkouts').timeBased().everyHours(1).create()");
   Logger.log("3. Complete a workout and wait 1 hour to test automatic analysis");
 }
+
+// =========================================================
+// TODAY'S ACTIVITIES TEST
+// =========================================================
+
+/**
+ * Test function to check today's activities from Intervals.icu
+ * Useful for verifying workouts were recorded
+ */
+function testTodaysActivities() {
+  Logger.log("=== TODAY'S ACTIVITIES ===\n");
+  requireValidConfig();
+
+  const today = new Date();
+  const todayStr = formatDateISO(today);
+
+  // Fetch activities for today only
+  const endpoint = `/athlete/0/activities?oldest=${todayStr}&newest=${todayStr}`;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success) {
+    Logger.log("ERROR: Failed to fetch activities - " + result.error);
+    return;
+  }
+
+  const activities = result.data;
+
+  if (!activities || activities.length === 0) {
+    Logger.log("No activities found for today (" + todayStr + ")");
+    Logger.log("\nTip: Activities may take a few minutes to sync from your device.");
+    return;
+  }
+
+  Logger.log("Found " + activities.length + " activity(ies) for " + todayStr + ":\n");
+
+  activities.forEach(function(a, i) {
+    Logger.log("--- Activity " + (i + 1) + " ---");
+
+    // Check for Strava API restriction
+    if (a._note && a._note.includes("not available via the API")) {
+      Logger.log("Source: " + a.source);
+      Logger.log("Start: " + a.start_date_local);
+      Logger.log("Note: " + a._note);
+      Logger.log("\nThis activity's details are restricted by " + a.source + "'s API policy.");
+      Logger.log("View full details at: https://intervals.icu/activities/" + a.id);
+    } else {
+      Logger.log("Name: " + a.name);
+      Logger.log("Type: " + a.type);
+      Logger.log("Start: " + a.start_date_local);
+      Logger.log("Duration: " + Math.round((a.moving_time || 0) / 60) + " min");
+      Logger.log("Distance: " + ((a.distance || 0) / 1000).toFixed(2) + " km");
+      Logger.log("TSS: " + (a.icu_training_load || 'N/A'));
+
+      if (a.type === 'Run') {
+        // Try multiple pace sources: direct field, or calculate from distance/time
+        let paceStr = 'N/A';
+        if (a.average_speed) {
+          paceStr = formatPace(a.average_speed);
+        } else if (a.icu_average_speed) {
+          paceStr = formatPace(a.icu_average_speed);
+        } else if (a.distance > 0 && a.moving_time > 0) {
+          // Calculate pace from distance (m) and time (s)
+          const speedMs = a.distance / a.moving_time;
+          paceStr = formatPace(speedMs) + " (calculated)";
+        }
+        Logger.log("Avg Pace: " + paceStr);
+        Logger.log("Avg HR: " + (a.average_heartrate || a.icu_average_hr || 'N/A') + " bpm");
+      } else if (a.type === 'Ride' || a.type === 'VirtualRide') {
+        Logger.log("Avg Power: " + (a.icu_average_watts || 'N/A') + "W");
+        Logger.log("NP: " + (a.icu_weighted_avg_watts || 'N/A') + "W");
+      }
+    }
+    Logger.log("");
+  });
+
+  Logger.log("=== END ===");
+}
+
+/**
+ * Helper to format pace from m/s to min:sec/km
+ */
+function formatPace(metersPerSecond) {
+  if (!metersPerSecond || metersPerSecond <= 0) return 'N/A';
+  const secsPerKm = 1000 / metersPerSecond;
+  const mins = Math.floor(secsPerKm / 60);
+  const secs = Math.round(secsPerKm % 60);
+  return mins + ":" + (secs < 10 ? "0" : "") + secs + "/km";
+}
