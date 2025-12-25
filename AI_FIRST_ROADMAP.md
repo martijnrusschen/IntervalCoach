@@ -86,7 +86,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | 17 | **Easier Setup** | Manual config.gs creation | Setup wizard, better documentation, env validation | Pending |
 | 18 | **Remove Repetitive Code** | Some duplication across files | DRY refactoring, shared utilities | Pending |
 | 19 | **Whoop API Fallback** | Intervals.icu wellness only | Add Whoop API as alternative/supplementary data source | Pending |
-| 20 | **AI Workout Feedback Loop** | Basic RPE/Feel collection | AI learns from workout ratings to refine future suggestions | Pending |
+| 20 | **Post-Workout AI Analysis** | Basic RPE/Feel collection | Hourly check for completed workouts → AI analyzes actual vs predicted difficulty → sends insights email → feeds into next day's adaptive context | **Complete** |
 
 ---
 
@@ -278,6 +278,41 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - Returns specific recommendations: continue_normal, reduce_intensity, reduce_volume, recovery_week, complete_rest
 - Includes physiological insight explaining what's happening and risk level
 
+### Feature 20: Post-Workout AI Analysis ✅ COMPLETE
+
+**Implementation:**
+- Added `checkForCompletedWorkouts()` in `main.gs` - Hourly check with smart caching (early exit if no new activities)
+- Added `analyzeCompletedWorkout()` in `main.gs` - Orchestrates analysis flow for each completed workout
+- Added `generatePostWorkoutAnalysis()` in `prompts.gs` - AI prompt analyzing effectiveness, difficulty, recovery impact
+- Added `sendPostWorkoutAnalysisEmail()` in `emails.gs` - Comprehensive email with analysis insights
+- Added `storeWorkoutAnalysis()` in `utils.gs` - Stores analysis history for adaptive learning
+- Added `getWorkoutAnalysisHistory()` in `utils.gs` - Retrieves stored analyses for adaptive context
+- Added `getLastWorkoutAnalysis()` in `utils.gs` - Quick access to most recent analysis
+- Added `testPostWorkoutAnalysis()` in `tests.gs` - Complete test workflow
+
+**Key changes:**
+- Hourly trigger checks for completed workouts since last analysis timestamp
+- Smart caching via PropertiesService.getScriptProperties() avoids redundant API calls
+- Early exit if no new activities (2-5 seconds, minimal quota usage)
+- Filters out placeholders (requires TSS > 0 and duration > 5 minutes)
+- AI analyzes: effectiveness (1-10), difficulty match, workout stimulus quality, recovery impact
+- Returns structured JSON with performance highlights, key insights, training adjustments
+- FTP calibration recommendations (increase_5w, decrease_5w, retest_recommended)
+- Analysis stored in script properties (rolling 7-day window, max 14 records)
+- Email sent with congratulatory message, detailed metrics, and actionable recommendations
+- Cost: ~$0.05-0.10/month in Gemini API costs (only runs when real workouts completed)
+
+**Trigger Setup:**
+- Function: `checkForCompletedWorkouts`
+- Type: Hour timer (every 1 hour)
+- Quota usage: <0.25% of daily limit (20k URL fetch calls/day)
+
+**Future Enhancements:**
+- Integrate analysis history into `getAdaptiveTrainingContext()` for next-day workout generation
+- Use difficulty match trends to calibrate AI's workout intensity predictions
+- Feed FTP calibration recommendations into power profile analysis
+- Compare predicted vs actual recovery time to improve future estimates
+
 ---
 
 ## How to Use This Document
@@ -290,4 +325,4 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ---
 
-*Last updated: 2025-12-25 (Competitor analysis added)*
+*Last updated: 2025-12-25 (Post-Workout AI Analysis implemented)*

@@ -90,17 +90,16 @@ function testAdaptiveTraining() {
     Logger.log("Average RPE: " + feedback.summary.avgRpe.toFixed(1) + "/10");
   }
   if (feedback.summary.avgFeel != null) {
-    const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
-    Logger.log("Average Feel: " + feedback.summary.avgFeel.toFixed(1) + "/5 (" + (feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A') + ")");
+    Logger.log("Average Feel: " + feedback.summary.avgFeel.toFixed(1) + " (" + getFeelLabel(feedback.summary.avgFeel) + ")");
   }
 
   Logger.log("\n--- Feel Distribution ---");
   const fd = feedback.summary.feelDistribution;
-  Logger.log("Great (5): " + fd.great);
-  Logger.log("Good (4): " + fd.good);
-  Logger.log("Okay (3): " + fd.okay);
-  Logger.log("Poor (2): " + fd.poor);
-  Logger.log("Bad (1): " + fd.bad);
+  Logger.log("Strong (1): " + fd.great);
+  Logger.log("Good (2): " + fd.good);
+  Logger.log("Normal (3): " + fd.okay);
+  Logger.log("Poor (4): " + fd.poor);
+  Logger.log("Weak (5): " + fd.bad);
 
   Logger.log("\n--- RPE Distribution ---");
   const rd = feedback.summary.rpeDistribution;
@@ -1515,4 +1514,162 @@ function testAICumulativeFatiguePrediction() {
   }
 
   Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test post-workout analysis feature
+ * Tests the hourly check, AI analysis, and email sending
+ */
+function testPostWorkoutAnalysis() {
+  Logger.log("=== TESTING POST-WORKOUT ANALYSIS ===\n");
+
+  requireValidConfig();
+
+  // Test 1: Check for completed workouts (should find recent activities)
+  Logger.log("--- Test 1: Check for Completed Workouts ---");
+  try {
+    checkForCompletedWorkouts();
+    Logger.log("✓ checkForCompletedWorkouts() executed successfully");
+  } catch (e) {
+    Logger.log("✗ Error in checkForCompletedWorkouts(): " + e.toString());
+  }
+
+  // Test 2: Fetch a recent activity and analyze it manually
+  Logger.log("\n--- Test 2: Manual Analysis of Recent Activity ---");
+
+  const today = new Date();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 7);
+
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(sevenDaysAgo)}&newest=${formatDateISO(today)}`;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success) {
+    Logger.log("✗ Error fetching activities: " + result.error);
+    return;
+  }
+
+  const activities = result.data;
+  if (!activities || activities.length === 0) {
+    Logger.log("⚠ No activities found in last 7 days - cannot test analysis");
+    Logger.log("Tip: Complete a workout and try again in an hour");
+    return;
+  }
+
+  // Find first real workout (with TSS > 0)
+  const realWorkout = activities.find(a => a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300);
+
+  if (!realWorkout) {
+    Logger.log("⚠ No real workouts found (only placeholders) - cannot test analysis");
+    return;
+  }
+
+  Logger.log("Testing with activity: " + realWorkout.name);
+  Logger.log("  Type: " + realWorkout.type);
+  Logger.log("  Date: " + realWorkout.start_date_local);
+  Logger.log("  TSS: " + realWorkout.icu_training_load);
+  Logger.log("  Duration: " + Math.round(realWorkout.moving_time / 60) + " min");
+
+  // Fetch context data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitness = fetchFitnessMetrics();
+
+  const isRun = realWorkout.type === "Run";
+  let powerProfile = { available: false };
+  let runningData = { available: false };
+
+  if (isRun) {
+    runningData = fetchRunningData();
+  } else {
+    const powerCurve = fetchPowerCurve();
+    const goals = fetchUpcomingGoals();
+    powerProfile = analyzePowerProfile(powerCurve, goals);
+  }
+
+  // Test 3: AI Analysis
+  Logger.log("\n--- Test 3: AI Analysis ---");
+  const analysis = generatePostWorkoutAnalysis(realWorkout, wellness, fitness, powerProfile, runningData);
+
+  if (!analysis || !analysis.success) {
+    Logger.log("✗ AI analysis failed: " + (analysis?.error || "Unknown error"));
+    return;
+  }
+
+  Logger.log("✓ AI analysis successful");
+  Logger.log("\n[Analysis Results]");
+  Logger.log("  Effectiveness: " + analysis.effectiveness + "/10");
+  Logger.log("  Effectiveness Reason: " + analysis.effectivenessReason);
+  Logger.log("  Difficulty Match: " + analysis.difficultyMatch);
+  Logger.log("  Difficulty Reason: " + analysis.difficultyReason);
+  Logger.log("  Workout Stimulus: " + analysis.workoutStimulus + " (" + analysis.stimulusQuality + ")");
+
+  if (analysis.recoveryImpact) {
+    Logger.log("\n[Recovery Impact]");
+    Logger.log("  Severity: " + analysis.recoveryImpact.severity);
+    Logger.log("  Estimated Recovery: " + analysis.recoveryImpact.estimatedRecoveryHours + " hours");
+    Logger.log("  Next Workout: " + analysis.recoveryImpact.nextWorkoutAdjustment);
+  }
+
+  Logger.log("\n[Key Insight]");
+  Logger.log("  " + analysis.keyInsight);
+
+  if (analysis.performanceHighlights && analysis.performanceHighlights.length > 0) {
+    Logger.log("\n[Performance Highlights]");
+    analysis.performanceHighlights.forEach(h => Logger.log("  • " + h));
+  }
+
+  if (analysis.trainingAdjustments) {
+    Logger.log("\n[Training Adjustments]");
+    Logger.log("  Needed: " + analysis.trainingAdjustments.needed);
+    if (analysis.trainingAdjustments.needed) {
+      Logger.log("  FTP Calibration: " + analysis.trainingAdjustments.ftpCalibration);
+      Logger.log("  Future Intensity: " + analysis.trainingAdjustments.futureIntensity);
+      Logger.log("  Reasoning: " + analysis.trainingAdjustments.reasoning);
+    }
+  }
+
+  if (analysis.congratsMessage) {
+    Logger.log("\n[Congrats Message]");
+    Logger.log("  " + analysis.congratsMessage);
+  }
+
+  Logger.log("\nConfidence: " + analysis.confidence);
+
+  // Test 4: Storage
+  Logger.log("\n--- Test 4: Storage ---");
+  try {
+    storeWorkoutAnalysis(realWorkout, analysis);
+    Logger.log("✓ Analysis stored successfully");
+
+    // Retrieve and verify
+    const lastAnalysis = getLastWorkoutAnalysis();
+    if (lastAnalysis && lastAnalysis.activityName === realWorkout.name) {
+      Logger.log("✓ Retrieved stored analysis: " + lastAnalysis.activityName);
+    } else {
+      Logger.log("✗ Failed to retrieve stored analysis");
+    }
+
+    const history = getWorkoutAnalysisHistory(7);
+    Logger.log("✓ Analysis history: " + history.length + " records");
+  } catch (e) {
+    Logger.log("✗ Error storing analysis: " + e.toString());
+  }
+
+  // Test 5: Email Sending
+  Logger.log("\n--- Test 5: Email Sending ---");
+  Logger.log("Sending post-workout analysis email...");
+
+  try {
+    sendPostWorkoutAnalysisEmail(realWorkout, analysis, wellness, fitness, powerProfile, runningData);
+    Logger.log("✓ Email sent successfully to " + USER_SETTINGS.EMAIL_TO);
+  } catch (e) {
+    Logger.log("✗ Error sending email: " + e.toString());
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+  Logger.log("\nNext steps:");
+  Logger.log("1. Check your email for the post-workout analysis");
+  Logger.log("2. Set up hourly trigger: ScriptApp.newTrigger('checkForCompletedWorkouts').timeBased().everyHours(1).create()");
+  Logger.log("3. Complete a workout and wait 1 hour to test automatic analysis");
 }

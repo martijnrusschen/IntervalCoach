@@ -18,6 +18,35 @@ function formatDateISO(date) {
 }
 
 /**
+ * Convert Intervals.icu feel value to label
+ * Intervals.icu scale: 1=Strong (best), 2=Good, 3=Normal, 4=Poor, 5=Weak (worst)
+ * @param {number} feelValue - Feel value from Intervals.icu (1-5)
+ * @returns {string} Human readable label
+ */
+function getFeelLabel(feelValue) {
+  const feelLabels = { 1: 'Strong', 2: 'Good', 3: 'Normal', 4: 'Poor', 5: 'Weak' };
+  return feelLabels[Math.round(feelValue)] || String(feelValue);
+}
+
+/**
+ * Check if feel value indicates good recovery (Strong or Good)
+ * @param {number} feelValue - Feel value from Intervals.icu (1-5)
+ * @returns {boolean} True if feeling good
+ */
+function isGoodFeel(feelValue) {
+  return feelValue != null && feelValue <= 2;
+}
+
+/**
+ * Check if feel value indicates poor recovery (Poor or Weak)
+ * @param {number} feelValue - Feel value from Intervals.icu (1-5)
+ * @returns {boolean} True if feeling poor
+ */
+function isPoorFeel(feelValue) {
+  return feelValue != null && feelValue >= 4;
+}
+
+/**
  * Format duration in seconds to human readable string
  * @param {number} seconds - Duration in seconds
  * @param {boolean} showSign - Whether to show +/- sign for differences
@@ -465,11 +494,12 @@ function fetchRecentActivityFeedback(days) {
       if (a.feel != null) {
         totalFeel += a.feel;
         feelCount++;
-        if (a.feel === 1) result.summary.feelDistribution.bad++;
-        else if (a.feel === 2) result.summary.feelDistribution.poor++;
-        else if (a.feel === 3) result.summary.feelDistribution.okay++;
-        else if (a.feel === 4) result.summary.feelDistribution.good++;
-        else if (a.feel === 5) result.summary.feelDistribution.great++;
+        // Intervals.icu scale: 1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak
+        if (a.feel === 1) result.summary.feelDistribution.great++;      // Strong
+        else if (a.feel === 2) result.summary.feelDistribution.good++;  // Good
+        else if (a.feel === 3) result.summary.feelDistribution.okay++;  // Normal
+        else if (a.feel === 4) result.summary.feelDistribution.poor++;  // Poor
+        else if (a.feel === 5) result.summary.feelDistribution.bad++;   // Weak
       }
     }
   });
@@ -522,19 +552,20 @@ function analyzeTrainingAdaptation(feedback) {
   // Decision logic
   let adjustmentScore = 0;
 
-  // Factor 1: Average Feel (target: 3.5-4.0)
+  // Factor 1: Average Feel (Intervals.icu scale: 1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak)
+  // Lower is better! Target: 2.0-3.0
   if (avgFeel != null) {
-    if (avgFeel < 2.5) {
+    if (isPoorFeel(avgFeel)) {
       adjustmentScore -= 2;
-      result.reasoning.push(`Low average feel (${avgFeel.toFixed(1)}/5) suggests overreaching`);
-    } else if (avgFeel < 3.0) {
+      result.reasoning.push(`Poor average feel (${avgFeel.toFixed(1)} - ${getFeelLabel(avgFeel)}) suggests overreaching`);
+    } else if (avgFeel > 3.5) {
       adjustmentScore -= 1;
-      result.reasoning.push(`Below-target feel (${avgFeel.toFixed(1)}/5) suggests accumulated fatigue`);
-    } else if (avgFeel > 4.0) {
+      result.reasoning.push(`Below-target feel (${avgFeel.toFixed(1)} - ${getFeelLabel(avgFeel)}) suggests accumulated fatigue`);
+    } else if (isGoodFeel(avgFeel)) {
       adjustmentScore += 1;
-      result.reasoning.push(`High feel scores (${avgFeel.toFixed(1)}/5) indicate good recovery`);
+      result.reasoning.push(`Strong feel scores (${avgFeel.toFixed(1)} - ${getFeelLabel(avgFeel)}) indicate good recovery`);
     } else {
-      result.reasoning.push(`Feel scores are in target range (${avgFeel.toFixed(1)}/5)`);
+      result.reasoning.push(`Feel scores in target range (${avgFeel.toFixed(1)} - ${getFeelLabel(avgFeel)})`);
     }
   }
 
@@ -556,14 +587,15 @@ function analyzeTrainingAdaptation(feedback) {
   }
 
   // Factor 4: Recent trend (look at last 3 activities)
+  // Remember: Intervals.icu scale 1=Strong (best), 5=Weak (worst)
   const recentActivities = feedback.activities.slice(0, 3);
   const recentWithFeel = recentActivities.filter(a => a.feel != null);
   if (recentWithFeel.length >= 2) {
     const recentAvgFeel = recentWithFeel.reduce((sum, a) => sum + a.feel, 0) / recentWithFeel.length;
-    if (recentAvgFeel < 2.5) {
+    if (recentAvgFeel > 3.5) {
       adjustmentScore -= 1;
       result.reasoning.push(`Recent workouts trending negative (last ${recentWithFeel.length} avg: ${recentAvgFeel.toFixed(1)})`);
-    } else if (recentAvgFeel > 4.0 && avgFeel != null && recentAvgFeel > avgFeel) {
+    } else if (recentAvgFeel < 2.5 && avgFeel != null && recentAvgFeel < avgFeel) {
       adjustmentScore += 0.5;
       result.reasoning.push(`Recent workouts trending positive`);
     }
@@ -663,19 +695,18 @@ function generateAdaptivePromptContext(feedback, adaptation, gapData, gapAnalysi
   // RPE/Feel feedback section
   if (feedback.summary.totalWithFeedback >= 3) {
     hasContent = true;
-    const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
     context += `RECENT WORKOUT FEEDBACK (last 14 days, ${feedback.summary.totalWithFeedback} workouts with data):\n`;
 
     if (feedback.summary.avgFeel != null) {
-      context += `- Average Feel: ${feedback.summary.avgFeel.toFixed(1)}/5 (${feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A'})\n`;
+      context += `- Average Feel: ${feedback.summary.avgFeel.toFixed(1)} (${getFeelLabel(feedback.summary.avgFeel)}) - scale: 1=Strong to 5=Weak\n`;
     }
     if (feedback.summary.avgRpe != null) {
       context += `- Average RPE: ${feedback.summary.avgRpe.toFixed(1)}/10\n`;
     }
 
-    // Feel distribution
+    // Feel distribution (great=Strong, good=Good, okay=Normal, poor=Poor, bad=Weak)
     const fd = feedback.summary.feelDistribution;
-    context += `- Feel distribution: ${fd.great} Great, ${fd.good} Good, ${fd.okay} Okay, ${fd.poor} Poor, ${fd.bad} Bad\n`;
+    context += `- Feel distribution: ${fd.great} Strong, ${fd.good} Good, ${fd.okay} Normal, ${fd.poor} Poor, ${fd.bad} Weak\n`;
     context += `\n`;
   }
 
@@ -904,4 +935,134 @@ function fetchWeeklyActivities(daysBack, daysOffset) {
   });
 
   return result;
+}
+
+// =========================================================
+// POST-WORKOUT ANALYSIS STORAGE
+// =========================================================
+
+/**
+ * Store workout analysis for future adaptive context
+ * Saves analysis data to script properties for next day's workout generation
+ * @param {object} activity - Activity object
+ * @param {object} analysis - AI analysis results
+ */
+function storeWorkoutAnalysis(activity, analysis) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+
+  // Create analysis record
+  const analysisRecord = {
+    activityId: activity.id,
+    activityName: activity.name,
+    activityType: activity.type,
+    date: activity.start_date_local,
+    tss: activity.icu_training_load,
+    effectiveness: analysis.effectiveness,
+    difficultyMatch: analysis.difficultyMatch,
+    stimulus: analysis.workoutStimulus,
+    recoveryHours: analysis.recoveryImpact?.estimatedRecoveryHours || null,
+    adjustmentsNeeded: analysis.trainingAdjustments?.needed || false,
+    ftpCalibration: analysis.trainingAdjustments?.ftpCalibration || 'none',
+    keyInsight: analysis.keyInsight,
+    timestamp: new Date().toISOString()
+  };
+
+  // Store last 7 days of analyses
+  const historyKey = 'workoutAnalysisHistory';
+  let history = [];
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (historyJson) {
+      history = JSON.parse(historyJson);
+    }
+  } catch (e) {
+    Logger.log("Error parsing workout analysis history: " + e.toString());
+    history = [];
+  }
+
+  // Add new record
+  history.unshift(analysisRecord);
+
+  // Keep only last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  history = history.filter(record => {
+    const recordDate = new Date(record.date);
+    return recordDate >= sevenDaysAgo;
+  });
+
+  // Limit to 14 records max (safety)
+  if (history.length > 14) {
+    history = history.slice(0, 14);
+  }
+
+  // Store updated history
+  try {
+    scriptProperties.setProperty(historyKey, JSON.stringify(history));
+    Logger.log(`Stored analysis for ${activity.name} (${history.length} records in history)`);
+  } catch (e) {
+    Logger.log("Error storing workout analysis: " + e.toString());
+  }
+
+  // Also store "last analysis" for quick access
+  const lastAnalysisKey = 'lastWorkoutAnalysis';
+  try {
+    scriptProperties.setProperty(lastAnalysisKey, JSON.stringify(analysisRecord));
+  } catch (e) {
+    Logger.log("Error storing last workout analysis: " + e.toString());
+  }
+}
+
+/**
+ * Get recent workout analyses from storage
+ * @param {number} days - Number of days to retrieve (default 7)
+ * @returns {Array} Array of analysis records
+ */
+function getWorkoutAnalysisHistory(days) {
+  days = days || 7;
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const historyKey = 'workoutAnalysisHistory';
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (!historyJson) {
+      return [];
+    }
+
+    const history = JSON.parse(historyJson);
+
+    // Filter by days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    return history.filter(record => {
+      const recordDate = new Date(record.date);
+      return recordDate >= cutoffDate;
+    });
+  } catch (e) {
+    Logger.log("Error retrieving workout analysis history: " + e.toString());
+    return [];
+  }
+}
+
+/**
+ * Get last workout analysis
+ * @returns {object|null} Last analysis record or null
+ */
+function getLastWorkoutAnalysis() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const lastAnalysisKey = 'lastWorkoutAnalysis';
+
+  try {
+    const lastAnalysisJson = scriptProperties.getProperty(lastAnalysisKey);
+    if (!lastAnalysisJson) {
+      return null;
+    }
+
+    return JSON.parse(lastAnalysisJson);
+  } catch (e) {
+    Logger.log("Error retrieving last workout analysis: " + e.toString());
+    return null;
+  }
 }
