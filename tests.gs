@@ -1216,6 +1216,65 @@ function testAITrainingGapAnalysis() {
 }
 
 // =========================================================
+// CLOSED-LOOP WEEKLY ADAPTATION TEST
+// =========================================================
+
+/**
+ * Test closed-loop weekly plan adaptation
+ * Analyzes planned vs actual execution and generates insights
+ */
+function testClosedLoopAdaptation() {
+  Logger.log("=== CLOSED-LOOP WEEKLY ADAPTATION TEST ===\n");
+  requireValidConfig();
+
+  // Analyze last week's plan execution
+  Logger.log("--- Analyzing Last Week's Plan Execution ---");
+  const executionAnalysis = analyzeWeeklyPlanExecution(1);
+
+  Logger.log("Period: " + executionAnalysis.period.start + " to " + executionAnalysis.period.end);
+  Logger.log("\n--- Planned Sessions ---");
+  executionAnalysis.planned.forEach(p => {
+    Logger.log(`  ${p.date}: ${p.workoutType} (TSS: ${p.plannedTSS}, ${p.plannedDuration}min)`);
+  });
+
+  Logger.log("\n--- Actual Sessions ---");
+  executionAnalysis.actual.forEach(a => {
+    Logger.log(`  ${a.date}: ${a.workoutType} (TSS: ${a.actualTSS}, ${a.actualDuration}min)`);
+  });
+
+  Logger.log("\n--- Comparison ---");
+  executionAnalysis.comparison.forEach(c => {
+    const status = c.status === 'completed' ? '✓' : '✗';
+    Logger.log(`  ${status} ${c.date}: ${c.planned.workoutType} → ${c.actual?.workoutType || 'SKIPPED'}`);
+    if (c.status === 'completed') {
+      Logger.log(`     TSS variance: ${c.tssVariance >= 0 ? '+' : ''}${c.tssVariance}`);
+    }
+  });
+
+  Logger.log("\n--- Summary ---");
+  const s = executionAnalysis.summary;
+  Logger.log(`Planned: ${s.plannedSessions} | Completed: ${s.completedSessions} | Skipped: ${s.skippedSessions}`);
+  Logger.log(`Planned TSS: ${s.plannedTSS} | Actual TSS: ${s.actualTSS} | Variance: ${s.tssVariance >= 0 ? '+' : ''}${s.tssVariance}`);
+  Logger.log(`Adherence Score: ${s.adherenceScore}%`);
+
+  // Get AI adaptation insights
+  Logger.log("\n--- AI Adaptation Insights ---");
+  const insights = generateAIPlanAdaptationInsights(executionAnalysis);
+
+  if (insights) {
+    Logger.log("Patterns: " + JSON.stringify(insights.patterns));
+    Logger.log("Adaptations: " + JSON.stringify(insights.adaptations));
+    Logger.log("Assessment: " + insights.adherenceAssessment);
+    Logger.log("Recommendation: " + insights.planningRecommendation);
+    Logger.log("Confidence: " + insights.confidence);
+  } else {
+    Logger.log("No insights generated (may need more plan data)");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
 // AI EFTP TRAJECTORY ANALYSIS TEST
 // =========================================================
 
