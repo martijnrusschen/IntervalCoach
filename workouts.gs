@@ -1416,26 +1416,47 @@ function analyzeWeeklyPlanExecution(weeksBack = 1) {
     }
   };
 
-  // Fetch planned workouts (Weekly Plan events)
+  // Fetch planned workouts (WORKOUT category events or Weekly Plan placeholders)
   const eventsResult = fetchIcuApi(`/athlete/0/events?oldest=${startStr}&newest=${endStr}`);
+  Logger.log(`Found ${eventsResult.data?.length || 0} events in period`);
   if (eventsResult.success && Array.isArray(eventsResult.data)) {
     eventsResult.data.forEach(function(e) {
-      if (e.description?.includes('[Weekly Plan]')) {
-        // Parse planned workout details from description
-        const tssMatch = e.description.match(/TSS Target: ~(\d+)/);
-        const durationMatch = e.description.match(/Duration: (\d+) min/);
-        const typeMatch = e.name?.match(/^([A-Za-z_]+)/);
+      Logger.log(`  Event: "${e.name}" | category: ${e.category} | description: ${e.description?.substring(0, 50) || 'none'}`);
+
+      // Detect planned workouts: WORKOUT category or [Weekly Plan] placeholders
+      const isWorkoutEvent = e.category === 'WORKOUT';
+      const isWeeklyPlan = e.description?.includes('[Weekly Plan]');
+
+      if (isWorkoutEvent || isWeeklyPlan) {
+        // Parse workout details
+        const tssMatch = e.description?.match(/TSS Target: ~(\d+)/) || e.description?.match(/TSS[:\s]+(\d+)/i);
+        const durationMatch = e.description?.match(/Duration: (\d+) min/) || e.description?.match(/(\d+)\s*min/i);
+
+        // Extract workout type from name
+        let workoutType = 'Unknown';
+        if (e.name?.includes('IntervalCoach_')) {
+          // IntervalCoach generated: IntervalCoach_SweetSpot_20251224
+          const parts = e.name.split('_');
+          workoutType = parts[1] || 'Unknown';
+        } else if (isWeeklyPlan) {
+          const typeMatch = e.name?.match(/^([A-Za-z_]+)/);
+          workoutType = typeMatch ? typeMatch[1] : 'Unknown';
+        } else {
+          // Use event name as type
+          workoutType = e.name || 'Unknown';
+        }
 
         result.planned.push({
           date: e.start_date?.substring(0, 10) || e.start_date_local?.substring(0, 10),
           name: e.name,
-          workoutType: typeMatch ? typeMatch[1] : 'Unknown',
-          plannedTSS: tssMatch ? parseInt(tssMatch[1]) : 0,
+          workoutType: workoutType,
+          plannedTSS: tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 0),
           plannedDuration: durationMatch ? parseInt(durationMatch[1]) : 0,
-          activity: e.type || (e.name?.toLowerCase().includes('run') ? 'Run' : 'Ride')
+          activity: e.type || (e.name?.toLowerCase().includes('run') ? 'Run' : 'Ride'),
+          source: isWeeklyPlan ? 'weekly_plan' : 'calendar'
         });
         result.summary.plannedSessions++;
-        result.summary.plannedTSS += tssMatch ? parseInt(tssMatch[1]) : 0;
+        result.summary.plannedTSS += tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 0);
       }
     });
   }
