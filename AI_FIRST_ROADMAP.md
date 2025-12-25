@@ -57,7 +57,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
 | 9 | **Event-Specific Training** | Simple pre-race intensity rules in `workouts.gs` | AI analyzes race profile (distance, terrain, demands) → custom training emphasis and peaking strategy | **Complete** |
-| 10 | **Cumulative Fatigue Prediction** | 14-day averaging in `utils.gs:489-591` | AI models fatigue trajectory, distinguishes "good" vs "bad" fatigue, predicts recovery timeline | Pending |
+| 10 | **Cumulative Fatigue Prediction** | 14-day averaging in `utils.gs:489-591` | AI models fatigue trajectory, distinguishes "good" vs "bad" fatigue, predicts recovery timeline | **Complete** |
 | 11 | **Race Outcome Prediction** | None | AI predicts race performance/placement given current fitness, compares to goal time | Pending |
 | 12 | **Closed-Loop Weekly Adaptation** | Static AI weekly plan | AI learns from actual vs planned execution, adapts future plans based on outcomes | **Complete** |
 
@@ -75,6 +75,24 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
 | 15 | **On-Demand Training App** | Email/cron-based generation only | Web app or iOS app for real-time workout generation with instant AI coaching | Pending |
+
+---
+
+## Phase 4: Code Quality & Infrastructure
+
+| # | Feature | Current State | Improvement | Status |
+|---|---------|---------------|-------------|--------|
+| 16 | **Code Cleanup** | Organic growth over time | Refactor, remove dead code, improve structure | Pending |
+| 17 | **Easier Setup** | Manual config.gs creation | Setup wizard, better documentation, env validation | Pending |
+| 18 | **Remove Repetitive Code** | Some duplication across files | DRY refactoring, shared utilities | Pending |
+| 19 | **Whoop API Fallback** | Intervals.icu wellness only | Add Whoop API as alternative/supplementary data source | Pending |
+| 20 | **AI Workout Feedback Loop** | Basic RPE/Feel collection | AI learns from workout ratings to refine future suggestions | Pending |
+
+---
+
+## Competitor Analysis (TODO)
+
+Compare with JOIN and TrainerRoad to identify missing features.
 
 ---
 
@@ -208,6 +226,22 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - AI analyzes patterns: which workout types get skipped, swapped, or modified
 - Returns adaptation recommendations for future planning
 - Weekly plan prompt now includes learnings from past execution
+
+### Feature 10: AI Cumulative Fatigue Prediction ✅ COMPLETE
+
+**Implementation:**
+- Added `generateAICumulativeFatigueAnalysis()` in `prompts.gs` - AI analyzes fatigue state
+- Added `fetchFitnessTrend()` in `power.gs` - fetches 14-day CTL/ATL/TSB history
+- Added `testAICumulativeFatiguePrediction()` in `tests.gs`
+
+**Key changes:**
+- AI receives current fitness (CTL, ATL, TSB, ramp rate) + 14-day trend + wellness + RPE/Feel feedback
+- Classifies fatigue type: fresh, normal, functional_overreaching, non_functional_overreaching, overtraining_warning
+- Distinguishes "good" fatigue (productive for adaptation) vs "bad" fatigue (warning signs)
+- Predicts days to recovery (neutral and positive TSB)
+- Identifies warning signs: declining HRV, elevated RHR, poor sleep, high RPE
+- Returns specific recommendations: continue_normal, reduce_intensity, reduce_volume, recovery_week, complete_rest
+- Includes physiological insight explaining what's happening and risk level
 
 ---
 

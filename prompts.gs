@@ -1415,3 +1415,142 @@ Use ${langName} for all string values within the JSON:
   }
 }
 
+// =========================================================
+// AI CUMULATIVE FATIGUE PREDICTION
+// =========================================================
+
+/**
+ * AI-driven cumulative fatigue analysis
+ * Distinguishes "good" vs "bad" fatigue and predicts recovery timeline
+ *
+ * @param {object} fitnessMetrics - CTL, ATL, TSB, rampRate
+ * @param {object} fitnessTrend - Historical fitness data (7-14 days)
+ * @param {object} wellness - Current and recent wellness data
+ * @param {object} workoutFeedback - RPE/Feel from recent workouts
+ * @param {object} phaseInfo - Training phase context
+ * @returns {object} Fatigue analysis with type, severity, recovery prediction
+ */
+function generateAICumulativeFatigueAnalysis(fitnessMetrics, fitnessTrend, wellness, workoutFeedback, phaseInfo) {
+  const langName = getPromptLanguage();
+
+  // Build fitness context
+  const fitnessContext = `
+CURRENT FITNESS STATE:
+- CTL (Chronic Load): ${fitnessMetrics?.ctl?.toFixed(1) || 'Unknown'}
+- ATL (Acute Load): ${fitnessMetrics?.atl?.toFixed(1) || 'Unknown'}
+- TSB (Form): ${fitnessMetrics?.tsb?.toFixed(1) || 'Unknown'}
+- Ramp Rate: ${fitnessMetrics?.rampRate?.toFixed(2) || 'Unknown'} CTL/week
+`;
+
+  // Build trend context
+  let trendContext = '\nFITNESS TREND (last 7-14 days):\n';
+  if (fitnessTrend && fitnessTrend.length > 0) {
+    fitnessTrend.slice(0, 10).forEach(d => {
+      trendContext += `- ${d.date}: CTL=${d.ctl?.toFixed(0) || '?'}, ATL=${d.atl?.toFixed(0) || '?'}, TSB=${d.tsb?.toFixed(0) || '?'}\n`;
+    });
+  } else {
+    trendContext += '- No historical data available\n';
+  }
+
+  // Build wellness context
+  let wellnessContext = '\nWELLNESS INDICATORS:\n';
+  if (wellness) {
+    wellnessContext += `- Recovery Score: ${wellness.recoveryScore || 'Unknown'}%\n`;
+    wellnessContext += `- HRV: ${wellness.hrv || 'Unknown'} (7-day avg: ${wellness.avgHrv?.toFixed(0) || 'Unknown'})\n`;
+    wellnessContext += `- Resting HR: ${wellness.restingHR || 'Unknown'} (7-day avg: ${wellness.avgRestingHR?.toFixed(0) || 'Unknown'})\n`;
+    wellnessContext += `- Sleep: ${wellness.sleep?.toFixed(1) || 'Unknown'}h (7-day avg: ${wellness.avgSleep?.toFixed(1) || 'Unknown'}h)\n`;
+    if (wellness.soreness) wellnessContext += `- Soreness: ${wellness.soreness}/5\n`;
+    if (wellness.fatigue) wellnessContext += `- Subjective Fatigue: ${wellness.fatigue}/5\n`;
+    if (wellness.stress) wellnessContext += `- Stress: ${wellness.stress}/5\n`;
+    if (wellness.mood) wellnessContext += `- Mood: ${wellness.mood}/5\n`;
+  }
+
+  // Build workout feedback context
+  let feedbackContext = '\nRECENT WORKOUT FEEDBACK:\n';
+  if (workoutFeedback && workoutFeedback.summary) {
+    feedbackContext += `- Activities with feedback: ${workoutFeedback.summary.totalWithFeedback}\n`;
+    feedbackContext += `- Average RPE: ${workoutFeedback.summary.avgRpe?.toFixed(1) || 'N/A'}/10\n`;
+    feedbackContext += `- Average Feel: ${workoutFeedback.summary.avgFeel?.toFixed(1) || 'N/A'}/5\n`;
+    if (workoutFeedback.summary.feelDistribution) {
+      const fd = workoutFeedback.summary.feelDistribution;
+      feedbackContext += `- Feel distribution: Great=${fd.great || 0}, Good=${fd.good || 0}, OK=${fd.okay || 0}, Poor=${fd.poor || 0}, Bad=${fd.bad || 0}\n`;
+    }
+  }
+
+  // Training phase context
+  const phaseContext = `
+TRAINING CONTEXT:
+- Phase: ${phaseInfo?.phaseName || 'Unknown'}
+- Weeks to Goal: ${phaseInfo?.weeksOut || 'Unknown'}
+`;
+
+  const prompt = `You are an expert sports scientist analyzing an athlete's fatigue state to determine if they're experiencing productive training stress or showing warning signs of overtraining.
+
+${fitnessContext}${trendContext}${wellnessContext}${feedbackContext}${phaseContext}
+
+Analyze the cumulative fatigue and provide:
+
+1. **Fatigue Classification** - Determine the type of fatigue:
+   - **Functional Overreaching (FOR)**: Intentional short-term overload that leads to supercompensation. Signs: Temporary performance dip, maintained motivation, recovery within 1-2 weeks.
+   - **Non-Functional Overreaching (NFOR)**: Excessive training without adequate recovery. Signs: Prolonged fatigue (2-4 weeks), decreased performance, disturbed sleep, mood changes.
+   - **Overtraining Syndrome (OTS)**: Severe chronic fatigue requiring months to recover. Signs: Persistent fatigue despite rest, hormonal disruption, depression, illness.
+   - **Normal Training Fatigue**: Expected day-to-day fatigue that clears with routine recovery.
+   - **Fresh/Recovered**: Low fatigue, ready for quality training.
+
+2. **Warning Signs Analysis** - Look for:
+   - TSB deeply negative for extended periods (< -20 for > 7 days)
+   - HRV trending down or below personal baseline
+   - Sleep quality declining
+   - Elevated resting HR
+   - Increasing RPE for same workouts
+   - Declining "Feel" scores
+   - High soreness/fatigue/stress markers
+
+3. **Recovery Prediction** - Based on current state:
+   - Estimated days until TSB returns to neutral/positive
+   - Whether training should continue, reduce, or stop
+   - Recommended recovery activities
+
+**IMPORTANT: Respond with ONLY valid JSON. No introductory text, no explanations. Just the JSON object.**
+Use ${langName} for all string values within the JSON:
+{
+  "fatigueType": "fresh|normal|functional_overreaching|non_functional_overreaching|overtraining_warning",
+  "fatigueSeverity": 1-10 (1=fresh, 5=moderately fatigued, 10=severe),
+  "fatigueQuality": "productive|neutral|concerning|dangerous",
+  "tsbTrend": "improving|stable|declining|rapidly_declining",
+  "warningSignsPresent": true/false,
+  "warningSigns": ["list of specific warning signs observed, or empty if none"],
+  "recoveryPrediction": {
+    "daysToNeutralTSB": estimated days until TSB reaches 0,
+    "daysToPositiveTSB": estimated days until TSB reaches +5,
+    "recoveryConfidence": "high|medium|low"
+  },
+  "recommendation": {
+    "trainingAdvice": "continue_normal|reduce_intensity|reduce_volume|recovery_week|complete_rest",
+    "durationDays": number of days to follow this advice,
+    "specificActions": ["2-3 specific actionable recommendations"]
+  },
+  "physiologicalInsight": "2-3 sentences explaining what's happening physiologically and whether the current fatigue is productive for adaptation",
+  "riskLevel": "low|moderate|high|critical",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI cumulative fatigue analysis: No response from Gemini");
+      return null;
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    const result = JSON.parse(cleaned);
+    result.aiEnhanced = true;
+    return result;
+  } catch (e) {
+    Logger.log("Failed to parse AI cumulative fatigue analysis: " + e.toString());
+    return null;
+  }
+}
+

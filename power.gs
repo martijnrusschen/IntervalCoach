@@ -788,6 +788,44 @@ function fetchFitnessMetrics(targetDate) {
 }
 
 /**
+ * Fetch fitness trend data (CTL, ATL, TSB) for the last N days
+ * @param {number} days - Number of days to look back (default 14)
+ * @returns {Array} Array of daily fitness metrics sorted by date descending
+ */
+function fetchFitnessTrend(days = 14) {
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - days);
+
+  const oldestStr = formatDateISO(startDate);
+  const newestStr = formatDateISO(today);
+
+  const result = fetchIcuApi("/athlete/0/wellness?oldest=" + oldestStr + "&newest=" + newestStr);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    Logger.log("Error fetching fitness trend: " + (result.error || "No data"));
+    return [];
+  }
+
+  // Map to simplified format and sort by date descending (most recent first)
+  const trend = result.data
+    .filter(d => d.ctl != null || d.atl != null)
+    .map(d => ({
+      date: d.id,  // id is the date string in wellness API
+      ctl: d.ctl,
+      atl: d.atl,
+      tsb: d.ctl != null && d.atl != null ? d.ctl - d.atl : null,
+      recoveryScore: d.recovery_score,
+      hrv: d.hrv,
+      restingHR: d.resting_hr,
+      sleep: d.sleep_time
+    }))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  return trend;
+}
+
+/**
  * Fetch historical eFTP value for a specific date from fitness-model-events
  * @param {Date} date - The date to get eFTP for (finds most recent SET_EFTP event before this date)
  * @returns {number|null} eFTP value or null if not available
