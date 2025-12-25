@@ -90,9 +90,44 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ---
 
-## Competitor Analysis (TODO)
+## Competitor Analysis
 
-Compare with JOIN and TrainerRoad to identify missing features.
+### JOIN Cycling ([join.cc](https://join.cc/))
+| Feature | JOIN | IntervalCoach | Gap |
+|---------|------|---------------|-----|
+| Adaptive training plans | ✓ Real-time schedule adaptation | ✓ AI weekly planning | Similar |
+| 400+ workout library | ✓ World Tour-level workouts | ✗ Generates on-demand | **Add workout templates** |
+| RPE feedback integration | ✓ After each workout | ✓ Collects RPE/Feel | Similar |
+| Mobile app | ✓ iOS & Android | ✗ Email/script only | **Phase 3: App** |
+| Unplanned ride handling | ✓ Auto-adjusts schedule | ✓ Closed-loop adaptation | Similar |
+| Multi-sport | ✓ Running integration | ✓ Cycling + Running | Similar |
+| Readiness score | ✓ Daily readiness | ✓ AI recovery assessment | Similar |
+
+### TrainerRoad ([trainerroad.com](https://www.trainerroad.com/))
+| Feature | TrainerRoad | IntervalCoach | Gap |
+|---------|-------------|---------------|-----|
+| Adaptive Training (ML) | ✓ Adjusts workout difficulty | ✓ AI adapts weekly plan | Similar |
+| Progression Levels | ✓ Per-zone fitness tracking | ✗ Overall CTL/FTP only | **Add zone progression** |
+| AI FTP Detection | ✓ No ramp tests needed | ~ Uses Intervals.icu eFTP | Similar |
+| TrainNow (on-demand) | ✓ Quick workout picker | ✗ Requires full generation | **Add quick picker** |
+| Plan Builder | ✓ 2-year planning, A/B/C events | ✓ Weekly planning, A/B/C races | Similar |
+| Workout Difficulty Levels | ✓ Granular difficulty ratings | ✗ Intensity 1-5 only | **Enhance ratings** |
+| Post-workout survey | ✓ Structured feedback | ✓ RPE/Feel collection | Similar |
+| Calendar drag-drop | ✓ Visual editing | ✗ Intervals.icu calendar | External |
+| PowerMatch | ✓ Smart trainer control | ✗ Not applicable | N/A |
+| Cross-platform apps | ✓ iOS/Android/Mac/Win/Garmin | ✗ Apps Script only | **Phase 3: App** |
+| Outside workouts | ✓ GPS-guided | ✓ Generates for Zwift/.zwo | Partial |
+
+### Features to Add (from competitor analysis)
+
+| # | Feature | Source | Priority |
+|---|---------|--------|----------|
+| 21 | **TrainNow-style Quick Picker** | TrainerRoad | High - on-demand workout selection |
+| 22 | **Zone Progression Levels** | TrainerRoad | Medium - track fitness per power zone |
+| 23 | **Workout Template Library** | JOIN | Medium - curated workout database |
+| 24 | **Workout Difficulty Ratings** | TrainerRoad | Low - granular difficulty levels |
+| 25 | **Visual Analytics Dashboard** | Both | Medium - charts, trends, progress |
+| 26 | **Multi-year Plan Builder** | TrainerRoad | Low - long-term periodization |
 
 ---
 
@@ -255,4 +290,4 @@ Compare with JOIN and TrainerRoad to identify missing features.
 
 ---
 
-*Last updated: 2025-12-25*
+*Last updated: 2025-12-25 (Competitor analysis added)*
