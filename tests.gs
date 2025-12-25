@@ -1429,3 +1429,90 @@ function testAIEventSpecificTraining() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+// =========================================================
+// AI CUMULATIVE FATIGUE PREDICTION TEST
+// =========================================================
+
+/**
+ * Test AI-driven cumulative fatigue prediction
+ * Tests fatigue classification, warning signs, and recovery prediction
+ */
+function testAICumulativeFatiguePrediction() {
+  Logger.log("=== AI CUMULATIVE FATIGUE PREDICTION TEST ===\n");
+  requireValidConfig();
+
+  // Fetch all required data
+  Logger.log("--- Fetching Data ---");
+
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("Current Fitness: CTL=" + (fitnessMetrics.ctl?.toFixed(1) || 'N/A') +
+    ", ATL=" + (fitnessMetrics.atl?.toFixed(1) || 'N/A') +
+    ", TSB=" + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+
+  const fitnessTrend = fetchFitnessTrend(14);
+  Logger.log("Fitness trend: " + fitnessTrend.length + " days of data");
+
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
+  Logger.log("Wellness: Recovery=" + (wellness.today?.recovery || 'N/A') + "%, HRV=" + (wellness.today?.hrv || 'N/A') +
+    " | Status: " + (wellness.recoveryStatus || 'Unknown'));
+
+  const workoutFeedback = fetchRecentActivityFeedback(14);
+  Logger.log("Workout feedback: " + (workoutFeedback.summary?.totalWithFeedback || 0) + " activities with RPE/Feel");
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+
+  // Run AI analysis
+  Logger.log("\n--- AI Fatigue Analysis ---");
+  const analysis = generateAICumulativeFatigueAnalysis(
+    fitnessMetrics,
+    fitnessTrend,
+    wellness,
+    workoutFeedback,
+    phaseInfo
+  );
+
+  if (analysis) {
+    Logger.log("\n[Fatigue Classification]");
+    Logger.log("  Type: " + analysis.fatigueType);
+    Logger.log("  Severity: " + analysis.fatigueSeverity + "/10");
+    Logger.log("  Quality: " + analysis.fatigueQuality);
+    Logger.log("  TSB Trend: " + analysis.tsbTrend);
+    Logger.log("  Risk Level: " + analysis.riskLevel);
+
+    Logger.log("\n[Warning Signs]");
+    Logger.log("  Present: " + analysis.warningSignsPresent);
+    if (analysis.warningSigns && analysis.warningSigns.length > 0) {
+      analysis.warningSigns.forEach(w => Logger.log("  ⚠ " + w));
+    } else {
+      Logger.log("  None detected");
+    }
+
+    Logger.log("\n[Recovery Prediction]");
+    Logger.log("  Days to neutral TSB: " + analysis.recoveryPrediction?.daysToNeutralTSB);
+    Logger.log("  Days to positive TSB: " + analysis.recoveryPrediction?.daysToPositiveTSB);
+    Logger.log("  Confidence: " + analysis.recoveryPrediction?.recoveryConfidence);
+
+    Logger.log("\n[Recommendation]");
+    Logger.log("  Advice: " + analysis.recommendation?.trainingAdvice);
+    Logger.log("  Duration: " + analysis.recommendation?.durationDays + " days");
+    if (analysis.recommendation?.specificActions) {
+      Logger.log("  Actions:");
+      analysis.recommendation.specificActions.forEach(a => Logger.log("    → " + a));
+    }
+
+    Logger.log("\n[Physiological Insight]");
+    Logger.log("  " + analysis.physiologicalInsight);
+
+    Logger.log("\nConfidence: " + analysis.confidence);
+    Logger.log("AI Enhanced: " + analysis.aiEnhanced);
+  } else {
+    Logger.log("Analysis returned null - check data availability");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
