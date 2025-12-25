@@ -950,6 +950,34 @@ Generate a personalized training proposal:`;
  * @returns {object} Structured weekly plan with day-by-day recommendations
  */
 function generateAIWeeklyPlan(context) {
+  // ===== CLOSED-LOOP ADAPTATION =====
+  // Analyze last week's plan execution and get AI insights
+  let adaptationContext = '';
+  try {
+    const executionAnalysis = analyzeWeeklyPlanExecution(1);
+    if (executionAnalysis && executionAnalysis.summary.plannedSessions > 0) {
+      Logger.log("Plan Execution Analysis: " + JSON.stringify(executionAnalysis.summary));
+
+      const adaptationInsights = generateAIPlanAdaptationInsights(executionAnalysis);
+      if (adaptationInsights) {
+        Logger.log("AI Adaptation Insights: " + JSON.stringify(adaptationInsights));
+        adaptationContext = `
+**CLOSED-LOOP ADAPTATION (Learn from last week):**
+- Adherence Score: ${executionAnalysis.summary.adherenceScore}%
+- Completed: ${executionAnalysis.summary.completedSessions}/${executionAnalysis.summary.plannedSessions} sessions
+- TSS Variance: ${executionAnalysis.summary.tssVariance >= 0 ? '+' : ''}${executionAnalysis.summary.tssVariance}
+- Patterns Observed: ${adaptationInsights.patterns?.join('; ') || 'None'}
+- Recommended Adaptations: ${adaptationInsights.adaptations?.join('; ') || 'None'}
+- Key Insight: ${adaptationInsights.planningRecommendation || 'Continue as planned'}
+
+**APPLY THESE LEARNINGS TO THIS WEEK'S PLAN.**
+`;
+      }
+    }
+  } catch (e) {
+    Logger.log("Closed-loop adaptation failed (non-critical): " + e.toString());
+  }
+
   // Build last week summary
   let lastWeekContext = '';
   if (context.lastWeek) {
@@ -1036,7 +1064,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
+${adaptationContext}${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
@@ -1347,5 +1375,251 @@ function createWeeklyPlanEvents(weeklyPlan) {
 
   Logger.log(`Weekly plan events: ${results.created} created, ${results.skipped} skipped, ${results.errors} errors`);
   return results;
+}
+
+// =========================================================
+// CLOSED-LOOP WEEKLY ADAPTATION
+// =========================================================
+
+/**
+ * Analyze last week's planned vs actual execution
+ * Compares what was planned in the weekly plan vs what was actually done
+ * @param {number} weeksBack - How many weeks back to analyze (default 1)
+ * @returns {object} { planned, actual, comparison, adherenceScore }
+ */
+function analyzeWeeklyPlanExecution(weeksBack = 1) {
+  const today = new Date();
+  const weekEnd = new Date(today);
+  weekEnd.setDate(today.getDate() - (weeksBack - 1) * 7 - 1); // Yesterday for last week
+  const weekStart = new Date(weekEnd);
+  weekStart.setDate(weekEnd.getDate() - 6);
+
+  const startStr = formatDateISO(weekStart);
+  const endStr = formatDateISO(weekEnd);
+
+  Logger.log(`Analyzing plan execution: ${startStr} to ${endStr}`);
+
+  const result = {
+    period: { start: startStr, end: endStr },
+    planned: [],
+    actual: [],
+    comparison: [],
+    summary: {
+      plannedSessions: 0,
+      completedSessions: 0,
+      skippedSessions: 0,
+      extraSessions: 0,
+      plannedTSS: 0,
+      actualTSS: 0,
+      tssVariance: 0,
+      adherenceScore: 0
+    }
+  };
+
+  // Fetch planned workouts (WORKOUT category events or Weekly Plan placeholders)
+  const eventsResult = fetchIcuApi(`/athlete/0/events?oldest=${startStr}&newest=${endStr}`);
+  Logger.log(`Found ${eventsResult.data?.length || 0} events in period`);
+  if (eventsResult.success && Array.isArray(eventsResult.data)) {
+    eventsResult.data.forEach(function(e) {
+      Logger.log(`  Event: "${e.name}" | category: ${e.category} | description: ${e.description?.substring(0, 50) || 'none'}`);
+
+      // Detect planned workouts: WORKOUT category or [Weekly Plan] placeholders
+      const isWorkoutEvent = e.category === 'WORKOUT';
+      const isWeeklyPlan = e.description?.includes('[Weekly Plan]');
+
+      if (isWorkoutEvent || isWeeklyPlan) {
+        // Parse workout details
+        const tssMatch = e.description?.match(/TSS Target: ~(\d+)/) || e.description?.match(/TSS[:\s]+(\d+)/i);
+        const durationMatch = e.description?.match(/Duration: (\d+) min/) || e.description?.match(/(\d+)\s*min/i);
+
+        // Extract workout type from name
+        let workoutType = 'Unknown';
+        if (e.name?.includes('IntervalCoach_')) {
+          // IntervalCoach generated: IntervalCoach_SweetSpot_20251224
+          const parts = e.name.split('_');
+          workoutType = parts[1] || 'Unknown';
+        } else if (isWeeklyPlan) {
+          const typeMatch = e.name?.match(/^([A-Za-z_]+)/);
+          workoutType = typeMatch ? typeMatch[1] : 'Unknown';
+        } else {
+          // Use event name as type
+          workoutType = e.name || 'Unknown';
+        }
+
+        result.planned.push({
+          date: e.start_date?.substring(0, 10) || e.start_date_local?.substring(0, 10),
+          name: e.name,
+          workoutType: workoutType,
+          plannedTSS: tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 0),
+          plannedDuration: durationMatch ? parseInt(durationMatch[1]) : 0,
+          activity: e.type || (e.name?.toLowerCase().includes('run') ? 'Run' : 'Ride'),
+          source: isWeeklyPlan ? 'weekly_plan' : 'calendar'
+        });
+        result.summary.plannedSessions++;
+        result.summary.plannedTSS += tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 0);
+      }
+    });
+  }
+
+  // Fetch actual activities
+  const activitiesResult = fetchIcuApi(`/athlete/0/activities?oldest=${startStr}&newest=${endStr}`);
+  if (activitiesResult.success && Array.isArray(activitiesResult.data)) {
+    activitiesResult.data.forEach(function(a) {
+      if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
+        const classified = classifyActivityType(a);
+        result.actual.push({
+          date: a.start_date_local?.substring(0, 10),
+          name: a.name,
+          workoutType: classified?.type || 'Unknown',
+          actualTSS: a.icu_training_load || 0,
+          actualDuration: Math.round((a.moving_time || 0) / 60),
+          activity: a.type.replace('Virtual', '')
+        });
+        result.summary.actualTSS += a.icu_training_load || 0;
+      }
+    });
+  }
+
+  // Compare planned vs actual by date
+  const plannedByDate = {};
+  result.planned.forEach(p => {
+    plannedByDate[p.date] = p;
+  });
+
+  const actualByDate = {};
+  result.actual.forEach(a => {
+    if (!actualByDate[a.date]) actualByDate[a.date] = [];
+    actualByDate[a.date].push(a);
+  });
+
+  // Analyze each planned day
+  result.planned.forEach(planned => {
+    const actuals = actualByDate[planned.date] || [];
+    const matchingActual = actuals.find(a =>
+      a.activity === planned.activity ||
+      (a.activity === 'Ride' && planned.activity === 'Ride') ||
+      (a.activity === 'Run' && planned.activity === 'Run')
+    );
+
+    const comparison = {
+      date: planned.date,
+      planned: planned,
+      actual: matchingActual || null,
+      status: 'skipped',
+      tssVariance: 0,
+      durationVariance: 0,
+      typeMatch: false
+    };
+
+    if (matchingActual) {
+      comparison.status = 'completed';
+      comparison.tssVariance = matchingActual.actualTSS - planned.plannedTSS;
+      comparison.durationVariance = matchingActual.actualDuration - planned.plannedDuration;
+      comparison.typeMatch = matchingActual.workoutType === planned.workoutType ||
+        matchingActual.workoutType?.includes(planned.workoutType?.split('_')[0]);
+      result.summary.completedSessions++;
+    } else {
+      result.summary.skippedSessions++;
+    }
+
+    result.comparison.push(comparison);
+  });
+
+  // Count extra sessions (done but not planned)
+  const plannedDates = new Set(result.planned.map(p => p.date));
+  result.actual.forEach(a => {
+    if (!plannedDates.has(a.date)) {
+      result.summary.extraSessions++;
+    }
+  });
+
+  // Calculate adherence score (0-100)
+  if (result.summary.plannedSessions > 0) {
+    const completionRate = result.summary.completedSessions / result.summary.plannedSessions;
+    const tssAccuracy = result.summary.plannedTSS > 0 ?
+      Math.min(1, result.summary.actualTSS / result.summary.plannedTSS) : 0;
+    result.summary.adherenceScore = Math.round((completionRate * 0.7 + tssAccuracy * 0.3) * 100);
+  }
+
+  result.summary.tssVariance = result.summary.actualTSS - result.summary.plannedTSS;
+
+  return result;
+}
+
+/**
+ * Generate AI insights from plan execution analysis
+ * Learns patterns from what worked and what didn't
+ * @param {object} executionData - From analyzeWeeklyPlanExecution()
+ * @returns {object} { patterns, adaptations, recommendations }
+ */
+function generateAIPlanAdaptationInsights(executionData) {
+  const langName = getPromptLanguage();
+
+  if (!executionData || executionData.summary.plannedSessions === 0) {
+    return null;
+  }
+
+  const summary = executionData.summary;
+  const comparisons = executionData.comparison;
+
+  // Build comparison details
+  const completedDetails = comparisons.filter(c => c.status === 'completed').map(c => {
+    const tssSign = c.tssVariance >= 0 ? '+' : '';
+    return `${c.date}: ${c.planned.workoutType} → ${c.actual?.workoutType || 'done'} (TSS: ${tssSign}${c.tssVariance})`;
+  }).join('\n');
+
+  const skippedDetails = comparisons.filter(c => c.status === 'skipped').map(c =>
+    `${c.date}: ${c.planned.workoutType} (TSS target: ${c.planned.plannedTSS})`
+  ).join('\n');
+
+  const prompt = `You are an expert coach analyzing how well an athlete followed their training plan last week.
+
+**PLAN EXECUTION SUMMARY:**
+- Planned Sessions: ${summary.plannedSessions}
+- Completed: ${summary.completedSessions}
+- Skipped: ${summary.skippedSessions}
+- Extra (unplanned): ${summary.extraSessions}
+- Planned TSS: ${summary.plannedTSS}
+- Actual TSS: ${summary.actualTSS} (${summary.tssVariance >= 0 ? '+' : ''}${summary.tssVariance})
+- Adherence Score: ${summary.adherenceScore}%
+
+**COMPLETED SESSIONS:**
+${completedDetails || 'None'}
+
+**SKIPPED SESSIONS:**
+${skippedDetails || 'None'}
+
+**Your Analysis Task:**
+Identify patterns in what the athlete completes vs skips:
+1. Are certain workout types consistently skipped? (intensity too high? wrong day?)
+2. Did they exceed or fall short of TSS targets? (over-eager or under-recovered?)
+3. Were there unplanned sessions? (athlete prefers flexibility?)
+4. What adaptations should future plans make?
+
+**Output JSON only (no markdown wrapping):**
+Write all text in ${langName}.
+{
+  "patterns": ["Pattern 1 observed in ${langName}", "Pattern 2"],
+  "adaptations": ["Adaptation 1 for future plans in ${langName}", "Adaptation 2"],
+  "adherenceAssessment": "Brief assessment of adherence quality in ${langName}",
+  "planningRecommendation": "Key recommendation for next week's plan in ${langName}",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI plan adaptation: No response from Gemini");
+      return null;
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Failed to parse AI plan adaptation insights: " + e.toString());
+    return null;
+  }
 }
 
