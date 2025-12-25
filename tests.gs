@@ -1335,3 +1335,97 @@ function testAIEftpTrajectoryAnalysis() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+// =========================================================
+// AI EVENT-SPECIFIC TRAINING TEST
+// =========================================================
+
+/**
+ * Test AI-driven event-specific training analysis
+ * Tests event profile analysis and tailored training recommendations
+ */
+function testAIEventSpecificTraining() {
+  Logger.log("=== AI EVENT-SPECIFIC TRAINING TEST ===\n");
+  requireValidConfig();
+
+  // Fetch real data
+  const goals = fetchUpcomingGoals();
+  const powerProfile = analyzePowerProfile(fetchPowerCurve(), goals);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const phaseInfo = calculateTrainingPhase(goals);
+
+  Logger.log("--- Goal Event ---");
+  if (goals.available && goals.primaryGoal) {
+    Logger.log("Name: " + goals.primaryGoal.name);
+    Logger.log("Date: " + goals.primaryGoal.date);
+    Logger.log("Type: " + (goals.primaryGoal.type || 'Unknown'));
+    Logger.log("Description: " + (goals.primaryGoal.description || 'None'));
+  } else {
+    Logger.log("No primary goal found - test may not produce meaningful results");
+  }
+
+  Logger.log("\n--- Athlete Profile ---");
+  Logger.log("eFTP: " + (powerProfile.eFTP || 'Unknown') + "W");
+  Logger.log("Strengths: " + (powerProfile.strengths?.join(', ') || 'Unknown'));
+  Logger.log("Focus Areas: " + (powerProfile.focusAreas?.join(', ') || 'Unknown'));
+  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(0) || 'Unknown'));
+
+  // Calculate weeks to goal (fallback if phaseInfo.weeksOut is NaN)
+  let weeksOut = phaseInfo.weeksOut;
+  if (isNaN(weeksOut) && goals.primaryGoal?.date) {
+    const goalDate = new Date(goals.primaryGoal.date);
+    const today = new Date();
+    weeksOut = Math.round((goalDate - today) / (7 * 24 * 60 * 60 * 1000));
+  }
+
+  Logger.log("\n--- Timeline ---");
+  Logger.log("Weeks to Goal: " + weeksOut);
+  Logger.log("Current Phase: " + phaseInfo.phaseName);
+
+  // Run analysis
+  Logger.log("\n--- AI Event Analysis ---");
+  const analysis = generateAIEventAnalysis(
+    goals.primaryGoal || { name: 'General Fitness', date: '2025-06-01', priority: 'A' },
+    powerProfile,
+    fitnessMetrics,
+    weeksOut || 12
+  );
+
+  if (analysis) {
+    Logger.log("\n[Event Profile]");
+    Logger.log("  Category: " + analysis.eventProfile?.category);
+    Logger.log("  Primary Demands: " + (analysis.eventProfile?.primaryDemands?.join(', ') || 'N/A'));
+    Logger.log("  Key Challenge: " + analysis.eventProfile?.keyChallenge);
+    Logger.log("  Est. Duration: " + analysis.eventProfile?.estimatedDuration);
+
+    Logger.log("\n[Training Emphasis]");
+    Logger.log("  Priority Workouts: " + (analysis.trainingEmphasis?.priorityWorkouts?.join(', ') || 'N/A'));
+    Logger.log("  Secondary Workouts: " + (analysis.trainingEmphasis?.secondaryWorkouts?.join(', ') || 'N/A'));
+    Logger.log("  Avoid: " + (analysis.trainingEmphasis?.avoidWorkouts?.join(', ') || 'N/A'));
+    Logger.log("  Intensity Focus: " + analysis.trainingEmphasis?.intensityFocus);
+    Logger.log("  Weekly Structure: " + analysis.trainingEmphasis?.weeklyStructure);
+
+    Logger.log("\n[Peaking Strategy]");
+    Logger.log("  Taper Length: " + analysis.peakingStrategy?.taperLength);
+    Logger.log("  Taper Style: " + analysis.peakingStrategy?.taperStyle);
+    Logger.log("  Last Hard Workout: " + analysis.peakingStrategy?.lastHardWorkout);
+    Logger.log("  Volume Reduction: " + analysis.peakingStrategy?.volumeReduction);
+    Logger.log("  Opener: " + analysis.peakingStrategy?.openerWorkout);
+
+    Logger.log("\n[Current Phase Advice]");
+    Logger.log("  Phase: " + analysis.currentPhaseAdvice?.phase);
+    Logger.log("  Build vs Taper: " + analysis.currentPhaseAdvice?.buildVsTaper);
+    Logger.log("  Weekly Focus: " + analysis.currentPhaseAdvice?.weeklyFocus);
+    Logger.log("  Key Workout: " + analysis.currentPhaseAdvice?.keyWorkout);
+
+    Logger.log("\n[Athlete Notes]");
+    Logger.log("  " + analysis.athleteSpecificNotes);
+
+    Logger.log("\nConfidence: " + analysis.confidence);
+    Logger.log("AI Enhanced: " + analysis.aiEnhanced);
+  } else {
+    Logger.log("Analysis returned null - check goals and power profile data");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
