@@ -56,7 +56,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 | # | Feature | Current State | AI-First Opportunity | Status |
 |---|---------|---------------|---------------------|--------|
-| 9 | **Event-Specific Training** | Simple pre-race intensity rules in `workouts.gs` | AI analyzes race profile (distance, terrain, demands) → custom training emphasis and peaking strategy | Pending |
+| 9 | **Event-Specific Training** | Simple pre-race intensity rules in `workouts.gs` | AI analyzes race profile (distance, terrain, demands) → custom training emphasis and peaking strategy | **Complete** |
 | 10 | **Cumulative Fatigue Prediction** | 14-day averaging in `utils.gs:489-591` | AI models fatigue trajectory, distinguishes "good" vs "bad" fatigue, predicts recovery timeline | Pending |
 | 11 | **Race Outcome Prediction** | None | AI predicts race performance/placement given current fitness, compares to goal time | Pending |
 | 12 | **Closed-Loop Weekly Adaptation** | Static AI weekly plan | AI learns from actual vs planned execution, adapts future plans based on outcomes | **Complete** |
@@ -67,6 +67,14 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 |---|---------|---------------|---------------------|--------|
 | 13 | **Personalized Zone Boundaries** | Fixed offsets from CS/FTP in `prompts.gs:245-260` | AI adjusts zones based on athlete's lactate patterns, HRV response, time-at-power distributions | Pending |
 | 14 | **Cross-Sport Zone Equivalency** | Separate cycling/running zones | AI calculates equivalent efforts across sports (cycling FTP ↔ running threshold) | Pending |
+
+---
+
+## Phase 3: Platform Expansion
+
+| # | Feature | Current State | AI-First Opportunity | Status |
+|---|---------|---------------|---------------------|--------|
+| 15 | **On-Demand Training App** | Email/cron-based generation only | Web app or iOS app for real-time workout generation with instant AI coaching | Pending |
 
 ---
 
@@ -167,6 +175,40 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - Includes specific training adjustments if behind schedule
 - Shows trajectory status in weekly email fitness section
 
+### Feature 9: AI Event-Specific Training ✅ COMPLETE
+
+**Implementation:**
+- Added `generateAIEventAnalysis()` in `prompts.gs` - AI analyzes event profile and returns tailored training strategy
+- Integrated into `generateAIWeeklyPlan()` in `workouts.gs` - event analysis injected into weekly planning prompt
+- Added `testAIEventSpecificTraining()` in `tests.gs`
+
+**Key changes:**
+- AI receives event name, date, type, description + athlete power profile + fitness metrics + weeks out
+- Returns comprehensive analysis:
+  - `eventProfile`: category, primary/secondary demands, key challenge, estimated duration
+  - `trainingEmphasis`: priority workouts, secondary workouts, workouts to avoid, intensity focus
+  - `peakingStrategy`: taper length/style, last hard workout timing, volume reduction curve, opener workout
+  - `currentPhaseAdvice`: current phase, build vs taper, weekly focus, key workout
+  - `athleteSpecificNotes`: personalized notes on profile-event match
+- Weekly plan now receives event-specific guidance to tailor workout selection
+- Replaces simple "pre-race day = intensity 1-2" with intelligent event-aware periodization
+
+### Feature 12: Closed-Loop Weekly Adaptation ✅ COMPLETE
+
+**Implementation:**
+- Added `analyzeWeeklyPlanExecution()` in `workouts.gs` - compares planned vs actual workouts
+- Added `generateAIPlanAdaptationInsights()` in `workouts.gs` - AI learns from discrepancies
+- Integrated into `generateAIWeeklyPlan()` - adaptation insights injected into weekly planning prompt
+- Added `testClosedLoopAdaptation()` in `tests.gs`
+
+**Key changes:**
+- Fetches [Weekly Plan] events and WORKOUT category events from Intervals.icu
+- Matches planned sessions to actual activities by date
+- Calculates adherence score: 70% completion rate + 30% TSS accuracy
+- AI analyzes patterns: which workout types get skipped, swapped, or modified
+- Returns adaptation recommendations for future planning
+- Weekly plan prompt now includes learnings from past execution
+
 ---
 
 ## How to Use This Document
@@ -179,4 +221,4 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ---
 
-*Last updated: 2025-12-24*
+*Last updated: 2025-12-25*

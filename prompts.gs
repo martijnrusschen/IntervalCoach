@@ -1297,3 +1297,120 @@ Write "assessment", "recommendation", and "adjustments" in ${langName}.
   }
 }
 
+/**
+ * AI-driven event-specific training analysis
+ * Analyzes race profile and returns custom training emphasis and peaking strategy
+ *
+ * @param {object} goal - Goal event (name, date, type, description, priority)
+ * @param {object} powerProfile - Athlete's power profile
+ * @param {object} fitnessMetrics - Current fitness (CTL, ATL, TSB)
+ * @param {number} weeksOut - Weeks until event
+ * @returns {object} Event-specific training recommendations
+ */
+function generateAIEventAnalysis(goal, powerProfile, fitnessMetrics, weeksOut) {
+  const langName = getPromptLanguage();
+
+  // Build event context
+  const eventContext = `
+EVENT DETAILS:
+- Name: ${goal.name}
+- Date: ${goal.date}
+- Priority: ${goal.priority || 'A'}-race
+- Type: ${goal.type || 'Unknown'}
+- Description: ${goal.description || 'No description provided'}
+- Weeks Until Event: ${weeksOut}
+`;
+
+  // Build athlete context
+  const athleteContext = `
+ATHLETE PROFILE:
+- Current eFTP: ${powerProfile?.eFTP || 'Unknown'}W
+- W': ${powerProfile?.wPrime || 'Unknown'}kJ
+- Current CTL: ${fitnessMetrics?.ctl?.toFixed(0) || 'Unknown'}
+- Current ATL: ${fitnessMetrics?.atl?.toFixed(0) || 'Unknown'}
+- Current TSB: ${fitnessMetrics?.tsb?.toFixed(0) || 'Unknown'}
+- Power Strengths: ${powerProfile?.strengths?.join(', ') || 'Unknown'}
+- Power Weaknesses: ${powerProfile?.focusAreas?.join(', ') || 'Unknown'}
+`;
+
+  const prompt = `You are an expert cycling coach analyzing an upcoming event to create a tailored training strategy.
+
+${eventContext}
+${athleteContext}
+
+Analyze this event and provide specific training recommendations. Consider:
+
+1. **Event Demands Analysis** - What physiological systems does this event stress?
+   - Climbing events → sustained power, threshold, weight-to-power
+   - Criteriums → repeated hard efforts, anaerobic capacity, acceleration
+   - Time trials → sustained threshold power, pacing
+   - Gran fondos → endurance, fueling, steady-state efficiency
+   - Hilly races → variable power, surges, recovery between efforts
+
+2. **Training Emphasis** - Based on event demands and athlete's current strengths/weaknesses:
+   - Which energy systems to prioritize?
+   - What workout types are most important?
+   - How should intensity distribution shift?
+
+3. **Peaking Strategy** - How to arrive fresh and fit:
+   - Recommended taper length and style
+   - When to do the last hard workout
+   - Volume reduction curve
+
+4. **Timeline Recommendations** - Given ${weeksOut} weeks out:
+   - What phase should training be in now?
+   - Key focuses for the remaining weeks
+   - Any benchmark workouts to gauge readiness
+
+Respond in ${langName} with this JSON structure:
+{
+  "eventProfile": {
+    "category": "climbing|criterium|time_trial|gran_fondo|road_race|mixed",
+    "primaryDemands": ["list of 2-3 key physiological demands"],
+    "secondaryDemands": ["list of 1-2 secondary demands"],
+    "estimatedDuration": "expected race duration",
+    "keyChallenge": "single most important factor for success"
+  },
+  "trainingEmphasis": {
+    "priorityWorkouts": ["top 3 workout types to focus on"],
+    "secondaryWorkouts": ["2-3 supporting workout types"],
+    "avoidWorkouts": ["workout types that are less important now"],
+    "weeklyStructure": "recommended weekly structure description",
+    "intensityFocus": "threshold|vo2max|endurance|anaerobic|mixed"
+  },
+  "peakingStrategy": {
+    "taperLength": "recommended taper in weeks (1-3)",
+    "taperStyle": "linear|step|exponential",
+    "lastHardWorkout": "days before event for last intensity",
+    "volumeReduction": "percentage reduction per week during taper",
+    "openerWorkout": "recommended day-before-race workout"
+  },
+  "currentPhaseAdvice": {
+    "phase": "what phase athlete should be in now",
+    "weeklyFocus": "primary focus for this week",
+    "keyWorkout": "most important workout to nail",
+    "buildVsTaper": "building|maintaining|tapering"
+  },
+  "athleteSpecificNotes": "2-3 sentences on how this athlete's profile matches or mismatches the event demands, and what to prioritize",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("AI event analysis: No response from Gemini");
+      return null;
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    const result = JSON.parse(cleaned);
+    result.aiEnhanced = true;
+    return result;
+  } catch (e) {
+    Logger.log("Failed to parse AI event analysis: " + e.toString());
+    return null;
+  }
+}
+

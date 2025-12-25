@@ -978,6 +978,51 @@ function generateAIWeeklyPlan(context) {
     Logger.log("Closed-loop adaptation failed (non-critical): " + e.toString());
   }
 
+  // ===== EVENT-SPECIFIC TRAINING =====
+  // Analyze primary goal event and get tailored training recommendations
+  let eventTrainingContext = '';
+  try {
+    if (context.goals?.available && context.goals?.primaryGoal) {
+      const goal = context.goals.primaryGoal;
+      const weeksOut = context.weeksOut || 12;
+
+      // Build power profile from context
+      const powerProfile = {
+        eFTP: context.eftp,
+        wPrime: context.wPrime,
+        strengths: context.powerStrengths || [],
+        focusAreas: context.powerWeaknesses || []
+      };
+
+      // Build fitness metrics
+      const fitnessMetrics = {
+        ctl: context.ctl,
+        atl: context.atl,
+        tsb: context.tsb
+      };
+
+      const eventAnalysis = generateAIEventAnalysis(goal, powerProfile, fitnessMetrics, weeksOut);
+      if (eventAnalysis) {
+        Logger.log("AI Event Analysis: " + JSON.stringify(eventAnalysis.eventProfile));
+        eventTrainingContext = `
+**EVENT-SPECIFIC TRAINING (Tailored for ${goal.name}):**
+- Event Type: ${eventAnalysis.eventProfile?.category || 'Unknown'}
+- Key Challenge: ${eventAnalysis.eventProfile?.keyChallenge || 'N/A'}
+- Primary Demands: ${eventAnalysis.eventProfile?.primaryDemands?.join(', ') || 'N/A'}
+- Priority Workouts: ${eventAnalysis.trainingEmphasis?.priorityWorkouts?.join(', ') || 'N/A'}
+- Intensity Focus: ${eventAnalysis.trainingEmphasis?.intensityFocus || 'mixed'}
+- Current Phase Advice: ${eventAnalysis.currentPhaseAdvice?.phase || 'Build'} - ${eventAnalysis.currentPhaseAdvice?.buildVsTaper || 'building'}
+- Key Workout This Week: ${eventAnalysis.currentPhaseAdvice?.keyWorkout || 'N/A'}
+- Athlete Notes: ${eventAnalysis.athleteSpecificNotes || 'N/A'}
+
+**APPLY THIS EVENT-SPECIFIC EMPHASIS TO WORKOUT SELECTION.**
+`;
+      }
+    }
+  } catch (e) {
+    Logger.log("Event-specific training analysis failed (non-critical): " + e.toString());
+  }
+
   // Build last week summary
   let lastWeekContext = '';
   if (context.lastWeek) {
@@ -1064,7 +1109,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${adaptationContext}${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
+${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
