@@ -1452,17 +1452,20 @@ CURRENT FITNESS STATE:
     trendContext += '- No historical data available\n';
   }
 
-  // Build wellness context
+  // Build wellness context (wellness comes from createWellnessSummary)
   let wellnessContext = '\nWELLNESS INDICATORS:\n';
-  if (wellness) {
-    wellnessContext += `- Recovery Score: ${wellness.recoveryScore || 'Unknown'}%\n`;
-    wellnessContext += `- HRV: ${wellness.hrv || 'Unknown'} (7-day avg: ${wellness.avgHrv?.toFixed(0) || 'Unknown'})\n`;
-    wellnessContext += `- Resting HR: ${wellness.restingHR || 'Unknown'} (7-day avg: ${wellness.avgRestingHR?.toFixed(0) || 'Unknown'})\n`;
-    wellnessContext += `- Sleep: ${wellness.sleep?.toFixed(1) || 'Unknown'}h (7-day avg: ${wellness.avgSleep?.toFixed(1) || 'Unknown'}h)\n`;
-    if (wellness.soreness) wellnessContext += `- Soreness: ${wellness.soreness}/5\n`;
-    if (wellness.fatigue) wellnessContext += `- Subjective Fatigue: ${wellness.fatigue}/5\n`;
-    if (wellness.stress) wellnessContext += `- Stress: ${wellness.stress}/5\n`;
-    if (wellness.mood) wellnessContext += `- Mood: ${wellness.mood}/5\n`;
+  if (wellness && wellness.available) {
+    const today = wellness.today || {};
+    const avg = wellness.averages || {};
+    wellnessContext += `- Recovery Score: ${today.recovery || 'Unknown'}%\n`;
+    wellnessContext += `- HRV: ${today.hrv || 'Unknown'} (7-day avg: ${avg.hrv?.toFixed(0) || 'Unknown'})\n`;
+    wellnessContext += `- Resting HR: ${today.restingHR || 'Unknown'} (7-day avg: ${avg.restingHR?.toFixed(0) || 'Unknown'})\n`;
+    wellnessContext += `- Sleep: ${today.sleep?.toFixed(1) || 'Unknown'}h (7-day avg: ${avg.sleep?.toFixed(1) || 'Unknown'}h)\n`;
+    wellnessContext += `- Recovery Status: ${wellness.recoveryStatus || 'Unknown'}\n`;
+    if (today.soreness) wellnessContext += `- Soreness: ${today.soreness}/5\n`;
+    if (today.fatigue) wellnessContext += `- Subjective Fatigue: ${today.fatigue}/5\n`;
+    if (today.stress) wellnessContext += `- Stress: ${today.stress}/5\n`;
+    if (today.mood) wellnessContext += `- Mood: ${today.mood}/5\n`;
   }
 
   // Build workout feedback context

@@ -1455,7 +1455,8 @@ function testAICumulativeFatiguePrediction() {
 
   const wellnessRecords = fetchWellnessData();
   const wellness = createWellnessSummary(wellnessRecords);
-  Logger.log("Wellness: Recovery=" + (wellness.recoveryScore || 'N/A') + "%, HRV=" + (wellness.hrv || 'N/A'));
+  Logger.log("Wellness: Recovery=" + (wellness.today?.recovery || 'N/A') + "%, HRV=" + (wellness.today?.hrv || 'N/A') +
+    " | Status: " + (wellness.recoveryStatus || 'Unknown'));
 
   const workoutFeedback = fetchRecentActivityFeedback(14);
   Logger.log("Workout feedback: " + (workoutFeedback.summary?.totalWithFeedback || 0) + " activities with RPE/Feel");
