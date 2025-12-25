@@ -104,6 +104,35 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | Readiness score | ✓ Daily readiness | ✓ AI recovery assessment | Similar |
 
 ### TrainerRoad ([trainerroad.com](https://www.trainerroad.com/))
+
+**TrainerRoad AI** (Launching 2025 - "Biggest Update Ever"):
+
+TrainerRoad claims 27% more accurate workout recommendations using proprietary AI models trained on "tens of millions of rides."
+
+| Feature | TrainerRoad | IntervalCoach | Status |
+|---------|-------------|---------------|--------|
+| Custom AI models (not ChatGPT) | ✓ Proprietary models | ✓ Custom prompts + Gemini | Similar approach |
+| Workout Simulation | ✓ Simulates hundreds of workouts | ✗ Direct AI recommendation | **Add simulation** |
+| Predicted FTP | ✓ Shows future FTP based on training | ✓ AI eFTP Trajectory Analysis | Similar |
+| Impact Preview | ✓ See how changes affect future weeks | ✗ Not implemented | **Add impact preview** |
+| Workout Feel Prediction | ✓ Explains how workout will feel | ~ Partial (difficulty 1-5) | **Enhance feel prediction** |
+| Training Future Visibility | ✓ Multi-week forward view | ✓ Weekly planning only | **Extend to multi-week** |
+| Fatigue Prediction | ✓ Predicts burnout before it happens | ✓ AI Cumulative Fatigue Prediction | **Ahead** - distinguishes FOR/NFOR/OTS |
+
+**Red Light Green Light** (Flagship fatigue feature, March 2024):
+
+| Feature | TrainerRoad | IntervalCoach | Status |
+|---------|-------------|---------------|--------|
+| Red/Yellow/Green recovery status | ✓ Calendar day markers | ✓ AI Recovery Assessment | **Ahead** - uses personal baselines not fixed thresholds |
+| Auto-adaptation to fatigue | ✓ Adapts to easier workout | ✓ AI Rest Day Assessment | **Ahead** - considers TSB, wellness, events, training phase |
+| AI Fatigue Detection | ✓ Built on 250M workouts | ✓ AI Cumulative Fatigue Prediction | **Ahead** - distinguishes FOR/NFOR/OTS |
+| Recovery timeline | ✗ Not shown | ✓ Days-to-recovery prediction | **Ahead** |
+| Post-workout survey | ✓ RPE feedback | ✓ RPE/Feel + AI analysis email | **Ahead** - proactive insights within 1 hour |
+| Fatigue quality assessment | ✗ Binary fatigued/not | ✓ "Good" vs "bad" fatigue classification | **Ahead** |
+| Overtraining warning | ✗ Not shown | ✓ OTS risk detection with warning signs | **Ahead** |
+
+**Other TrainerRoad Features:**
+
 | Feature | TrainerRoad | IntervalCoach | Gap |
 |---------|-------------|---------------|-----|
 | Adaptive Training (ML) | ✓ Adjusts workout difficulty | ✓ AI adapts weekly plan | Similar |
@@ -117,6 +146,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | PowerMatch | ✓ Smart trainer control | ✗ Not applicable | N/A |
 | Cross-platform apps | ✓ iOS/Android/Mac/Win/Garmin | ✗ Apps Script only | **Phase 3: App** |
 | Outside workouts | ✓ GPS-guided | ✓ Generates for Zwift/.zwo | Partial |
+| Zwift Integration (2025) | ✓ All Zwift activities analyzed | ✓ Native Intervals.icu sync | Similar |
 
 ### Features to Add (from competitor analysis)
 
@@ -128,6 +158,10 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 | 24 | **Workout Difficulty Ratings** | TrainerRoad | Low - granular difficulty levels |
 | 25 | **Visual Analytics Dashboard** | Both | Medium - charts, trends, progress |
 | 26 | **Multi-year Plan Builder** | TrainerRoad | Low - long-term periodization |
+| 27 | **Workout Impact Preview** | TrainerRoad AI | High - show how today's ride affects next 2 weeks |
+| 28 | **Enhanced Workout Feel Prediction** | TrainerRoad AI | Medium - predict how workout will feel beyond 1-5 |
+| 29 | **Multi-Week Forward View** | TrainerRoad AI | Medium - extend weekly plan to 2-4 week visibility |
+| 30 | **Training Outcome Simulation** | TrainerRoad AI | Low - simulate multiple workout options before deciding |
 
 ---
 
