@@ -1469,14 +1469,16 @@ CURRENT FITNESS STATE:
   }
 
   // Build workout feedback context
+  // Note: Intervals.icu Feel scale: 1=Strong (best), 2=Good, 3=Normal, 4=Poor, 5=Weak (worst)
   let feedbackContext = '\nRECENT WORKOUT FEEDBACK:\n';
   if (workoutFeedback && workoutFeedback.summary) {
     feedbackContext += `- Activities with feedback: ${workoutFeedback.summary.totalWithFeedback}\n`;
     feedbackContext += `- Average RPE: ${workoutFeedback.summary.avgRpe?.toFixed(1) || 'N/A'}/10\n`;
-    feedbackContext += `- Average Feel: ${workoutFeedback.summary.avgFeel?.toFixed(1) || 'N/A'}/5\n`;
+    const avgFeel = workoutFeedback.summary.avgFeel;
+    feedbackContext += `- Average Feel: ${avgFeel?.toFixed(1) || 'N/A'} (${avgFeel != null ? getFeelLabel(avgFeel) : 'N/A'}) - scale: 1=Strong to 5=Weak\n`;
     if (workoutFeedback.summary.feelDistribution) {
       const fd = workoutFeedback.summary.feelDistribution;
-      feedbackContext += `- Feel distribution: Great=${fd.great || 0}, Good=${fd.good || 0}, OK=${fd.okay || 0}, Poor=${fd.poor || 0}, Bad=${fd.bad || 0}\n`;
+      feedbackContext += `- Feel distribution: Strong=${fd.great || 0}, Good=${fd.good || 0}, Normal=${fd.okay || 0}, Poor=${fd.poor || 0}, Weak=${fd.bad || 0}\n`;
     }
   }
 
@@ -1618,7 +1620,7 @@ function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, 
 - Intensity Factor: ${activity.icu_intensity || 'N/A'}
 - Variability Index: ${activity.icu_variability_index || 'N/A'} (cycling)
 - RPE: ${activity.icu_rpe || 'Not recorded'} / 10
-- Feel: ${activity.feel || 'Not recorded'} / 5
+- Feel: ${activity.feel ? getFeelLabel(activity.feel) : 'Not recorded'} (scale: 1=Strong to 5=Weak)
 - Zone Distribution: ${zoneDistribution}
 ${sportContext}
 

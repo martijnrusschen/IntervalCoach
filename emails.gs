@@ -814,7 +814,7 @@ ${t.intensity || "Intensity Factor"}: ${activity.icu_intensity ? activity.icu_in
       body += `  RPE: ${activity.icu_rpe}/10`;
     }
     if (activity.feel) {
-      body += `${activity.icu_rpe ? ' | ' : '  '}Feel: ${activity.feel}/5`;
+      body += `${activity.icu_rpe ? ' | ' : '  '}Feel: ${getFeelLabel(activity.feel)}`;
     }
     body += `\n`;
   }

@@ -90,17 +90,16 @@ function testAdaptiveTraining() {
     Logger.log("Average RPE: " + feedback.summary.avgRpe.toFixed(1) + "/10");
   }
   if (feedback.summary.avgFeel != null) {
-    const feelMap = { 1: 'Bad', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Great' };
-    Logger.log("Average Feel: " + feedback.summary.avgFeel.toFixed(1) + "/5 (" + (feelMap[Math.round(feedback.summary.avgFeel)] || 'N/A') + ")");
+    Logger.log("Average Feel: " + feedback.summary.avgFeel.toFixed(1) + " (" + getFeelLabel(feedback.summary.avgFeel) + ")");
   }
 
   Logger.log("\n--- Feel Distribution ---");
   const fd = feedback.summary.feelDistribution;
-  Logger.log("Great (5): " + fd.great);
-  Logger.log("Good (4): " + fd.good);
-  Logger.log("Okay (3): " + fd.okay);
-  Logger.log("Poor (2): " + fd.poor);
-  Logger.log("Bad (1): " + fd.bad);
+  Logger.log("Strong (1): " + fd.great);
+  Logger.log("Good (2): " + fd.good);
+  Logger.log("Normal (3): " + fd.okay);
+  Logger.log("Poor (4): " + fd.poor);
+  Logger.log("Weak (5): " + fd.bad);
 
   Logger.log("\n--- RPE Distribution ---");
   const rd = feedback.summary.rpeDistribution;
