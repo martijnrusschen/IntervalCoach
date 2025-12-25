@@ -1362,7 +1362,8 @@ Analyze this event and provide specific training recommendations. Consider:
    - Key focuses for the remaining weeks
    - Any benchmark workouts to gauge readiness
 
-Respond in ${langName} with this JSON structure:
+**IMPORTANT: Respond with ONLY valid JSON. No introductory text, no explanations. Just the JSON object.**
+Use ${langName} for all string values within the JSON:
 {
   "eventProfile": {
     "category": "climbing|criterium|time_trial|gran_fondo|road_race|mixed",

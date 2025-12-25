@@ -1370,8 +1370,16 @@ function testAIEventSpecificTraining() {
   Logger.log("Focus Areas: " + (powerProfile.focusAreas?.join(', ') || 'Unknown'));
   Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(0) || 'Unknown'));
 
+  // Calculate weeks to goal (fallback if phaseInfo.weeksOut is NaN)
+  let weeksOut = phaseInfo.weeksOut;
+  if (isNaN(weeksOut) && goals.primaryGoal?.date) {
+    const goalDate = new Date(goals.primaryGoal.date);
+    const today = new Date();
+    weeksOut = Math.round((goalDate - today) / (7 * 24 * 60 * 60 * 1000));
+  }
+
   Logger.log("\n--- Timeline ---");
-  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+  Logger.log("Weeks to Goal: " + weeksOut);
   Logger.log("Current Phase: " + phaseInfo.phaseName);
 
   // Run analysis
@@ -1380,7 +1388,7 @@ function testAIEventSpecificTraining() {
     goals.primaryGoal || { name: 'General Fitness', date: '2025-06-01', priority: 'A' },
     powerProfile,
     fitnessMetrics,
-    phaseInfo.weeksOut
+    weeksOut || 12
   );
 
   if (analysis) {
