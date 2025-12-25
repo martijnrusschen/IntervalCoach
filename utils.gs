@@ -1015,6 +1015,29 @@ function storeWorkoutAnalysis(activity, analysis) {
 }
 
 /**
+ * Check if an activity has already been analyzed
+ * @param {string} activityId - Activity ID to check
+ * @returns {boolean} True if already analyzed
+ */
+function isActivityAlreadyAnalyzed(activityId) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const historyKey = 'workoutAnalysisHistory';
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (!historyJson) {
+      return false;
+    }
+
+    const history = JSON.parse(historyJson);
+    return history.some(record => record.activityId === activityId);
+  } catch (e) {
+    Logger.log("Error checking analysis history: " + e.toString());
+    return false;
+  }
+}
+
+/**
  * Get recent workout analyses from storage
  * @param {number} days - Number of days to retrieve (default 7)
  * @returns {Array} Array of analysis records

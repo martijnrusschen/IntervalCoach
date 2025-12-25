@@ -507,10 +507,19 @@ function checkForCompletedWorkouts() {
     return;
   }
 
-  Logger.log(`Analyzing ${realWorkouts.length} completed workout(s)...`);
+  // Filter out already-analyzed workouts
+  const newWorkouts = realWorkouts.filter(a => !isActivityAlreadyAnalyzed(a.id));
 
-  // Analyze each workout
-  for (const activity of realWorkouts) {
+  if (newWorkouts.length === 0) {
+    Logger.log("All workouts already analyzed - skipping");
+    scriptProperties.setProperty(lastCheckKey, now.toISOString());
+    return;
+  }
+
+  Logger.log(`Analyzing ${newWorkouts.length} new workout(s) (${realWorkouts.length - newWorkouts.length} already analyzed)...`);
+
+  // Analyze each new workout
+  for (const activity of newWorkouts) {
     try {
       analyzeCompletedWorkout(activity);
     } catch (error) {
