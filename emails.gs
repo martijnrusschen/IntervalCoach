@@ -89,6 +89,12 @@ ${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
 `;
   }
 
+  // Workout Impact Preview Section
+  const impactPreview = generateWorkoutImpactSection(summary, phaseInfo, workout);
+  if (impactPreview) {
+    body += impactPreview;
+  }
+
   body += `
 -----------------------------------
 ${t.recommendation_title}
@@ -936,3 +942,151 @@ ${t.keep_training || "Keep up the great work!"}
   Logger.log("Post-workout analysis email sent successfully.");
 }
 
+// =========================================================
+// WORKOUT IMPACT PREVIEW SECTION
+// =========================================================
+
+/**
+ * Generate the workout impact preview section for the daily email
+ * Shows how today's workout affects CTL/ATL/TSB over the next 2 weeks
+ * @param {object} summary - Athlete summary with CTL/ATL/TSB
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} workout - Generated workout with type and duration
+ * @returns {string} Formatted email section or empty string if unavailable
+ */
+function generateWorkoutImpactSection(summary, phaseInfo, workout) {
+  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  try {
+    // Estimate TSS for today's workout based on type and duration
+    const estimatedTSS = estimateWorkoutTSS(workout);
+
+    if (!estimatedTSS || estimatedTSS <= 0) {
+      Logger.log("Impact preview skipped: Could not estimate TSS");
+      return "";
+    }
+
+    // Get current fitness metrics
+    const fitnessMetrics = {
+      ctl: summary.ctl_90 || 0,
+      atl: summary.atl || 0,
+      tsb: summary.tsb_current || 0
+    };
+
+    // Generate impact preview data
+    const impactData = generateWorkoutImpactPreview(estimatedTSS, fitnessMetrics, 14);
+
+    if (!impactData || !impactData.withWorkout || impactData.withWorkout.length === 0) {
+      Logger.log("Impact preview skipped: No projection data");
+      return "";
+    }
+
+    // Fetch goals for context
+    const goals = fetchUpcomingGoals();
+
+    // Generate AI narrative
+    const aiPreview = generateAIWorkoutImpactPreview(impactData, goals, phaseInfo);
+
+    // Format the section
+    let section = `
+-----------------------------------
+${t.impact_preview_title || "Workout Impact Preview"}
+-----------------------------------
+`;
+
+    // AI Summary
+    if (aiPreview && aiPreview.summary) {
+      section += `${aiPreview.summary}\n\n`;
+    }
+
+    // Key metrics
+    section += `Today's TSS: ~${estimatedTSS}
+`;
+
+    // Tomorrow's impact
+    const tomorrow = impactData.withWorkout[1];
+    section += `Tomorrow: CTL ${tomorrow.ctl} | TSB ${tomorrow.tsb}\n`;
+
+    // 2-week outlook
+    const endOfWeek2 = impactData.withWorkout[13];
+    section += `In 2 weeks: CTL ${endOfWeek2.ctl} (+${impactData.impact.twoWeekCTLDelta.toFixed(1)})\n`;
+
+    // Key insights
+    if (aiPreview && aiPreview.keyInsights && aiPreview.keyInsights.length > 0) {
+      section += "\n";
+      for (var i = 0; i < aiPreview.keyInsights.length && i < 2; i++) {
+        section += "• " + aiPreview.keyInsights[i] + "\n";
+      }
+    }
+
+    // AI narrative
+    if (aiPreview && aiPreview.narrative) {
+      section += "\n" + aiPreview.narrative + "\n";
+    }
+
+    // Mini projection table (next 7 days)
+    section += "\n7-Day Projection:\n";
+    for (var d = 0; d < 7 && d < impactData.withWorkout.length; d++) {
+      var day = impactData.withWorkout[d];
+      var tssIndicator = day.tss > 0 ? ("TSS:" + day.tss) : "Rest";
+      section += day.dayName + " " + day.date.substring(5) + ": " + tssIndicator + " -> TSB " + day.tsb + "\n";
+    }
+
+    Logger.log("Impact preview generated" + (aiPreview.aiEnhanced ? " (AI-enhanced)" : " (fallback)"));
+    return section;
+
+  } catch (e) {
+    Logger.log("Error generating impact preview: " + e.toString());
+    return "";
+  }
+}
+
+/**
+ * Estimate TSS for a workout based on type and duration
+ * Uses typical intensity factors for different workout types
+ * @param {object} workout - Workout object with type and duration info
+ * @returns {number} Estimated TSS
+ */
+function estimateWorkoutTSS(workout) {
+  if (!workout) return 0;
+
+  // Try to extract duration from workout
+  let durationMinutes = 60; // default
+
+  // Check for explicit duration
+  if (workout.duration) {
+    durationMinutes = typeof workout.duration === 'object' ? workout.duration.max : workout.duration;
+  } else if (workout.durationMinutes) {
+    durationMinutes = workout.durationMinutes;
+  }
+
+  // Determine intensity factor based on workout type
+  const workoutType = (workout.type || "").toLowerCase();
+
+  // TSS per minute based on workout type
+  // Zone 2/Endurance: ~0.5-0.6 TSS/min (IF ~0.65-0.75)
+  // Tempo/SweetSpot: ~0.7-0.8 TSS/min (IF ~0.84-0.90)
+  // Threshold/VO2max: ~0.9-1.1 TSS/min (IF ~0.95-1.05)
+  let tssPerMinute = 0.65; // default moderate
+
+  if (workoutType.indexOf("recovery") !== -1 || workoutType.indexOf("z1") !== -1) {
+    tssPerMinute = 0.4;
+  } else if (workoutType.indexOf("endurance") !== -1 || workoutType.indexOf("z2") !== -1 || workoutType.indexOf("base") !== -1) {
+    tssPerMinute = 0.55;
+  } else if (workoutType.indexOf("tempo") !== -1 || workoutType.indexOf("z3") !== -1) {
+    tssPerMinute = 0.72;
+  } else if (workoutType.indexOf("sweetspot") !== -1 || workoutType.indexOf("sweet_spot") !== -1 || workoutType.indexOf("ss") !== -1) {
+    tssPerMinute = 0.80;
+  } else if (workoutType.indexOf("threshold") !== -1 || workoutType.indexOf("z4") !== -1 || workoutType.indexOf("ftp") !== -1) {
+    tssPerMinute = 0.92;
+  } else if (workoutType.indexOf("vo2") !== -1 || workoutType.indexOf("z5") !== -1) {
+    tssPerMinute = 1.0;
+  } else if (workoutType.indexOf("anaerobic") !== -1 || workoutType.indexOf("z6") !== -1 || workoutType.indexOf("sprint") !== -1) {
+    tssPerMinute = 1.1;
+  }
+
+  const estimatedTSS = Math.round(durationMinutes * tssPerMinute);
+
+  Logger.log("Estimated TSS for " + workoutType + " (" + durationMinutes + "min): " + estimatedTSS);
+  return estimatedTSS;
+}

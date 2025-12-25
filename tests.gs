@@ -1761,3 +1761,111 @@ function formatPace(metersPerSecond) {
   const secs = Math.round(secsPerKm % 60);
   return mins + ":" + (secs < 10 ? "0" : "") + secs + "/km";
 }
+
+// =========================================================
+// WORKOUT IMPACT PREVIEW TESTS
+// =========================================================
+
+/**
+ * Test the Workout Impact Preview feature
+ * Tests projection calculations, TSS estimation, and AI narrative generation
+ */
+function testWorkoutImpactPreview() {
+  Logger.log("=== WORKOUT IMPACT PREVIEW TEST ===\n");
+
+  // 1. Test fitness metrics fetching
+  Logger.log("--- Current Fitness Metrics ---");
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("CTL: " + fitnessMetrics.ctl);
+  Logger.log("ATL: " + fitnessMetrics.atl);
+  Logger.log("TSB: " + fitnessMetrics.tsb);
+  Logger.log("Ramp Rate: " + fitnessMetrics.rampRate);
+
+  // 2. Test upcoming planned TSS fetching
+  Logger.log("\n--- Upcoming Planned Workouts (14 days) ---");
+  const upcomingWorkouts = fetchUpcomingPlannedTSS(14);
+  upcomingWorkouts.forEach(function(w) {
+    if (w.tss > 0 || w.activityType) {
+      Logger.log(w.date + ": " + (w.activityType || "Rest") + " TSS=" + w.tss + " (" + w.source + ")");
+    }
+  });
+
+  // 3. Test projection calculation
+  Logger.log("\n--- Fitness Projection (60 TSS workout) ---");
+  const testTSS = 60;
+  const projections = projectFitnessMetrics(fitnessMetrics.ctl, fitnessMetrics.atl, upcomingWorkouts, 14);
+  projections.slice(0, 7).forEach(function(p) {
+    Logger.log(p.dayName + " " + p.date + ": TSS=" + p.tss + " -> CTL=" + p.ctl + " ATL=" + p.atl + " TSB=" + p.tsb);
+  });
+
+  // 4. Test impact preview generation
+  Logger.log("\n--- Impact Preview (comparing with/without workout) ---");
+  const impactData = generateWorkoutImpactPreview(testTSS, fitnessMetrics, 14);
+
+  Logger.log("Current state: CTL=" + impactData.currentMetrics.ctl + " TSB=" + impactData.currentMetrics.tsb);
+  Logger.log("Today's TSS: " + impactData.todaysTSS);
+  Logger.log("Tomorrow TSB delta: " + impactData.impact.tomorrowTSBDelta.toFixed(1));
+  Logger.log("2-week CTL gain: +" + impactData.impact.twoWeekCTLDelta.toFixed(1));
+  Logger.log("Lowest TSB this week: " + impactData.impact.lowestTSB.toFixed(1));
+  Logger.log("Days to positive TSB: " + (impactData.impact.daysToPositiveTSB !== null ? impactData.impact.daysToPositiveTSB : "14+"));
+
+  if (impactData.impact.peakFormWindow.length > 0) {
+    Logger.log("Peak form window: " + impactData.impact.peakFormWindow.slice(0, 3).join(", "));
+  }
+
+  // 5. Test TSS estimation
+  Logger.log("\n--- TSS Estimation by Workout Type ---");
+  const testWorkouts = [
+    { type: "Recovery_Z1", duration: 45 },
+    { type: "Endurance_Z2", duration: 90 },
+    { type: "SweetSpot_SST", duration: 60 },
+    { type: "Threshold_FTP", duration: 60 },
+    { type: "VO2max_Intervals", duration: 60 }
+  ];
+  testWorkouts.forEach(function(w) {
+    const tss = estimateWorkoutTSS(w);
+    Logger.log(w.type + " (" + w.duration + "min): ~" + tss + " TSS");
+  });
+
+  // 6. Test AI narrative generation
+  Logger.log("\n--- AI Impact Preview Narrative ---");
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = calculateTrainingPhase(goals);
+
+  const aiPreview = generateAIWorkoutImpactPreview(impactData, goals, phaseInfo);
+
+  if (aiPreview.success) {
+    Logger.log("AI Enhanced: " + aiPreview.aiEnhanced);
+    Logger.log("Summary: " + aiPreview.summary);
+    Logger.log("Form Status: " + aiPreview.formStatus);
+    Logger.log("Recommendation: " + aiPreview.recommendation);
+    Logger.log("\nNarrative:\n" + aiPreview.narrative);
+    if (aiPreview.keyInsights && aiPreview.keyInsights.length > 0) {
+      Logger.log("\nKey Insights:");
+      aiPreview.keyInsights.forEach(function(insight, i) {
+        Logger.log("  " + (i + 1) + ". " + insight);
+      });
+    }
+  } else {
+    Logger.log("AI preview failed: " + (aiPreview.error || "Unknown error"));
+  }
+
+  // 7. Test full email section generation
+  Logger.log("\n--- Full Email Section ---");
+  const testSummary = {
+    ctl_90: fitnessMetrics.ctl,
+    atl: fitnessMetrics.atl,
+    tsb_current: fitnessMetrics.tsb
+  };
+  const testWorkout = { type: "SweetSpot_SST", duration: 75 };
+
+  const emailSection = generateWorkoutImpactSection(testSummary, phaseInfo, testWorkout);
+  if (emailSection) {
+    Logger.log("Email section generated (" + emailSection.length + " chars):");
+    Logger.log(emailSection);
+  } else {
+    Logger.log("Email section was empty (skipped)");
+  }
+
+  Logger.log("\n=== END WORKOUT IMPACT PREVIEW TEST ===");
+}
