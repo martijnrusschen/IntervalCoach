@@ -1462,7 +1462,8 @@ function testAICumulativeFatiguePrediction() {
   Logger.log("Workout feedback: " + (workoutFeedback.summary?.totalWithFeedback || 0) + " activities with RPE/Feel");
 
   const goals = fetchUpcomingGoals();
-  const phaseInfo = calculateTrainingPhase(goals);
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
   Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
 
   // Run AI analysis
