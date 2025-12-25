@@ -50,6 +50,26 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ---
 
+## Phase 2: Advanced AI Features
+
+### High Impact
+
+| # | Feature | Current State | AI-First Opportunity | Status |
+|---|---------|---------------|---------------------|--------|
+| 9 | **Event-Specific Training** | Simple pre-race intensity rules in `workouts.gs` | AI analyzes race profile (distance, terrain, demands) → custom training emphasis and peaking strategy | Pending |
+| 10 | **Cumulative Fatigue Prediction** | 14-day averaging in `utils.gs:489-591` | AI models fatigue trajectory, distinguishes "good" vs "bad" fatigue, predicts recovery timeline | Pending |
+| 11 | **Race Outcome Prediction** | None | AI predicts race performance/placement given current fitness, compares to goal time | Pending |
+| 12 | **Closed-Loop Weekly Adaptation** | Static AI weekly plan | AI learns from actual vs planned execution, adapts future plans based on outcomes | Pending |
+
+### Medium Impact
+
+| # | Feature | Current State | AI-First Opportunity | Status |
+|---|---------|---------------|---------------------|--------|
+| 13 | **Personalized Zone Boundaries** | Fixed offsets from CS/FTP in `prompts.gs:245-260` | AI adjusts zones based on athlete's lactate patterns, HRV response, time-at-power distributions | Pending |
+| 14 | **Cross-Sport Zone Equivalency** | Separate cycling/running zones | AI calculates equivalent efforts across sports (cycling FTP ↔ running threshold) | Pending |
+
+---
+
 ## Implementation Notes
 
 ### Feature 1: AI Power Profile Analysis ✅ COMPLETE
