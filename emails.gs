@@ -762,3 +762,177 @@ ${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
   Logger.log("Monthly progress report sent successfully.");
 }
 
+// =========================================================
+// POST-WORKOUT ANALYSIS EMAIL
+// =========================================================
+
+/**
+ * Send post-workout AI analysis email
+ * @param {object} activity - Completed activity
+ * @param {object} analysis - AI analysis results
+ * @param {object} wellness - Current wellness data
+ * @param {object} fitness - Current fitness metrics
+ * @param {object} powerProfile - Power profile (null for runs)
+ * @param {object} runningData - Running data (null for cycling)
+ */
+function sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData) {
+  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const isRun = activity.type === "Run";
+
+  // Generate subject line
+  const dateStr = Utilities.formatDate(new Date(activity.start_date_local), SYSTEM_SETTINGS.TIMEZONE, "MM/dd HH:mm");
+  const effectivenessEmoji = analysis.effectiveness >= 8 ? "🎯" : analysis.effectiveness >= 6 ? "✓" : "⚠";
+  const subject = `[IntervalCoach] ${effectivenessEmoji} Workout Analysis: ${activity.name} (${dateStr})`;
+
+  let body = `${t.greeting}\n\n`;
+
+  // Congratulatory message
+  if (analysis.congratsMessage) {
+    body += `===================================
+${t.workout_complete || "Workout Complete"}
+===================================
+${analysis.congratsMessage}
+
+`;
+  }
+
+  // Workout Summary
+  body += `===================================
+${t.workout_summary || "Workout Summary"}
+===================================
+${t.workout_type || "Type"}: ${activity.type}
+${t.duration || "Duration"}: ${Math.round(activity.moving_time / 60)} minutes
+TSS/Load: ${activity.icu_training_load}
+${t.intensity || "Intensity Factor"}: ${activity.icu_intensity ? activity.icu_intensity.toFixed(2) : 'N/A'}
+`;
+
+  // RPE/Feel if available
+  if (activity.icu_rpe || activity.feel) {
+    body += `\n${t.subjective_feedback || "Your Feedback"}:
+`;
+    if (activity.icu_rpe) {
+      body += `  RPE: ${activity.icu_rpe}/10`;
+    }
+    if (activity.feel) {
+      body += `${activity.icu_rpe ? ' | ' : '  '}Feel: ${activity.feel}/5`;
+    }
+    body += `\n`;
+  }
+
+  // AI Analysis
+  body += `
+===================================
+${t.ai_analysis || "AI Analysis"}
+===================================
+${t.effectiveness || "Effectiveness"}: ${analysis.effectiveness}/10
+${analysis.effectivenessReason}
+
+${t.difficulty || "Difficulty"}: ${analysis.difficultyMatch.replace(/_/g, ' ')}
+${analysis.difficultyReason}
+
+${t.workout_stimulus || "Workout Stimulus"}: ${analysis.workoutStimulus.toUpperCase()} (${analysis.stimulusQuality})
+`;
+
+  // Key Insight
+  body += `
+-----------------------------------
+${t.key_insight || "Key Insight"}
+-----------------------------------
+${analysis.keyInsight}
+`;
+
+  // Performance Highlights
+  if (analysis.performanceHighlights && analysis.performanceHighlights.length > 0) {
+    body += `
+-----------------------------------
+${t.highlights || "Highlights"}
+-----------------------------------
+`;
+    analysis.performanceHighlights.forEach(highlight => {
+      body += `• ${highlight}\n`;
+    });
+  }
+
+  // Recovery Impact
+  if (analysis.recoveryImpact) {
+    body += `
+-----------------------------------
+${t.recovery_impact || "Recovery Impact"}
+-----------------------------------
+${t.severity || "Severity"}: ${analysis.recoveryImpact.severity}
+${t.estimated_recovery || "Est. Recovery"}: ${analysis.recoveryImpact.estimatedRecoveryHours} hours
+${t.next_workout || "Next Workout"}: ${analysis.recoveryImpact.nextWorkoutAdjustment.replace(/_/g, ' ')}
+`;
+  }
+
+  // Training Adjustments
+  if (analysis.trainingAdjustments && analysis.trainingAdjustments.needed) {
+    body += `
+-----------------------------------
+${t.training_adjustments || "Training Adjustments"}
+-----------------------------------
+`;
+    if (analysis.trainingAdjustments.ftpCalibration && analysis.trainingAdjustments.ftpCalibration !== 'none') {
+      body += `FTP Calibration: ${analysis.trainingAdjustments.ftpCalibration.replace(/_/g, ' ')}\n`;
+    }
+    if (analysis.trainingAdjustments.futureIntensity) {
+      body += `Future Intensity: ${analysis.trainingAdjustments.futureIntensity.replace(/_/g, ' ')}\n`;
+    }
+    body += `\n${analysis.trainingAdjustments.reasoning}\n`;
+  }
+
+  // Current Fitness State
+  body += `
+-----------------------------------
+${t.current_fitness || "Current Fitness"}
+-----------------------------------
+CTL: ${fitness.ctl ? fitness.ctl.toFixed(1) : 'N/A'}
+ATL: ${fitness.atl ? fitness.atl.toFixed(1) : 'N/A'}
+TSB: ${fitness.tsb ? fitness.tsb.toFixed(1) : 'N/A'}
+${t.ramp_rate || "Ramp Rate"}: ${fitness.rampRate || 'N/A'} TSS/week
+`;
+
+  // Power/Running Profile
+  if (!isRun && powerProfile && powerProfile.available) {
+    const currentEftp = powerProfile.currentEftp || powerProfile.eFTP;
+    body += `
+-----------------------------------
+${t.power_profile_title || "Power Profile"}
+-----------------------------------
+eFTP: ${currentEftp}W
+Peak Powers: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W
+`;
+  } else if (isRun && runningData && runningData.available) {
+    body += `
+-----------------------------------
+${t.running_profile || "Running Profile"}
+-----------------------------------
+Critical Speed: ${runningData.criticalSpeed || 'N/A'}/km
+D': ${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}
+Threshold Pace: ${runningData.thresholdPace || 'N/A'}/km
+`;
+  }
+
+  // Wellness
+  if (wellness && wellness.available) {
+    body += `
+-----------------------------------
+${t.recovery_title}
+-----------------------------------
+${t.recovery_status}: ${wellness.recoveryStatus}
+${t.sleep}: ${wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'}
+${t.hrv}: ${wellness.today.hrv || 'N/A'} ms
+${t.resting_hr}: ${wellness.today.restingHR || 'N/A'} bpm
+`;
+  }
+
+  body += `
+-----------------------------------
+${t.keep_training || "Keep up the great work!"}
+- IntervalCoach
+`;
+
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Post-workout analysis email sent successfully.");
+}
+

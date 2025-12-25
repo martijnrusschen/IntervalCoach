@@ -905,3 +905,133 @@ function fetchWeeklyActivities(daysBack, daysOffset) {
 
   return result;
 }
+
+// =========================================================
+// POST-WORKOUT ANALYSIS STORAGE
+// =========================================================
+
+/**
+ * Store workout analysis for future adaptive context
+ * Saves analysis data to script properties for next day's workout generation
+ * @param {object} activity - Activity object
+ * @param {object} analysis - AI analysis results
+ */
+function storeWorkoutAnalysis(activity, analysis) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+
+  // Create analysis record
+  const analysisRecord = {
+    activityId: activity.id,
+    activityName: activity.name,
+    activityType: activity.type,
+    date: activity.start_date_local,
+    tss: activity.icu_training_load,
+    effectiveness: analysis.effectiveness,
+    difficultyMatch: analysis.difficultyMatch,
+    stimulus: analysis.workoutStimulus,
+    recoveryHours: analysis.recoveryImpact?.estimatedRecoveryHours || null,
+    adjustmentsNeeded: analysis.trainingAdjustments?.needed || false,
+    ftpCalibration: analysis.trainingAdjustments?.ftpCalibration || 'none',
+    keyInsight: analysis.keyInsight,
+    timestamp: new Date().toISOString()
+  };
+
+  // Store last 7 days of analyses
+  const historyKey = 'workoutAnalysisHistory';
+  let history = [];
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (historyJson) {
+      history = JSON.parse(historyJson);
+    }
+  } catch (e) {
+    Logger.log("Error parsing workout analysis history: " + e.toString());
+    history = [];
+  }
+
+  // Add new record
+  history.unshift(analysisRecord);
+
+  // Keep only last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  history = history.filter(record => {
+    const recordDate = new Date(record.date);
+    return recordDate >= sevenDaysAgo;
+  });
+
+  // Limit to 14 records max (safety)
+  if (history.length > 14) {
+    history = history.slice(0, 14);
+  }
+
+  // Store updated history
+  try {
+    scriptProperties.setProperty(historyKey, JSON.stringify(history));
+    Logger.log(`Stored analysis for ${activity.name} (${history.length} records in history)`);
+  } catch (e) {
+    Logger.log("Error storing workout analysis: " + e.toString());
+  }
+
+  // Also store "last analysis" for quick access
+  const lastAnalysisKey = 'lastWorkoutAnalysis';
+  try {
+    scriptProperties.setProperty(lastAnalysisKey, JSON.stringify(analysisRecord));
+  } catch (e) {
+    Logger.log("Error storing last workout analysis: " + e.toString());
+  }
+}
+
+/**
+ * Get recent workout analyses from storage
+ * @param {number} days - Number of days to retrieve (default 7)
+ * @returns {Array} Array of analysis records
+ */
+function getWorkoutAnalysisHistory(days) {
+  days = days || 7;
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const historyKey = 'workoutAnalysisHistory';
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (!historyJson) {
+      return [];
+    }
+
+    const history = JSON.parse(historyJson);
+
+    // Filter by days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    return history.filter(record => {
+      const recordDate = new Date(record.date);
+      return recordDate >= cutoffDate;
+    });
+  } catch (e) {
+    Logger.log("Error retrieving workout analysis history: " + e.toString());
+    return [];
+  }
+}
+
+/**
+ * Get last workout analysis
+ * @returns {object|null} Last analysis record or null
+ */
+function getLastWorkoutAnalysis() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const lastAnalysisKey = 'lastWorkoutAnalysis';
+
+  try {
+    const lastAnalysisJson = scriptProperties.getProperty(lastAnalysisKey);
+    if (!lastAnalysisJson) {
+      return null;
+    }
+
+    return JSON.parse(lastAnalysisJson);
+  } catch (e) {
+    Logger.log("Error retrieving last workout analysis: " + e.toString());
+    return null;
+  }
+}

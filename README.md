@@ -51,6 +51,16 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Smart Limits:** Max 3 rides and 1-2 runs per week (adjustable based on athlete capacity)
 - **Variety Tracking:** Uses 2-week workout history to ensure training variety
 
+### Post-Workout AI Analysis (NEW)
+- **Hourly Checks:** Automatically detects when you complete a workout (checked every hour)
+- **AI Analysis:** Evaluates workout effectiveness, difficulty match, and execution quality
+- **Recovery Impact:** Estimates recovery time and provides recommendations for next workout
+- **Smart Caching:** Early exit if no new activities (2-5 second checks, minimal quota usage)
+- **Analysis Email:** Receive detailed insights within 1 hour of workout completion
+- **Adaptive Learning:** Analysis stored and used to improve future workout predictions
+- **Performance Tracking:** Highlights strengths, concerns, and training adjustments needed
+- **Cost:** ~$0.05-0.10/month in Gemini API costs (only calls AI when workouts are completed)
+
 ## How It Works
 
 ```
@@ -255,7 +265,14 @@ Once everything works, set up automatic triggers:
 - Type: Day timer
 - Time: 6:00 AM - 7:00 AM
 
-**Trigger 3: Weekly Summary + Planning (Recommended)**
+**Trigger 3: Post-Workout Analysis (Recommended)**
+- Function: `checkForCompletedWorkouts`
+- Event source: Time-driven
+- Type: Hour timer
+- Every: 1 hour
+- Automatically analyzes completed workouts and sends AI insights via email
+
+**Trigger 4: Weekly Summary + Planning (Recommended)**
 - Function: `sendWeeklySummaryEmail`
 - Event source: Time-driven
 - Type: Week timer
@@ -263,7 +280,7 @@ Once everything works, set up automatic triggers:
 - Time: 6:00 PM - 7:00 PM
 - Reviews past week + creates next week's plan + syncs to Intervals.icu calendar
 
-**Trigger 4: Monthly Progress Report (Optional)**
+**Trigger 5: Monthly Progress Report (Optional)**
 - Function: `sendMonthlyProgressEmail`
 - Event source: Time-driven
 - Type: Month timer

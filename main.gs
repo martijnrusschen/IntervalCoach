@@ -446,6 +446,132 @@ function fetchAndLogActivities() {
 }
 
 // =========================================================
+// POST-WORKOUT ANALYSIS: Check for Completed Workouts
+// =========================================================
+
+/**
+ * Check for completed workouts and analyze them with AI
+ * - Hourly check with smart caching (early exit if no new activities)
+ * - Compares predicted vs actual difficulty
+ * - Sends analysis email
+ * - Feeds insights into next day's workout generation
+ */
+function checkForCompletedWorkouts() {
+  requireValidConfig();
+
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const lastCheckKey = 'lastPostWorkoutAnalysis';
+
+  // Get last analysis timestamp (default to 24 hours ago for first run)
+  let lastCheckTime = scriptProperties.getProperty(lastCheckKey);
+  if (!lastCheckTime) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    lastCheckTime = yesterday.toISOString();
+    Logger.log("First run - checking last 24 hours");
+  }
+
+  const now = new Date();
+  const lastCheck = new Date(lastCheckTime);
+
+  Logger.log(`Checking for completed workouts since ${Utilities.formatDate(lastCheck, SYSTEM_SETTINGS.TIMEZONE, "yyyy-MM-dd HH:mm")}`);
+
+  // Fetch activities completed since last check
+  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(lastCheck)}&newest=${formatDateISO(now)}`;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success) {
+    Logger.log("Error fetching activities: " + result.error);
+    return;
+  }
+
+  const activities = result.data;
+  if (!activities || activities.length === 0) {
+    Logger.log("No new completed activities - early exit (2-5 seconds)");
+    // Update timestamp even on no activities to avoid repeated API calls
+    scriptProperties.setProperty(lastCheckKey, now.toISOString());
+    return;
+  }
+
+  Logger.log(`Found ${activities.length} new completed activity(ies)`);
+
+  // Filter to actual workouts (exclude manual entries without data)
+  const realWorkouts = activities.filter(a => {
+    // Must have training load and be a real activity (not just a placeholder)
+    return a.icu_training_load && a.icu_training_load > 0 && a.moving_time && a.moving_time > 300; // At least 5 minutes
+  });
+
+  if (realWorkouts.length === 0) {
+    Logger.log("No real workouts found (filtered out placeholders/manual entries)");
+    scriptProperties.setProperty(lastCheckKey, now.toISOString());
+    return;
+  }
+
+  Logger.log(`Analyzing ${realWorkouts.length} completed workout(s)...`);
+
+  // Analyze each workout
+  for (const activity of realWorkouts) {
+    try {
+      analyzeCompletedWorkout(activity);
+    } catch (error) {
+      Logger.log(`Error analyzing activity ${activity.id}: ${error.message}`);
+    }
+  }
+
+  // Update last check timestamp
+  scriptProperties.setProperty(lastCheckKey, now.toISOString());
+  Logger.log("Post-workout analysis complete");
+}
+
+/**
+ * Analyze a completed workout using AI
+ * @param {object} activity - Activity object from Intervals.icu API
+ */
+function analyzeCompletedWorkout(activity) {
+  Logger.log(`\n=== Analyzing: ${activity.name} ===`);
+  Logger.log(`Type: ${activity.type} | TSS: ${activity.icu_training_load} | Duration: ${formatDuration(activity.moving_time)}`);
+
+  // Fetch current wellness and fitness context
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitness = fetchFitnessMetrics();
+
+  // Get power/running data based on activity type
+  const isRun = activity.type === "Run";
+  let powerProfile = { available: false };
+  let runningData = { available: false };
+
+  if (isRun) {
+    runningData = fetchRunningData();
+  } else {
+    const powerCurve = fetchPowerCurve();
+    const goals = fetchUpcomingGoals();
+    powerProfile = analyzePowerProfile(powerCurve, goals);
+  }
+
+  // Generate AI analysis
+  const analysis = generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData);
+
+  if (!analysis || !analysis.success) {
+    Logger.log("AI analysis failed: " + (analysis?.error || "Unknown error"));
+    return;
+  }
+
+  Logger.log("AI Analysis Results:");
+  Logger.log(`  Effectiveness: ${analysis.effectiveness}/10`);
+  Logger.log(`  Difficulty Match: ${analysis.difficultyMatch}`);
+  Logger.log(`  Key Insight: ${analysis.keyInsight}`);
+
+  // Send email with analysis
+  sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData);
+
+  // Store analysis for next day's adaptive context
+  storeWorkoutAnalysis(activity, analysis);
+
+  Logger.log("Post-workout analysis email sent");
+}
+
+// =========================================================
 // ATHLETE SUMMARY
 // =========================================================
 

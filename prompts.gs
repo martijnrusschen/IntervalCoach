@@ -1557,3 +1557,146 @@ Use ${langName} for all string values within the JSON:
   }
 }
 
+// =========================================================
+// POST-WORKOUT ANALYSIS
+// =========================================================
+
+/**
+ * Generate AI-powered post-workout analysis
+ * Compares predicted vs actual difficulty, analyzes effectiveness
+ * @param {object} activity - Completed activity from Intervals.icu
+ * @param {object} wellness - Current wellness data
+ * @param {object} fitness - Current fitness metrics
+ * @param {object} powerProfile - Power profile (for cycling)
+ * @param {object} runningData - Running data (for runs)
+ * @returns {object} AI analysis with effectiveness, insights, recommendations
+ */
+function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData) {
+  const langName = getPromptLanguage();
+  const isRun = activity.type === "Run";
+
+  // Extract zone distribution for stimulus analysis
+  const zoneDistribution = activity.icu_zone_times ?
+    activity.icu_zone_times.map(z => `${z.id}: ${Math.round(z.secs / 60)}min`).join(", ") :
+    "Not available";
+
+  // Build sport-specific context
+  let sportContext = "";
+  if (isRun && runningData.available) {
+    sportContext = `
+**Running Profile:**
+- Critical Speed: ${runningData.criticalSpeed || 'N/A'}/km
+- D': ${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}
+- Threshold Pace: ${runningData.thresholdPace || 'N/A'}/km`;
+  } else if (!isRun && powerProfile.available) {
+    sportContext = `
+**Power Profile:**
+- eFTP: ${powerProfile.currentEftp || powerProfile.eFTP || 'N/A'}W
+- W': ${powerProfile.wPrimeKj || 'N/A'}kJ
+- VO2max: ${powerProfile.vo2max ? powerProfile.vo2max.toFixed(1) : 'N/A'}
+- Peak Powers: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W`;
+  }
+
+  // Build wellness context
+  let wellnessContext = "";
+  if (wellness && wellness.available) {
+    wellnessContext = `
+**Wellness Today:**
+- Recovery Status: ${wellness.recoveryStatus}
+- Sleep: ${wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${wellness.today.hrv || 'N/A'} ms (avg: ${wellness.averages.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'})
+- Resting HR: ${wellness.today.restingHR || 'N/A'} bpm`;
+  }
+
+  const prompt = `You are an expert cycling and running coach analyzing a completed workout.
+
+**Workout Details:**
+- Name: ${activity.name}
+- Type: ${activity.type}
+- Duration: ${Math.round(activity.moving_time / 60)} minutes
+- TSS/Training Load: ${activity.icu_training_load}
+- Intensity Factor: ${activity.icu_intensity || 'N/A'}
+- Variability Index: ${activity.icu_variability_index || 'N/A'} (cycling)
+- RPE: ${activity.icu_rpe || 'Not recorded'} / 10
+- Feel: ${activity.feel || 'Not recorded'} / 5
+- Zone Distribution: ${zoneDistribution}
+${sportContext}
+
+**Current Fitness State:**
+- CTL (Fitness): ${fitness.ctl || 'N/A'}
+- ATL (Fatigue): ${fitness.atl || 'N/A'}
+- TSB (Form): ${fitness.tsb || 'N/A'}
+- CTL Ramp Rate: ${fitness.rampRate || 'N/A'} per week
+${wellnessContext}
+
+**Analysis Tasks:**
+
+1. **Workout Effectiveness** (1-10 scale):
+   - Was the workout executed well based on zone distribution and metrics?
+   - Did it achieve its intended stimulus?
+   - Quality of execution (consistent power/pace, appropriate pacing)
+
+2. **Difficulty Assessment**:
+   - Based on RPE/Feel and the metrics, was this workout:
+     - "easier_than_expected" (RPE < 6 for structured workout)
+     - "as_expected" (RPE 6-8 for hard intervals, 3-5 for endurance)
+     - "harder_than_expected" (RPE > 8, or much higher than typical)
+
+3. **Recovery Impact**:
+   - How will this workout affect recovery over next 24-48h?
+   - Should next workout be adjusted based on this session?
+
+4. **Key Insight**:
+   - What's the single most important takeaway from this workout?
+   - Any red flags or exceptional performances to highlight?
+
+5. **Training Adjustments**:
+   - Should we adjust future workouts based on this performance?
+   - Calibration needed for FTP/zones or workout intensity?
+
+**IMPORTANT: Respond with ONLY valid JSON. No introductory text, no explanations. Just the JSON object.**
+Use ${langName} for all string values within the JSON:
+{
+  "effectiveness": 1-10 (how well the workout was executed),
+  "effectivenessReason": "1-2 sentences explaining the effectiveness rating",
+  "difficultyMatch": "easier_than_expected|as_expected|harder_than_expected",
+  "difficultyReason": "1-2 sentences explaining why difficulty matched or didn't match expectations",
+  "workoutStimulus": "recovery|endurance|tempo|threshold|vo2max|anaerobic|mixed",
+  "stimulusQuality": "poor|fair|good|excellent",
+  "recoveryImpact": {
+    "severity": "minimal|moderate|significant|severe",
+    "estimatedRecoveryHours": 12-72 hours until ready for next quality session,
+    "nextWorkoutAdjustment": "none|reduce_intensity|reduce_volume|add_rest_day"
+  },
+  "keyInsight": "Single most important takeaway (2-3 sentences)",
+  "performanceHighlights": ["List 2-3 specific positive observations or concerns"],
+  "trainingAdjustments": {
+    "needed": true/false,
+    "ftpCalibration": "none|increase_5w|decrease_5w|retest_recommended",
+    "futureIntensity": "maintain|increase_slightly|decrease_slightly",
+    "reasoning": "1-2 sentences explaining why adjustments are or aren't needed"
+  },
+  "congratsMessage": "Brief encouraging message about the workout (1-2 sentences)",
+  "confidence": "high|medium|low"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("Post-workout analysis: No response from Gemini");
+      return { success: false, error: "No response from AI" };
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    const result = JSON.parse(cleaned);
+    result.success = true;
+    result.aiEnhanced = true;
+    return result;
+  } catch (e) {
+    Logger.log("Failed to parse post-workout analysis: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
