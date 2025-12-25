@@ -1453,7 +1453,8 @@ function testAICumulativeFatiguePrediction() {
   const fitnessTrend = fetchFitnessTrend(14);
   Logger.log("Fitness trend: " + fitnessTrend.length + " days of data");
 
-  const wellness = fetchWellnessData();
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
   Logger.log("Wellness: Recovery=" + (wellness.recoveryScore || 'N/A') + "%, HRV=" + (wellness.hrv || 'N/A'));
 
   const workoutFeedback = fetchRecentActivityFeedback(14);
