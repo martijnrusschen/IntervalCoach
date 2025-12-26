@@ -1254,7 +1254,7 @@ Return JSON:
 }`;
 
   try {
-    var response = callGeminiAPI(prompt);
+    var response = callGeminiAPIText(prompt);
     if (!response || typeof response !== 'string') {
       return generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo);
     }
