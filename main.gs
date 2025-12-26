@@ -424,12 +424,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const dateStr = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MMdd");
   const fileDateStr = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "yyyyMMdd");
 
+  // Calculate cross-sport equivalency for context
+  let crossSportEquivalency = null;
+  try {
+    crossSportEquivalency = calculateCrossSportEquivalency();
+    if (crossSportEquivalency && crossSportEquivalency.available) {
+      Logger.log("Cross-sport data available: FTP " + crossSportEquivalency.cycling.ftp + "W ↔ CS " + crossSportEquivalency.running.criticalSpeed + "/km");
+    }
+  } catch (e) {
+    Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
+  }
+
   // Generate workout with appropriate prompt
   Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
 
   const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext);
+    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency)
+    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency);
 
   // Build context for regeneration feedback loop
   const regenerationContext = {

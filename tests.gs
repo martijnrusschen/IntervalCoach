@@ -2351,3 +2351,126 @@ function testZoneProgression() {
 
   Logger.log("\n=== ZONE PROGRESSION TEST COMPLETE ===");
 }
+
+// =========================================================
+// CROSS-SPORT EQUIVALENCY TESTS
+// =========================================================
+
+/**
+ * Test cross-sport zone equivalency between cycling and running
+ */
+function testCrossSportEquivalency() {
+  Logger.log("=== CROSS-SPORT EQUIVALENCY TEST ===\n");
+
+  // 1. Fetch both cycling and running data
+  Logger.log("--- Cycling Data ---");
+  const powerCurve = fetchPowerCurve();
+  if (powerCurve && powerCurve.available) {
+    Logger.log("FTP: " + (powerCurve.currentEftp || powerCurve.eFTP || powerCurve.ftp) + "W");
+    Logger.log("W': " + (powerCurve.wPrime ? (powerCurve.wPrime / 1000).toFixed(1) + " kJ" : "N/A"));
+    Logger.log("Weight: " + (powerCurve.weight || "N/A") + "kg");
+  } else {
+    Logger.log("Cycling data not available");
+  }
+
+  Logger.log("\n--- Running Data ---");
+  const runningData = fetchRunningData();
+  if (runningData && runningData.available) {
+    Logger.log("Critical Speed: " + runningData.criticalSpeed + "/km");
+    Logger.log("D': " + (runningData.dPrime ? Math.round(runningData.dPrime) + "m" : "N/A"));
+    Logger.log("Threshold Pace: " + (runningData.thresholdPace || "N/A"));
+  } else {
+    Logger.log("Running data not available");
+  }
+
+  // 2. Calculate cross-sport equivalencies
+  Logger.log("\n--- Cross-Sport Equivalencies ---");
+  const equivalencies = calculateCrossSportEquivalency();
+
+  if (equivalencies.available) {
+    Logger.log("Cross-sport data available: YES");
+
+    Logger.log("\nThreshold Comparison:");
+    Logger.log("  Cycling FTP: " + equivalencies.crossSportInsights.thresholdComparison.cycling);
+    Logger.log("  Running CS: " + equivalencies.crossSportInsights.thresholdComparison.running);
+
+    Logger.log("\nAnaerobic Capacity:");
+    Logger.log("  Cycling W': " + equivalencies.crossSportInsights.anaerobicCapacity.cycling);
+    Logger.log("  Running D': " + equivalencies.crossSportInsights.anaerobicCapacity.running);
+
+    Logger.log("\nZone Equivalencies:");
+    Logger.log("Zone       | Cycling      | Running");
+    Logger.log("-----------|--------------|-------------");
+    for (const equiv of equivalencies.equivalencies) {
+      const zoneName = equiv.zone.padEnd(10);
+      const cyclingPct = equiv.cycling.pctFtp.padEnd(12);
+      const runningPct = equiv.running.pctCS;
+      Logger.log(zoneName + " | " + cyclingPct + " | " + runningPct);
+    }
+
+    // 3. Test zone mapping functions
+    Logger.log("\n--- Zone Mapping Functions ---");
+    const cyclingZ4 = getRunningEquivalent('Z4', equivalencies);
+    if (cyclingZ4) {
+      Logger.log("Cycling Z4 (Threshold) -> Running: " + cyclingZ4.zone + " " + cyclingZ4.pace);
+    }
+
+    const runningZ5 = getCyclingEquivalent('Z5', equivalencies);
+    if (runningZ5) {
+      Logger.log("Running Z5 (VO2max) -> Cycling: " + runningZ5.zone + " " + runningZ5.watts);
+    }
+
+    // 4. Test AI recommendations
+    Logger.log("\n--- AI Cross-Sport Recommendations ---");
+    const goals = fetchUpcomingGoals();
+    const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+    const phaseInfo = calculateTrainingPhase(targetDate);
+    const zoneProgression = calculateZoneProgression();
+
+    const recommendations = generateCrossSportRecommendations(equivalencies, zoneProgression, phaseInfo, goals);
+
+    if (recommendations && recommendations.available) {
+      Logger.log("AI Enhanced: " + (recommendations.aiEnhanced || false));
+      Logger.log("\nCross-Training Strategy:");
+      Logger.log("  " + recommendations.crossTrainingStrategy);
+
+      Logger.log("\nCycling -> Running Transfer:");
+      Logger.log("  " + recommendations.cyclingToRunningTransfer.summary);
+      Logger.log("  Best zones: " + recommendations.cyclingToRunningTransfer.bestZones.join(", "));
+      Logger.log("  Tip: " + recommendations.cyclingToRunningTransfer.tip);
+
+      Logger.log("\nRunning -> Cycling Transfer:");
+      Logger.log("  " + recommendations.runningToCyclingTransfer.summary);
+      Logger.log("  Best zones: " + recommendations.runningToCyclingTransfer.bestZones.join(", "));
+      Logger.log("  Tip: " + recommendations.runningToCyclingTransfer.tip);
+
+      Logger.log("\nWeekly Mix Recommendation:");
+      Logger.log("  Cycling days: " + recommendations.weeklyMixRecommendation.cyclingDays);
+      Logger.log("  Running days: " + recommendations.weeklyMixRecommendation.runningDays);
+      Logger.log("  Rationale: " + recommendations.weeklyMixRecommendation.rationale);
+
+      Logger.log("\nKey Insight: " + recommendations.keyInsight);
+
+      if (recommendations.warnings && recommendations.warnings.length > 0) {
+        Logger.log("\nWarnings:");
+        recommendations.warnings.forEach(function(warning) {
+          Logger.log("  - " + warning);
+        });
+      }
+    } else {
+      Logger.log("AI recommendations not available");
+    }
+
+    // 5. Test formatted output
+    Logger.log("\n--- Formatted Cross-Sport Section (for email) ---");
+    const formatted = formatCrossSportSection(equivalencies);
+    Logger.log(formatted);
+
+  } else {
+    Logger.log("Cross-sport data not available (need both cycling and running data)");
+    Logger.log("Cycling available: " + equivalencies.cycling.available);
+    Logger.log("Running available: " + equivalencies.running.available);
+  }
+
+  Logger.log("\n=== CROSS-SPORT EQUIVALENCY TEST COMPLETE ===");
+}

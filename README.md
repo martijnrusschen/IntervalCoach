@@ -385,6 +385,7 @@ clasp pull
 | `testTrainingProposal()` | Weekly training proposal generation |
 | `testCoachingNote()` | Personalized coaching note generation |
 | `testZoneProgression()` | Zone progression levels and AI recommendations |
+| `testCrossSportEquivalency()` | Cross-sport zone mapping between cycling and running |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |

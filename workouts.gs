@@ -1046,6 +1046,25 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
 `;
   }
 
+  // Build cross-sport equivalency context
+  let crossSportContext = '';
+  if (context.crossSportEquivalency && context.crossSportEquivalency.available) {
+    const cs = context.crossSportEquivalency;
+    crossSportContext = `
+**CROSS-SPORT ZONE EQUIVALENCIES:**
+- Cycling FTP: ${cs.cycling.ftp}W -> Running Critical Speed: ${cs.running.criticalSpeed}/km
+- Use this for equivalent intensities when mixing sports
+- Threshold cycling = Threshold running (same physiological stress)
+- VO2max efforts transfer well between sports
+`;
+    if (context.crossSportRecommendations && context.crossSportRecommendations.available) {
+      const csr = context.crossSportRecommendations;
+      crossSportContext += `- AI Recommended Mix: ${csr.weeklyMixRecommendation?.cyclingDays || 3} cycling, ${csr.weeklyMixRecommendation?.runningDays || 2} running days
+- Key Insight: ${csr.keyInsight || 'Balance cycling and running based on goals'}
+`;
+    }
+  }
+
   // Build upcoming events context
   let eventsContext = '';
   if (context.upcomingEvents && context.upcomingEvents.length > 0) {
@@ -1106,7 +1125,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${zoneProgressionContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
+${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${zoneProgressionContext}${crossSportContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}

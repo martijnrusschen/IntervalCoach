@@ -471,6 +471,37 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
   }
   planContext.existingWorkouts = existingWorkouts;
 
+  // Add zone progression if available
+  try {
+    const zoneProgression = calculateZoneProgression();
+    if (zoneProgression && zoneProgression.available) {
+      planContext.zoneProgression = zoneProgression;
+    }
+  } catch (e) {
+    Logger.log("Zone progression failed (non-critical): " + e.toString());
+  }
+
+  // Add cross-sport equivalency if both cycling and running data available
+  try {
+    const crossSportEquivalency = calculateCrossSportEquivalency();
+    if (crossSportEquivalency && crossSportEquivalency.available) {
+      planContext.crossSportEquivalency = crossSportEquivalency;
+
+      // Get AI cross-sport recommendations
+      const crossSportRecommendations = generateCrossSportRecommendations(
+        crossSportEquivalency,
+        planContext.zoneProgression,
+        phaseInfo,
+        goals
+      );
+      if (crossSportRecommendations && crossSportRecommendations.available) {
+        planContext.crossSportRecommendations = crossSportRecommendations;
+      }
+    }
+  } catch (e) {
+    Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
+  }
+
   return planContext;
 }
 

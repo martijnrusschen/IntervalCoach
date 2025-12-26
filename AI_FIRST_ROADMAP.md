@@ -25,6 +25,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Unified Daily Email** - Single email format for workout/rest/status/group ride days
 - [x] **Week Progress Tracking** - Day-by-day planned vs completed with auto-cleanup of missed workouts
 - [x] **C Event (Group Ride) Support** - AI intensity advice for unstructured group rides
+- [x] **Cross-Sport Zone Equivalency** - AI calculates equivalent efforts between cycling and running
 
 ---
 
@@ -42,7 +43,6 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 | 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
 | 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
 | 🟡 **MEDIUM** | **Personalized Zone Boundaries** | AI adjusts zones based on lactate patterns, HRV response, time-at-power | AI-First |
-| 🟡 **MEDIUM** | **Cross-Sport Zone Equivalency** | AI calculates equivalent efforts: cycling FTP ↔ running threshold | AI-First |
 | 🟡 **MEDIUM** | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 | 🟡 **MEDIUM** | **Whoop API Fallback** | Add Whoop API as alternative/supplementary data source | Infrastructure |
 | 🟢 **LOW** | **Training Outcome Simulation** | Simulate multiple workout options before deciding | TrainerRoad AI |
@@ -325,6 +325,42 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Key insights (e.g., "TSB drops to -15 tomorrow but recovers by Friday")
 - AI coaching narrative
 - 7-day projection table
+
+### Feature: Cross-Sport Zone Equivalency ✅ COMPLETE
+
+**Implementation:**
+- Added `calculateCrossSportEquivalency()` in `power.gs` - Maps cycling power zones to running pace zones
+- Added `getRunningEquivalent()` in `power.gs` - Gets running pace for a cycling zone
+- Added `getCyclingEquivalent()` in `power.gs` - Gets cycling power for a running zone
+- Added `generateCrossSportRecommendations()` in `power.gs` - AI analyzes cross-training strategy
+- Added `generateFallbackCrossSportRecommendations()` in `power.gs` - Rule-based fallback
+- Added `formatCrossSportSection()` in `power.gs` - Formats equivalency table for email
+- Added translations for cross-sport UI strings (EN/NL)
+- Integrated into `buildWeeklyPlanContext()` in `emails.gs`
+- Added `crossSportContext` to `generateAIWeeklyPlan()` prompt in `workouts.gs`
+- Added `testCrossSportEquivalency()` in `tests.gs`
+
+**Key features:**
+- Maps cycling FTP to running Critical Speed (both represent ~1hr max sustainable effort)
+- Maps cycling W' (kJ) to running D' (meters) for anaerobic capacity comparison
+- Calculates zone equivalencies: Recovery, Endurance, Tempo, Threshold, VO2max, Anaerobic
+- AI generates personalized cross-training recommendations:
+  - How cycling fitness supports running and vice versa
+  - Which zones transfer best between sports
+  - Recommended weekly cycling/running mix
+  - Key insights and warnings
+- Integrated into weekly planning AI prompt for intelligent sport mixing
+- Physiological equivalence: same zone = same relative effort across sports
+
+**Zone Mapping:**
+| Zone | Cycling (% FTP) | Running (% Critical Speed) |
+|------|-----------------|----------------------------|
+| Recovery | < 55% | < 78% |
+| Endurance | 56-75% | 78-88% |
+| Tempo | 76-87% | 88-95% |
+| Threshold | 95-105% | 95-100% |
+| VO2max | 106-120% | 100-108% |
+| Anaerobic | > 121% | > 108% |
 
 ---
 

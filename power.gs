@@ -1615,6 +1615,395 @@ Write all text output in ${langName}.
   return recommendations;
 }
 
+// =========================================================
+// CROSS-SPORT ZONE EQUIVALENCY
+// =========================================================
+
+/**
+ * Calculate cross-sport zone equivalencies between cycling and running
+ * Maps power zones to pace zones based on physiological equivalence
+ * @returns {object} Cross-sport equivalency data with zone mappings
+ */
+function calculateCrossSportEquivalency() {
+  // Fetch both cycling and running data
+  const powerCurve = fetchPowerCurve();
+  const runningData = fetchRunningData();
+
+  const result = {
+    available: false,
+    cycling: {
+      available: false,
+      ftp: null,
+      wPrime: null,
+      zones: []
+    },
+    running: {
+      available: false,
+      criticalSpeed: null,
+      criticalSpeedMs: null,
+      dPrime: null,
+      thresholdPace: null,
+      zones: []
+    },
+    equivalencies: [],
+    crossSportInsights: null
+  };
+
+  // Process cycling data
+  if (powerCurve && powerCurve.available) {
+    const ftp = powerCurve.currentEftp || powerCurve.eFTP || powerCurve.ftp;
+    result.cycling = {
+      available: true,
+      ftp: ftp,
+      wPrime: powerCurve.wPrime,
+      wPrimeKj: powerCurve.wPrime ? (powerCurve.wPrime / 1000).toFixed(1) : null,
+      weight: powerCurve.weight,
+      // Standard 7-zone power model (% of FTP)
+      zones: [
+        { zone: 'Z1', name: 'Recovery', minPct: 0, maxPct: 55, minWatts: 0, maxWatts: Math.round(ftp * 0.55) },
+        { zone: 'Z2', name: 'Endurance', minPct: 56, maxPct: 75, minWatts: Math.round(ftp * 0.56), maxWatts: Math.round(ftp * 0.75) },
+        { zone: 'Z3', name: 'Tempo', minPct: 76, maxPct: 87, minWatts: Math.round(ftp * 0.76), maxWatts: Math.round(ftp * 0.87) },
+        { zone: 'SS', name: 'Sweet Spot', minPct: 88, maxPct: 94, minWatts: Math.round(ftp * 0.88), maxWatts: Math.round(ftp * 0.94) },
+        { zone: 'Z4', name: 'Threshold', minPct: 95, maxPct: 105, minWatts: Math.round(ftp * 0.95), maxWatts: Math.round(ftp * 1.05) },
+        { zone: 'Z5', name: 'VO2max', minPct: 106, maxPct: 120, minWatts: Math.round(ftp * 1.06), maxWatts: Math.round(ftp * 1.20) },
+        { zone: 'Z6', name: 'Anaerobic', minPct: 121, maxPct: 150, minWatts: Math.round(ftp * 1.21), maxWatts: Math.round(ftp * 1.50) }
+      ]
+    };
+  }
+
+  // Process running data
+  if (runningData && runningData.available && runningData.criticalSpeedMs) {
+    const csMs = runningData.criticalSpeedMs;
+    const csPace = runningData.criticalSpeed; // min/km format
+
+    // Helper to convert m/s to min/km pace string
+    const msToMinKm = function(ms) {
+      if (!ms || ms <= 0) return null;
+      const secsPerKm = 1000 / ms;
+      const mins = Math.floor(secsPerKm / 60);
+      const secs = Math.round(secsPerKm % 60);
+      return mins + ':' + (secs < 10 ? '0' : '') + secs;
+    };
+
+    result.running = {
+      available: true,
+      criticalSpeed: csPace,
+      criticalSpeedMs: csMs,
+      dPrime: runningData.dPrime,
+      thresholdPace: runningData.thresholdPace,
+      // Running zones based on % of Critical Speed
+      // Note: Running zones are inverted - slower pace = lower intensity
+      zones: [
+        { zone: 'Z1', name: 'Recovery', minPct: 0, maxPct: 78, pace: msToMinKm(csMs * 0.78), paceRange: 'slower than ' + msToMinKm(csMs * 0.78) },
+        { zone: 'Z2', name: 'Easy/Aerobic', minPct: 78, maxPct: 88, pace: msToMinKm(csMs * 0.83), paceRange: msToMinKm(csMs * 0.78) + ' - ' + msToMinKm(csMs * 0.88) },
+        { zone: 'Z3', name: 'Tempo', minPct: 88, maxPct: 95, pace: msToMinKm(csMs * 0.915), paceRange: msToMinKm(csMs * 0.88) + ' - ' + msToMinKm(csMs * 0.95) },
+        { zone: 'Z4', name: 'Threshold', minPct: 95, maxPct: 100, pace: csPace, paceRange: msToMinKm(csMs * 0.95) + ' - ' + csPace },
+        { zone: 'Z5', name: 'VO2max', minPct: 100, maxPct: 108, pace: msToMinKm(csMs * 1.04), paceRange: csPace + ' - ' + msToMinKm(csMs * 1.08) },
+        { zone: 'Z6', name: 'Anaerobic', minPct: 108, maxPct: 130, pace: msToMinKm(csMs * 1.15), paceRange: 'faster than ' + msToMinKm(csMs * 1.08) }
+      ]
+    };
+  }
+
+  // Build cross-sport equivalencies if both sports available
+  if (result.cycling.available && result.running.available) {
+    result.available = true;
+
+    // Zone equivalency mapping (same physiological stimulus)
+    result.equivalencies = [
+      {
+        zone: 'Recovery',
+        description: 'Easy movement, active recovery',
+        cycling: { zone: 'Z1', watts: '< ' + result.cycling.zones[0].maxWatts + 'W', pctFtp: '< 55%' },
+        running: { zone: 'Z1', pace: result.running.zones[0].paceRange, pctCS: '< 78%' },
+        physiological: 'Promotes blood flow without stress'
+      },
+      {
+        zone: 'Endurance',
+        description: 'Aerobic base building',
+        cycling: { zone: 'Z2', watts: result.cycling.zones[1].minWatts + '-' + result.cycling.zones[1].maxWatts + 'W', pctFtp: '56-75%' },
+        running: { zone: 'Z2', pace: result.running.zones[1].paceRange, pctCS: '78-88%' },
+        physiological: 'Fat oxidation, mitochondrial development'
+      },
+      {
+        zone: 'Tempo',
+        description: 'Moderate sustained effort',
+        cycling: { zone: 'Z3', watts: result.cycling.zones[2].minWatts + '-' + result.cycling.zones[2].maxWatts + 'W', pctFtp: '76-87%' },
+        running: { zone: 'Z3', pace: result.running.zones[2].paceRange, pctCS: '88-95%' },
+        physiological: 'Lactate clearance, aerobic capacity'
+      },
+      {
+        zone: 'Threshold',
+        description: 'Max sustained 40-60min effort',
+        cycling: { zone: 'Z4', watts: result.cycling.zones[4].minWatts + '-' + result.cycling.zones[4].maxWatts + 'W', pctFtp: '95-105%' },
+        running: { zone: 'Z4', pace: result.running.zones[3].paceRange, pctCS: '95-100%' },
+        physiological: 'Lactate threshold improvement'
+      },
+      {
+        zone: 'VO2max',
+        description: 'Hard 3-8min efforts',
+        cycling: { zone: 'Z5', watts: result.cycling.zones[5].minWatts + '-' + result.cycling.zones[5].maxWatts + 'W', pctFtp: '106-120%' },
+        running: { zone: 'Z5', pace: result.running.zones[4].paceRange, pctCS: '100-108%' },
+        physiological: 'Maximal oxygen uptake'
+      },
+      {
+        zone: 'Anaerobic',
+        description: 'Short max efforts <2min',
+        cycling: { zone: 'Z6', watts: '> ' + result.cycling.zones[6].minWatts + 'W', pctFtp: '> 121%' },
+        running: { zone: 'Z6', pace: result.running.zones[5].paceRange, pctCS: '> 108%' },
+        physiological: 'Glycolytic capacity, neuromuscular'
+      }
+    ];
+
+    // Calculate anaerobic capacity comparison
+    const wPrimeKj = result.cycling.wPrime ? result.cycling.wPrime / 1000 : null;
+    const dPrime = result.running.dPrime;
+
+    result.crossSportInsights = {
+      thresholdComparison: {
+        cycling: result.cycling.ftp + 'W',
+        running: result.running.criticalSpeed + '/km',
+        note: 'Both represent ~1hr max sustainable effort'
+      },
+      anaerobicCapacity: {
+        cycling: wPrimeKj ? wPrimeKj + ' kJ (W\')' : 'Not available',
+        running: dPrime ? Math.round(dPrime) + 'm (D\')' : 'Not available',
+        note: 'Higher values = better short, hard efforts'
+      }
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Get equivalent running pace for a cycling zone
+ * @param {string} cyclingZone - Cycling zone (Z1, Z2, Z3, SS, Z4, Z5, Z6)
+ * @param {object} equivalencies - Output from calculateCrossSportEquivalency()
+ * @returns {object} Equivalent running zone and pace
+ */
+function getRunningEquivalent(cyclingZone, equivalencies) {
+  if (!equivalencies || !equivalencies.available) return null;
+
+  const zoneMap = {
+    'Z1': 'Recovery',
+    'Z2': 'Endurance',
+    'Z3': 'Tempo',
+    'SS': 'Threshold', // Sweet spot maps to threshold-ish effort in running
+    'Z4': 'Threshold',
+    'Z5': 'VO2max',
+    'Z6': 'Anaerobic'
+  };
+
+  const targetZone = zoneMap[cyclingZone.toUpperCase()];
+  if (!targetZone) return null;
+
+  const equiv = equivalencies.equivalencies.find(function(e) {
+    return e.zone === targetZone;
+  });
+
+  return equiv ? equiv.running : null;
+}
+
+/**
+ * Get equivalent cycling power for a running zone
+ * @param {string} runningZone - Running zone (Z1, Z2, Z3, Z4, Z5, Z6)
+ * @param {object} equivalencies - Output from calculateCrossSportEquivalency()
+ * @returns {object} Equivalent cycling zone and power
+ */
+function getCyclingEquivalent(runningZone, equivalencies) {
+  if (!equivalencies || !equivalencies.available) return null;
+
+  const zoneMap = {
+    'Z1': 'Recovery',
+    'Z2': 'Endurance',
+    'Z3': 'Tempo',
+    'Z4': 'Threshold',
+    'Z5': 'VO2max',
+    'Z6': 'Anaerobic'
+  };
+
+  const targetZone = zoneMap[runningZone.toUpperCase()];
+  if (!targetZone) return null;
+
+  const equiv = equivalencies.equivalencies.find(function(e) {
+    return e.zone === targetZone;
+  });
+
+  return equiv ? equiv.cycling : null;
+}
+
+/**
+ * Generate AI-powered cross-sport training recommendations
+ * Analyzes how training in one sport can complement the other
+ * @param {object} equivalencies - Output from calculateCrossSportEquivalency()
+ * @param {object} zoneProgression - Zone progression data (optional)
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal events
+ * @returns {object} AI recommendations for cross-sport training
+ */
+function generateCrossSportRecommendations(equivalencies, zoneProgression, phaseInfo, goals) {
+  if (!equivalencies || !equivalencies.available) {
+    return {
+      available: false,
+      reason: 'Both cycling and running data required'
+    };
+  }
+
+  const langName = getPromptLanguage();
+
+  // Build context about current fitness in both sports
+  let zoneContext = '';
+  if (zoneProgression && zoneProgression.available) {
+    zoneContext = `
+**ZONE PROGRESSION LEVELS (both sports combined):**
+${Object.entries(zoneProgression.progression).map(([zone, data]) =>
+  `- ${zone.charAt(0).toUpperCase() + zone.slice(1)}: Level ${data.level} (${data.trend})`
+).join('\n')}
+- Focus areas: ${zoneProgression.focusAreas.join(', ')}
+- Strengths: ${zoneProgression.strengths.join(', ')}`;
+  }
+
+  const prompt = `You are a multi-sport endurance coach analyzing an athlete's cycling and running fitness.
+
+**CYCLING FITNESS:**
+- FTP: ${equivalencies.cycling.ftp}W
+- W' (Anaerobic Capacity): ${equivalencies.cycling.wPrimeKj || 'Unknown'} kJ
+${equivalencies.cycling.weight ? `- Weight: ${equivalencies.cycling.weight}kg (${(equivalencies.cycling.ftp / equivalencies.cycling.weight).toFixed(2)} W/kg)` : ''}
+
+**RUNNING FITNESS:**
+- Critical Speed: ${equivalencies.running.criticalSpeed}/km
+- D' (Anaerobic Capacity): ${equivalencies.running.dPrime ? Math.round(equivalencies.running.dPrime) + 'm' : 'Unknown'}
+- Threshold Pace: ${equivalencies.running.thresholdPace || equivalencies.running.criticalSpeed}/km
+${zoneContext}
+
+**TRAINING CONTEXT:**
+- Phase: ${phaseInfo?.phaseName || 'Build'} (${phaseInfo?.weeksOut || '?'} weeks to goal)
+${goals?.primaryGoal ? `- Primary Goal: ${goals.primaryGoal.name} (${goals.primaryGoal.date}, ${goals.primaryGoal.type || 'unknown type'})` : ''}
+
+**YOUR TASK:**
+Provide personalized cross-sport training recommendations. Consider:
+1. How cycling fitness can support running and vice versa
+2. Which zones transfer best between sports
+3. Optimal weekly mix of cycling and running
+4. Sport-specific vs cross-training focus based on goals
+
+Write all output in ${langName}.
+
+**Output JSON only:**
+{
+  "crossTrainingStrategy": "Overall approach to mixing cycling and running",
+  "cyclingToRunningTransfer": {
+    "summary": "How cycling fitness supports running",
+    "bestZones": ["zones that transfer well"],
+    "tip": "Specific advice"
+  },
+  "runningToCyclingTransfer": {
+    "summary": "How running fitness supports cycling",
+    "bestZones": ["zones that transfer well"],
+    "tip": "Specific advice"
+  },
+  "weeklyMixRecommendation": {
+    "cyclingDays": 3,
+    "runningDays": 2,
+    "rationale": "Why this mix works for current goals"
+  },
+  "keyInsight": "Most important cross-sport observation",
+  "warnings": ["Any concerns about current approach"]
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (!response || typeof response !== 'string') {
+      return generateFallbackCrossSportRecommendations(equivalencies);
+    }
+
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return generateFallbackCrossSportRecommendations(equivalencies);
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    parsed.available = true;
+    parsed.aiEnhanced = true;
+
+    return parsed;
+  } catch (e) {
+    Logger.log('AI cross-sport recommendations failed: ' + e.toString());
+    return generateFallbackCrossSportRecommendations(equivalencies);
+  }
+}
+
+/**
+ * Fallback cross-sport recommendations when AI is unavailable
+ */
+function generateFallbackCrossSportRecommendations(equivalencies) {
+  return {
+    available: true,
+    aiEnhanced: false,
+    crossTrainingStrategy: 'Mix cycling and running to build aerobic fitness while managing sport-specific stress.',
+    cyclingToRunningTransfer: {
+      summary: 'Cycling builds aerobic base with less impact stress',
+      bestZones: ['Endurance', 'Tempo', 'Threshold'],
+      tip: 'Use cycling for volume; use running for sport-specific work'
+    },
+    runningToCyclingTransfer: {
+      summary: 'Running develops VO2max and leg strength efficiently',
+      bestZones: ['Endurance', 'VO2max'],
+      tip: 'Short runs can maintain running fitness while focusing on cycling'
+    },
+    weeklyMixRecommendation: {
+      cyclingDays: 3,
+      runningDays: 2,
+      rationale: 'Balanced approach for multi-sport fitness'
+    },
+    keyInsight: 'FTP (' + equivalencies.cycling.ftp + 'W) and Critical Speed (' + equivalencies.running.criticalSpeed + '/km) represent equivalent threshold efforts.',
+    warnings: []
+  };
+}
+
+/**
+ * Format cross-sport equivalency for email/display
+ * @param {object} equivalencies - Output from calculateCrossSportEquivalency()
+ * @returns {string} Formatted text section
+ */
+function formatCrossSportSection(equivalencies) {
+  if (!equivalencies || !equivalencies.available) {
+    return '';
+  }
+
+  const t = getTranslations();
+
+  let section = '\n-----------------------------------\n';
+  section += (t.cross_sport_title || 'Cross-Sport Equivalencies') + '\n';
+  section += '-----------------------------------\n';
+
+  // Threshold comparison
+  section += '\n' + (t.threshold_comparison || 'Threshold Comparison') + ':\n';
+  section += '• Cycling FTP: ' + equivalencies.cycling.ftp + 'W\n';
+  section += '• Running CS: ' + equivalencies.running.criticalSpeed + '/km\n';
+
+  // Zone equivalencies table
+  section += '\n' + (t.zone_equivalencies || 'Zone Equivalencies') + ':\n';
+  section += 'Zone       | Cycling        | Running\n';
+  section += '-----------|----------------|----------------\n';
+
+  for (const equiv of equivalencies.equivalencies) {
+    const zoneName = equiv.zone.padEnd(10);
+    const cyclingInfo = (equiv.cycling.pctFtp).padEnd(14);
+    const runningInfo = equiv.running.pctCS;
+    section += zoneName + ' | ' + cyclingInfo + ' | ' + runningInfo + '\n';
+  }
+
+  // Anaerobic capacity comparison
+  if (equivalencies.crossSportInsights) {
+    section += '\n' + (t.anaerobic_capacity || 'Anaerobic Capacity') + ':\n';
+    section += '• Cycling W\': ' + equivalencies.crossSportInsights.anaerobicCapacity.cycling + '\n';
+    section += '• Running D\': ' + equivalencies.crossSportInsights.anaerobicCapacity.running + '\n';
+  }
+
+  return section;
+}
+
 /**
  * Fallback narrative when AI is unavailable
  */

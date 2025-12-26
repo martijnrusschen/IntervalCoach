@@ -116,6 +116,15 @@ const TRANSLATIONS = {
     ai_recommendation: "AI Recommendation",
     priority_this_week: "Priority this week",
     suggested_workouts: "Suggested workouts",
+    // Cross-sport equivalency
+    cross_sport_title: "Cross-Sport Zone Equivalencies",
+    threshold_comparison: "Threshold Comparison",
+    zone_equivalencies: "Zone Equivalencies",
+    anaerobic_capacity: "Anaerobic Capacity",
+    cross_sport_strategy: "Cross-Training Strategy",
+    cycling_to_running: "Cycling to Running Transfer",
+    running_to_cycling: "Running to Cycling Transfer",
+    weekly_mix: "Weekly Mix Recommendation",
     // Daily status (no placeholder day)
     daily_status_subject: "Training Status",
     daily_status_greeting: "Good morning!",
@@ -532,6 +541,15 @@ const TRANSLATIONS = {
     ai_recommendation: "AI Aanbeveling",
     priority_this_week: "Prioriteit deze week",
     suggested_workouts: "Aanbevolen workouts",
+    // Cross-sport equivalency
+    cross_sport_title: "Cross-Sport Zone Equivalenties",
+    threshold_comparison: "Drempel Vergelijking",
+    zone_equivalencies: "Zone Equivalenties",
+    anaerobic_capacity: "Anaerobe Capaciteit",
+    cross_sport_strategy: "Cross-Training Strategie",
+    cycling_to_running: "Fietsen naar Hardlopen",
+    running_to_cycling: "Hardlopen naar Fietsen",
+    weekly_mix: "Wekelijkse Mix Aanbeveling",
     // Daily status (no placeholder day)
     daily_status_subject: "Training Status",
     daily_status_greeting: "Goedemorgen!",

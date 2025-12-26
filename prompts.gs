@@ -33,7 +33,7 @@ function getPromptLanguage() {
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext) {
+function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency) {
   const analysisLang = getPromptLanguage();
 
   // Zwift Display Name (Clean, short name without "IntervalCoach_" prefix)
@@ -154,6 +154,23 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build cross-sport context
+  let crossSportContext = "";
+  if (crossSportEquivalency && crossSportEquivalency.available) {
+    const cs = crossSportEquivalency;
+    crossSportContext = `
+**1e. Cross-Sport Context (Cycling ↔ Running):**
+- **Cycling FTP:** ${cs.cycling.ftp}W | **Running CS:** ${cs.running.criticalSpeed}/km
+- **Cycling W':** ${cs.cycling.wPrimeKj || 'N/A'} kJ | **Running D':** ${cs.running.dPrime ? Math.round(cs.running.dPrime) + 'm' : 'N/A'}
+- **Zone Equivalence:** Same zone = same physiological stress across sports
+
+**CROSS-SPORT RULES:**
+- This athlete also runs. Consider cumulative training load from both sports.
+- If athlete ran recently (especially Z4+), adjust cycling intensity to manage total stress.
+- Cycling is lower impact but still contributes to overall fatigue.
+`;
+  }
+
   return `
 You are an expert cycling coach using the logic of Coggan, Friel, and Seiler.
 Generate a Zwift workout (.zwo) and evaluate its suitability.
@@ -165,7 +182,7 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB:** ${summary.tsb_current.toFixed(1)}
 - **Recent Load (Z5+):** ${summary.z5_recent_total > 1500 ? "High" : "Normal"}
-${wellnessContext}${powerContext}${adaptiveTrainingContext}
+${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
 - **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
@@ -213,7 +230,7 @@ ${wellnessContext}${powerContext}${adaptiveTrainingContext}
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext) {
+function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossSportEquivalency) {
   const analysisLang = getPromptLanguage();
 
   const safeType = type.replace(/[^a-zA-Z0-9]/g, "");
@@ -315,6 +332,24 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build cross-sport context
+  let crossSportContext = "";
+  if (crossSportEquivalency && crossSportEquivalency.available) {
+    const cs = crossSportEquivalency;
+    crossSportContext = `
+**1e. Cross-Sport Context (Cycling ↔ Running):**
+- **Cycling FTP:** ${cs.cycling.ftp}W | **Running CS:** ${cs.running.criticalSpeed}/km
+- **Cycling W':** ${cs.cycling.wPrimeKj || 'N/A'} kJ | **Running D':** ${cs.running.dPrime ? Math.round(cs.running.dPrime) + 'm' : 'N/A'}
+- **Zone Equivalence:** Same zone = same physiological stress across sports
+
+**CROSS-SPORT RULES:**
+- This athlete also cycles. Running zones should match equivalent cycling effort.
+- If recent cycling was intense (Z4+), consider easier running to manage total load.
+- Running has higher impact stress - even equivalent zones feel harder on the body.
+- Use running strategically: efficient for VO2max work, harder on joints than cycling.
+`;
+  }
+
   return `
 You are an expert running coach using principles from Daniels, Pfitzinger, and modern training science.
 Generate a running workout and evaluate its suitability.
@@ -326,7 +361,7 @@ Generate a running workout and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB (Training Stress Balance):** ${summary.tsb_current.toFixed(1)}
 - **Note:** This is a RUNNING workout to complement cycling training.
-${wellnessContext}${runContext}${adaptiveTrainingContext}
+${wellnessContext}${runContext}${adaptiveTrainingContext}${crossSportContext}
 **2. Assignment: Design a "${type}" Running Workout**
 - **Duration:** ${durationStr}. Total workout time including warm-up and cool-down.
 - **Type Guidance:**
