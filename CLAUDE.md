@@ -34,10 +34,10 @@ The codebase is organized into modular files by domain:
 | `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
 | `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `createWellnessSummary()`, `isRestDayRecommended()` |
 | `workouts.gs` | Workout selection logic | `checkAvailability()`, `selectWorkoutTypes()`, `uploadWorkoutToIntervals()` |
-| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()` |
+| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()`, `calculateZoneProgression()`, `getZoneRecommendations()` |
 | `prompts.gs` | AI prompt construction | `createPrompt()`, `createRunPrompt()`, `generatePersonalizedCoachingNote()` |
 | `emails.gs` | Email sending | `sendSmartSummaryEmail()`, `sendRestDayEmail()`, `sendWeeklySummaryEmail()` |
-| `utils.gs` | Helper functions | `formatDateISO()`, `average()`, `sum()`, `getAdaptiveTrainingContext()` |
+| `utils.gs` | Helper functions | `formatDateISO()`, `average()`, `sum()`, `getAdaptiveTrainingContext()`, `getZoneProgression()`, `storeZoneProgression()` |
 | `config.gs` | User config (gitignored) | API keys, user settings |
 | `config.sample.gs` | Config template | Copy to create config.gs |
 
@@ -59,12 +59,14 @@ The codebase is organized into modular files by domain:
 - `testRestDayEmail()` - Test rest day email functionality
 - `testTrainingProposal()` - Test weekly training proposal
 - `testWorkoutImpactPreview()` - Test workout impact preview with 2-week projections
+- `testZoneProgression()` - Test zone progression levels and AI recommendations
 
 ### Core Data Structures
 
 **Power Profile**: eFTP, W', VO2max, peak powers (5s-60m), strengths/focus areas
 **Running Data**: Critical Speed, D', pace zones, best efforts (400m-5k)
 **Wellness**: HRV, sleep, resting HR, recovery status (green/yellow/red), trend
+**Zone Progression**: Per-zone fitness levels (1-10), trends (improving/stable/declining), focus areas
 
 ## Development Workflow
 

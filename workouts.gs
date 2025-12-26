@@ -509,6 +509,20 @@ function generateAIWorkoutDecision(context) {
     }).join(", ");
   }
 
+  // Build zone progression context if available
+  let zoneProgressionContext = '';
+  if (context.zoneProgression && context.zoneProgression.available) {
+    const prog = context.zoneProgression;
+    zoneProgressionContext = `
+**ZONE PROGRESSION LEVELS (1.0-10.0 scale):**
+${Object.entries(prog.progression).map(([zone, data]) =>
+  `- ${zone.charAt(0).toUpperCase() + zone.slice(1)}: ${data.level.toFixed(1)} (${data.trend}${data.lastTrained ? ', last: ' + data.lastTrained : ''})`
+).join('\n')}
+- Strengths: ${prog.strengths.join(', ')}
+- Focus Areas (underdeveloped): ${prog.focusAreas.join(', ')}
+`;
+  }
+
   const prompt = `You are an expert cycling/running coach making a training decision for today.
 
 **ATHLETE CONTEXT:**
@@ -517,6 +531,7 @@ function generateAIWorkoutDecision(context) {
 - Phase Focus: ${context.phaseFocus || 'Not specified'}
 - Goal: ${context.goalDescription || 'General fitness'}
 ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : ''}
+${zoneProgressionContext}
 
 **FITNESS & FATIGUE:**
 - CTL (Fitness): ${context.ctl ? context.ctl.toFixed(0) : 'N/A'}
@@ -556,6 +571,9 @@ ${workoutOptions}
     E.g., SweetSpot and Tempo_Sustained both have "subthreshold" stimulus = same physiological stress = avoid back-to-back.
     If a stimulus was done 3+ times in 2 weeks, prioritize a different one.
 11. Match workout to training phase
+12. ZONE PROGRESSION: If zone progression data is available, consider prioritizing underdeveloped zones (focus areas).
+    A zone with declining trend that hasn't been trained in 2+ weeks should be prioritized.
+    Balance zone development with recovery status - don't push hard zones when fatigued.
 
 **YOUR TASK:**
 Recommend ONE specific workout type from the list above. Consider all factors holistically.
@@ -566,7 +584,8 @@ Recommend ONE specific workout type from the list above. Consider all factors ho
   "workoutType": "exact_workout_name_from_list",
   "intensity": 1-5,
   "reasoning": "2-3 sentence explanation of why this workout",
-  "varietyNote": "optional note about avoiding recently done types"
+  "varietyNote": "optional note about avoiding recently done types",
+  "zoneNote": "optional note about zone progression considerations (if zone data available)"
 }`;
 
   const response = callGeminiAPIText(prompt);
@@ -653,7 +672,9 @@ function selectWorkoutTypes(params) {
         isWeeklyPlan: params.isWeeklyPlan,
         // Stimulus variety tracking (AI-first variety check)
         recentStimuli: params.recentStimuli || {},
-        stimulusCounts: params.stimulusCounts || {}
+        stimulusCounts: params.stimulusCounts || {},
+        // Zone progression levels
+        zoneProgression: params.zoneProgression || null
       };
 
       const aiDecision = generateAIWorkoutDecision(aiContext);
@@ -971,6 +992,20 @@ function generateAIWeeklyPlan(context) {
 `;
   }
 
+  // Build zone progression context
+  let zoneProgressionContext = '';
+  if (context.zoneProgression && context.zoneProgression.available) {
+    const prog = context.zoneProgression;
+    zoneProgressionContext = `
+**ZONE PROGRESSION LEVELS (prioritize underdeveloped zones):**
+${Object.entries(prog.progression).map(([zone, data]) =>
+  `- ${zone.charAt(0).toUpperCase() + zone.slice(1)}: Level ${data.level.toFixed(1)} (${data.trend})`
+).join('\n')}
+- Strengths: ${prog.strengths.join(', ')}
+- Focus Areas: ${prog.focusAreas.join(', ')} (these zones need attention)
+`;
+  }
+
   // Build upcoming events context
   let eventsContext = '';
   if (context.upcomingEvents && context.upcomingEvents.length > 0) {
@@ -1031,7 +1066,7 @@ ${goalsContext}
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
 - 7-day Avg Sleep: ${context.avgSleep ? context.avgSleep.toFixed(1) + 'h' : 'N/A'}
-${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
+${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${zoneProgressionContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
@@ -1054,6 +1089,7 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 9. If fatigued (TSB < -15), reduce volume and intensity
 10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
 11. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
+12. ZONE PROGRESSION: If zone levels are provided, include at least one workout targeting underdeveloped zones (focus areas)
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:

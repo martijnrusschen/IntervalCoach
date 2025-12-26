@@ -2000,3 +2000,137 @@ function testDailyEmailStructure() {
   Logger.log("\n=== DAILY EMAIL TEST COMPLETE ===");
   Logger.log("To send actual email, run generateOptimalZwiftWorkoutsAutoByGemini()");
 }
+
+// =========================================================
+// ZONE PROGRESSION TESTS
+// =========================================================
+
+/**
+ * Test zone progression calculation and recommendations
+ * Verifies zone-specific fitness tracking and AI recommendations
+ */
+function testZoneProgression() {
+  Logger.log("=== ZONE PROGRESSION TEST ===\n");
+
+  // 1. Test zone exposure analysis for a single activity
+  Logger.log("--- Zone Exposure Analysis ---");
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
+
+  const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + formatDateISO(weekAgo) + "&newest=" + formatDateISO(today));
+
+  if (activitiesResult.success && activitiesResult.data.length > 0) {
+    const sampleActivity = activitiesResult.data.find(a => a.type === "Ride" || a.type === "Run");
+
+    if (sampleActivity) {
+      Logger.log("Sample activity: " + sampleActivity.name + " (" + sampleActivity.type + ")");
+      Logger.log("Date: " + sampleActivity.start_date_local);
+
+      const exposure = analyzeZoneExposure(sampleActivity);
+      if (exposure) {
+        Logger.log("Dominant zone: " + exposure.dominantZone);
+        Logger.log("Training stimulus: " + exposure.stimulus);
+        Logger.log("TSS: " + exposure.tss);
+        Logger.log("Zone distribution (%):");
+        for (const [zone, pct] of Object.entries(exposure.zonePercentages)) {
+          if (pct > 0) {
+            Logger.log("  " + zone.toUpperCase() + ": " + pct + "%");
+          }
+        }
+      } else {
+        Logger.log("Activity too short for zone analysis");
+      }
+    } else {
+      Logger.log("No Ride/Run activities found in last 7 days");
+    }
+  } else {
+    Logger.log("Failed to fetch activities: " + (activitiesResult.error || "No data"));
+  }
+
+  // 2. Test full zone progression calculation
+  Logger.log("\n--- Zone Progression Calculation (42 days) ---");
+  const progression = calculateZoneProgression(42);
+
+  if (progression.available) {
+    Logger.log("Activities analyzed: " + progression.activitiesAnalyzed);
+    Logger.log("Period: " + progression.periodDays + " days");
+    Logger.log("\nZone Levels (1.0-10.0 scale):");
+
+    for (const [zone, data] of Object.entries(progression.progression)) {
+      const zoneName = zone.charAt(0).toUpperCase() + zone.slice(1);
+      const bar = "█".repeat(Math.round(data.level)) + "░".repeat(10 - Math.round(data.level));
+      Logger.log("  " + zoneName.padEnd(12) + " " + data.level.toFixed(1) + " " + bar + " (" + data.trend + ")");
+      Logger.log("    Sessions: " + data.sessions + " | Total: " + data.totalMinutes + " min | Last: " + (data.lastTrained || "never"));
+    }
+
+    Logger.log("\nIdentified patterns:");
+    Logger.log("  Strengths: " + progression.strengths.join(", "));
+    Logger.log("  Focus Areas: " + progression.focusAreas.join(", "));
+  } else {
+    Logger.log("Zone progression calculation failed");
+  }
+
+  // 3. Test storage and retrieval
+  Logger.log("\n--- Zone Progression Storage ---");
+  if (progression.available) {
+    const stored = storeZoneProgression(progression);
+    Logger.log("Stored: " + (stored ? "OK" : "FAILED"));
+
+    const retrieved = getZoneProgression(false);
+    Logger.log("Retrieved from cache: " + (retrieved.available ? "OK" : "FAILED"));
+    Logger.log("Calculated at: " + retrieved.calculatedAt);
+  }
+
+  // 4. Test AI recommendations
+  Logger.log("\n--- AI Zone Recommendations ---");
+  if (progression.available) {
+    const goals = fetchUpcomingGoals();
+    const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+    const phaseInfo = calculateTrainingPhase(targetDate);
+
+    const recommendations = getZoneRecommendations(progression, phaseInfo, goals);
+
+    if (recommendations) {
+      Logger.log("AI Enhanced: " + (recommendations.aiEnhanced || false));
+      Logger.log("Summary: " + recommendations.summary);
+      Logger.log("Priority zone: " + recommendations.priorityZone);
+      Logger.log("Reason: " + recommendations.priorityReason);
+
+      if (recommendations.weeklyRecommendations) {
+        Logger.log("\nWeekly recommendations:");
+        recommendations.weeklyRecommendations.forEach(function(rec, i) {
+          Logger.log("  " + (i + 1) + ". " + rec);
+        });
+      }
+
+      if (recommendations.avoidanceNote) {
+        Logger.log("\nAvoidance note: " + recommendations.avoidanceNote);
+      }
+
+      Logger.log("Long-term trend: " + recommendations.longTermTrend);
+    } else {
+      Logger.log("AI recommendations failed");
+    }
+  }
+
+  // 5. Test formatted output
+  Logger.log("\n--- Formatted Zone Progression (for email) ---");
+  if (progression.available) {
+    const formatted = formatZoneProgressionText(progression);
+    Logger.log(formatted);
+  }
+
+  // 6. Test zone progression history
+  Logger.log("\n--- Zone Progression History ---");
+  if (progression.available) {
+    addZoneProgressionToHistory(progression);
+    const history = getZoneProgressionHistory(4);
+    Logger.log("History records: " + history.length);
+    history.forEach(function(snapshot, i) {
+      Logger.log("  " + (i + 1) + ". " + snapshot.date);
+    });
+  }
+
+  Logger.log("\n=== ZONE PROGRESSION TEST COMPLETE ===");
+}
