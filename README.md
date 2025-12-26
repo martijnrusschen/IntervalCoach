@@ -224,6 +224,28 @@ const USER_SETTINGS = {
 
 Save the script after making changes.
 
+### Step 4b: Optional - Set Up Whoop API (Real-Time Recovery Data)
+
+By default, IntervalCoach gets Whoop data via Intervals.icu, which syncs every ~8 hours. For real-time recovery data in your morning emails, you can connect directly to the Whoop API.
+
+1. Go to [developer.whoop.com](https://developer.whoop.com/) and create an app
+2. Set a redirect URI (can be any HTTPS URL you control)
+3. Add this to your `config.gs`:
+
+```javascript
+const WHOOP_CONFIG = {
+  CLIENT_ID: "your-whoop-client-id",
+  CLIENT_SECRET: "your-whoop-client-secret",
+  REDIRECT_URI: "https://your-domain.com/callback"
+};
+```
+
+4. Run `authorizeWhoop()` in Apps Script - it will give you a URL to visit
+5. Complete the OAuth flow and paste the code when prompted
+6. Test with `testWhoopApi()` - should show real-time recovery data
+
+Once set up, IntervalCoach automatically uses fresh Whoop data (recovery, HRV, sleep) instead of waiting for Intervals.icu to sync.
+
 ### Step 5: Authorize the Script
 
 1. In Apps Script, select `testEftp` from the function dropdown (near the Run button)

@@ -24,6 +24,24 @@ const API_KEYS = {
 };
 
 // =========================================================
+// WHOOP API (Optional - for real-time recovery data)
+// =========================================================
+// Provides fresher data than Intervals.icu's 8-hour sync cycle.
+// Leave commented out if you don't need real-time Whoop data.
+//
+// Setup:
+// 1. Create app at developer.whoop.com
+// 2. Set redirect URI (can be any HTTPS URL you control, or use a placeholder)
+// 3. Copy client ID and secret below
+// 4. Run authorizeWhoop() once to complete OAuth flow
+//
+// const WHOOP_CONFIG = {
+//   CLIENT_ID: "your-whoop-client-id",
+//   CLIENT_SECRET: "your-whoop-client-secret",
+//   REDIRECT_URI: "https://your-domain.com/callback"  // Must match developer.whoop.com
+// };
+
+// =========================================================
 // AI MODEL SETTINGS
 // =========================================================
 const AI_SETTINGS = {

@@ -9,7 +9,7 @@ IntervalCoach is an AI-powered cycling and running coach built on Google Apps Sc
 ## Architecture
 
 **Platform**: Google Apps Script (serverless JavaScript runtime)
-**External APIs**: Intervals.icu REST API, Google Gemini API (gemini-3-pro-preview)
+**External APIs**: Intervals.icu REST API, Google Gemini API (gemini-3-pro-preview), Whoop API (optional)
 **Outputs**: Zwift .zwo files, structured run workouts, email summaries
 
 ### Data Flow
@@ -32,7 +32,8 @@ The codebase is organized into modular files by domain:
 | `constants.gs` | Configuration constants | `SYSTEM_SETTINGS`, `TRAINING_CONSTANTS`, `WORKOUT_TYPES`, `HEADERS_FIXED` |
 | `translations.gs` | Localization (5 languages) | `TRANSLATIONS` (en, nl, ja, es, fr) |
 | `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
-| `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `createWellnessSummary()`, `isRestDayRecommended()` |
+| `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `fetchWellnessDataEnhanced()`, `createWellnessSummary()`, `isRestDayRecommended()` |
+| `whoop.gs` | Whoop API integration | `fetchWhoopWellnessData()`, `getWhoopCurrentRecovery()`, `authorizeWhoop()` |
 | `workouts.gs` | Workout selection logic | `checkAvailability()`, `selectWorkoutTypes()`, `uploadWorkoutToIntervals()` |
 | `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()`, `calculateZoneProgression()`, `getZoneRecommendations()` |
 | `prompts.gs` | AI prompt construction | `createPrompt()`, `createRunPrompt()`, `generatePersonalizedCoachingNote()` |
@@ -60,6 +61,8 @@ The codebase is organized into modular files by domain:
 - `testTrainingProposal()` - Test weekly training proposal
 - `testWorkoutImpactPreview()` - Test workout impact preview with 2-week projections
 - `testZoneProgression()` - Test zone progression levels and AI recommendations
+- `testWhoopApi()` - Test direct Whoop API connection (in whoop.gs)
+- `testWhoopWellness()` - Test Whoop-enhanced wellness data fetching
 
 ### Core Data Structures
 

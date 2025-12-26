@@ -1,11 +1,120 @@
 /**
  * IntervalCoach - Wellness & Recovery Data
  *
- * Fetches and processes wellness data from Intervals.icu (Whoop/Garmin/Oura)
+ * Fetches and processes wellness data from multiple sources:
+ * - Whoop API (real-time, if configured)
+ * - Intervals.icu (synced from Whoop/Garmin/Oura)
  */
 
 // =========================================================
-// WELLNESS DATA FETCHING
+// SMART WELLNESS DATA FETCHING
+// =========================================================
+
+/**
+ * Fetch today's wellness data with Whoop API as primary source
+ * Falls back to Intervals.icu if Whoop is not configured or fails
+ * @returns {object} Wellness record for today
+ */
+function fetchTodayWellness() {
+  // Try Whoop API first (real-time data)
+  if (typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
+    try {
+      const whoopData = fetchWhoopWellnessData();
+      if (whoopData.available) {
+        Logger.log('Using Whoop API for today\'s wellness (real-time)');
+        return {
+          date: whoopData.date,
+          sleep: whoopData.sleep,
+          sleepQuality: null,
+          sleepScore: whoopData.sleepScore,
+          restingHR: whoopData.restingHR,
+          hrv: whoopData.hrv,
+          recovery: whoopData.recovery,
+          spO2: whoopData.spO2,
+          respiration: null,
+          soreness: null,
+          fatigue: null,
+          stress: null,
+          mood: null,
+          source: 'whoop_api'
+        };
+      } else {
+        Logger.log('Whoop API: ' + whoopData.reason + ', falling back to Intervals.icu');
+      }
+    } catch (e) {
+      Logger.log('Whoop API error: ' + e.toString() + ', falling back to Intervals.icu');
+    }
+  }
+
+  // Fallback to Intervals.icu
+  const icuData = fetchWellnessData(1, 0);
+  if (icuData.length > 0) {
+    icuData[0].source = 'intervals_icu';
+    return icuData[0];
+  }
+
+  return null;
+}
+
+/**
+ * Fetch wellness data with Whoop enhancement for today
+ * Merges real-time Whoop data with Intervals.icu historical data
+ * @param {number} daysBack - How many days back to fetch
+ * @param {number} daysBackEnd - End offset from today
+ * @returns {Array} Array of wellness records
+ */
+function fetchWellnessDataEnhanced(daysBack = 7, daysBackEnd = 0) {
+  // Get Intervals.icu data for historical records
+  const icuRecords = fetchWellnessData(daysBack, daysBackEnd);
+
+  // If fetching today's data, try to enhance with Whoop API
+  if (daysBackEnd === 0 && typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
+    try {
+      const whoopData = fetchWhoopWellnessData();
+      if (whoopData.available) {
+        const today = formatDateISO(new Date());
+
+        // Find today's record in ICU data
+        const todayIdx = icuRecords.findIndex(r => r.date === today);
+
+        // Create enhanced today record
+        const enhancedToday = {
+          date: today,
+          sleep: whoopData.sleep || (todayIdx >= 0 ? icuRecords[todayIdx].sleep : null),
+          sleepQuality: todayIdx >= 0 ? icuRecords[todayIdx].sleepQuality : null,
+          sleepScore: whoopData.sleepScore || (todayIdx >= 0 ? icuRecords[todayIdx].sleepScore : null),
+          restingHR: whoopData.restingHR,
+          hrv: whoopData.hrv,
+          recovery: whoopData.recovery,
+          spO2: whoopData.spO2 || (todayIdx >= 0 ? icuRecords[todayIdx].spO2 : null),
+          respiration: todayIdx >= 0 ? icuRecords[todayIdx].respiration : null,
+          // Subjective markers from Intervals.icu (user-entered)
+          soreness: todayIdx >= 0 ? icuRecords[todayIdx].soreness : null,
+          fatigue: todayIdx >= 0 ? icuRecords[todayIdx].fatigue : null,
+          stress: todayIdx >= 0 ? icuRecords[todayIdx].stress : null,
+          mood: todayIdx >= 0 ? icuRecords[todayIdx].mood : null,
+          source: 'whoop_api'
+        };
+
+        // Replace or add today's record
+        if (todayIdx >= 0) {
+          icuRecords[todayIdx] = enhancedToday;
+        } else {
+          icuRecords.unshift(enhancedToday);
+        }
+
+        Logger.log('Enhanced today\'s wellness with Whoop API data');
+      }
+    } catch (e) {
+      Logger.log('Whoop enhancement failed: ' + e.toString());
+    }
+  }
+
+  return icuRecords;
+}
+
+// =========================================================
+// INTERVALS.ICU WELLNESS DATA
 // =========================================================
 
 /**

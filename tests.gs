@@ -2869,3 +2869,74 @@ function testActivityNotes() {
 
   Logger.log("\n=== ACTIVITY NOTES DISCOVERY COMPLETE ===");
 }
+
+// =========================================================
+// WHOOP WELLNESS INTEGRATION TEST
+// =========================================================
+
+/**
+ * Test Whoop API wellness integration
+ * Tests both direct Whoop API and enhanced wellness fetching
+ */
+function testWhoopWellness() {
+  Logger.log("=== WHOOP WELLNESS INTEGRATION TEST ===\n");
+
+  // Check if Whoop is configured
+  Logger.log("--- Configuration ---");
+  const isConfigured = typeof isWhoopConfigured === 'function' && isWhoopConfigured();
+  Logger.log("Whoop configured: " + isConfigured);
+
+  if (!isConfigured) {
+    Logger.log("\nWhoop not configured. To set up:");
+    Logger.log("1. Add WHOOP_CONFIG to config.gs");
+    Logger.log("2. Run authorizeWhoop() to complete OAuth");
+    Logger.log("\nFalling back to Intervals.icu only...\n");
+  }
+
+  // Test enhanced wellness fetching
+  Logger.log("\n--- Enhanced Wellness Fetch ---");
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
+
+  if (wellnessRecords.length > 0) {
+    const today = wellnessRecords[0];
+    Logger.log("Today's data:");
+    Logger.log("  Source: " + (today.source || 'intervals_icu'));
+    Logger.log("  Date: " + today.date);
+    Logger.log("  Recovery: " + (today.recovery != null ? today.recovery + "%" : "N/A"));
+    Logger.log("  HRV: " + (today.hrv != null ? today.hrv + " ms" : "N/A"));
+    Logger.log("  RHR: " + (today.restingHR != null ? today.restingHR + " bpm" : "N/A"));
+    Logger.log("  Sleep: " + (today.sleep != null ? today.sleep.toFixed(1) + "h" : "N/A"));
+    Logger.log("  SpO2: " + (today.spO2 != null ? today.spO2 + "%" : "N/A"));
+
+    // Show if we got fresher data from Whoop
+    if (today.source === 'whoop_api') {
+      Logger.log("\n✓ Using real-time Whoop API data (bypassing 8-hour sync delay)");
+    } else {
+      Logger.log("\n○ Using Intervals.icu data (may be up to 8 hours old)");
+    }
+  } else {
+    Logger.log("No wellness records found");
+  }
+
+  // Test wellness summary creation
+  Logger.log("\n--- Wellness Summary ---");
+  const summary = createWellnessSummary(wellnessRecords);
+  if (summary.available) {
+    Logger.log("Recovery Status: " + summary.recoveryStatus);
+    Logger.log("Sleep Status: " + summary.sleepStatus);
+    Logger.log("Intensity Modifier: " + (summary.intensityModifier * 100).toFixed(0) + "%");
+    if (summary.aiEnhanced) {
+      Logger.log("AI Reason: " + summary.personalizedReason);
+    }
+  } else {
+    Logger.log("Wellness summary not available");
+  }
+
+  // If Whoop is configured, run full Whoop API test
+  if (isConfigured) {
+    Logger.log("\n--- Direct Whoop API Test ---");
+    testWhoopApi();
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
