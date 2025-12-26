@@ -88,7 +88,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Suggested Training Plan",
     training_proposal_no_placeholders: "No workouts scheduled yet. Add placeholders to your Intervals.icu calendar.",
-    weekly_plan_title: "WEEK AHEAD PLAN"
+    weekly_plan_title: "WEEK AHEAD PLAN",
+    // Weekly impact preview
+    weekly_impact_title: "Weekly Training Impact",
+    weekly_summary: "Week Summary",
+    peak_form_days: "Peak Form",
+    key_insights: "Key Insights"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -165,7 +170,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "提案トレーニングプラン",
     training_proposal_no_placeholders: "予定されたワークアウトがありません。カレンダーにプレースホルダーを追加してください。",
-    weekly_plan_title: "来週のトレーニングプラン"
+    weekly_plan_title: "来週のトレーニングプラン",
+    // Weekly impact preview
+    weekly_impact_title: "週間トレーニング効果",
+    weekly_summary: "週間サマリー",
+    peak_form_days: "ピークフォーム",
+    key_insights: "重要なポイント"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -242,7 +252,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Plan de Entrenamiento Sugerido",
     training_proposal_no_placeholders: "No hay entrenamientos programados. Añade marcadores a tu calendario de Intervals.icu.",
-    weekly_plan_title: "PLAN SEMANAL"
+    weekly_plan_title: "PLAN SEMANAL",
+    // Weekly impact preview
+    weekly_impact_title: "Impacto Semanal del Entrenamiento",
+    weekly_summary: "Resumen Semanal",
+    peak_form_days: "Forma Óptima",
+    key_insights: "Puntos Clave"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -325,7 +340,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Plan d'Entraînement Suggéré",
     training_proposal_no_placeholders: "Aucun entraînement prévu. Ajoutez des marqueurs à votre calendrier Intervals.icu.",
-    weekly_plan_title: "PLAN DE LA SEMAINE"
+    weekly_plan_title: "PLAN DE LA SEMAINE",
+    // Weekly impact preview
+    weekly_impact_title: "Impact Hebdomadaire de l'Entraînement",
+    weekly_summary: "Résumé de la Semaine",
+    peak_form_days: "Forme Optimale",
+    key_insights: "Points Clés"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -409,6 +429,11 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Voorgesteld Trainingsplan",
     training_proposal_no_placeholders: "Geen workouts gepland. Voeg placeholders toe aan je Intervals.icu kalender.",
-    weekly_plan_title: "WEEKPLAN"
+    weekly_plan_title: "WEEKPLAN",
+    // Weekly impact preview
+    weekly_impact_title: "Wekelijkse Training Impact",
+    weekly_summary: "Weeksamenvatting",
+    peak_form_days: "Piekvorm",
+    key_insights: "Belangrijke Inzichten"
   }
 };

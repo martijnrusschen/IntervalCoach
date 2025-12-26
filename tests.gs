@@ -1867,5 +1867,61 @@ function testWorkoutImpactPreview() {
     Logger.log("Email section was empty (skipped)");
   }
 
+  // 8. Test Weekly Impact Preview
+  Logger.log("\n--- Weekly Impact Preview ---");
+  const mockWeeklyPlan = [
+    { date: formatDateISO(new Date()), dayName: "Today", workoutType: "SweetSpot_SST", estimatedTSS: 55, duration: 60 },
+    { date: formatDateISO(new Date(Date.now() + 86400000)), dayName: "Tomorrow", activity: "Rest", estimatedTSS: 0 },
+    { date: formatDateISO(new Date(Date.now() + 2*86400000)), dayName: "Day 3", workoutType: "Endurance_Z2", estimatedTSS: 45, duration: 75 },
+    { date: formatDateISO(new Date(Date.now() + 3*86400000)), dayName: "Day 4", workoutType: "VO2max_Intervals", estimatedTSS: 65, duration: 60 },
+    { date: formatDateISO(new Date(Date.now() + 4*86400000)), dayName: "Day 5", activity: "Rest", estimatedTSS: 0 },
+    { date: formatDateISO(new Date(Date.now() + 5*86400000)), dayName: "Day 6", workoutType: "Threshold_FTP", estimatedTSS: 60, duration: 60 },
+    { date: formatDateISO(new Date(Date.now() + 6*86400000)), dayName: "Day 7", workoutType: "Recovery_Z1", estimatedTSS: 20, duration: 45 }
+  ];
+
+  const weeklyImpact = generateWeeklyImpactPreview(mockWeeklyPlan, fitnessMetrics, 7);
+
+  Logger.log("Weekly projections:");
+  weeklyImpact.projections.forEach(function(p) {
+    Logger.log("  " + p.dayName + " " + p.date.substring(5) + ": " + p.workoutType + " (TSS " + p.tss + ") -> CTL " + p.ctl + ", TSB " + p.tsb);
+  });
+
+  Logger.log("\nWeekly Summary:");
+  Logger.log("  Total TSS: " + weeklyImpact.summary.totalTSS);
+  Logger.log("  CTL change: " + weeklyImpact.summary.startCTL.toFixed(1) + " -> " + weeklyImpact.summary.endCTL.toFixed(1) + " (" + (weeklyImpact.summary.ctlChange >= 0 ? "+" : "") + weeklyImpact.summary.ctlChange.toFixed(1) + ")");
+  Logger.log("  TSB range: " + weeklyImpact.summary.lowestTSB + " to " + weeklyImpact.summary.highestTSB);
+  Logger.log("  Sustainable: " + weeklyImpact.summary.sustainableLoad);
+  if (weeklyImpact.summary.peakFormDays.length > 0) {
+    Logger.log("  Peak form days: " + weeklyImpact.summary.peakFormDays.join(", "));
+  }
+  if (weeklyImpact.summary.fatigueWarningDays.length > 0) {
+    Logger.log("  Fatigue warning days: " + weeklyImpact.summary.fatigueWarningDays.join(", "));
+  }
+
+  // 9. Test AI Weekly Narrative
+  Logger.log("\n--- AI Weekly Impact Narrative ---");
+  const weeklyNarrative = generateAIWeeklyImpactNarrative(weeklyImpact, goals, phaseInfo);
+
+  if (weeklyNarrative.success) {
+    Logger.log("AI Enhanced: " + weeklyNarrative.aiEnhanced);
+    Logger.log("Week Summary: " + weeklyNarrative.weekSummary);
+    Logger.log("Load Assessment: " + weeklyNarrative.loadAssessment);
+    Logger.log("Risk Level: " + weeklyNarrative.riskLevel);
+    Logger.log("Recommendation: " + weeklyNarrative.recommendation);
+    if (weeklyNarrative.keyInsights && weeklyNarrative.keyInsights.length > 0) {
+      Logger.log("Key Insights:");
+      weeklyNarrative.keyInsights.forEach(function(insight, i) {
+        Logger.log("  " + (i + 1) + ". " + insight);
+      });
+    }
+  } else {
+    Logger.log("Weekly narrative failed");
+  }
+
+  // 10. Test formatted section for email
+  Logger.log("\n--- Formatted Weekly Impact Section ---");
+  const weeklySection = formatWeeklyImpactSection(weeklyImpact, weeklyNarrative);
+  Logger.log(weeklySection);
+
   Logger.log("\n=== END WORKOUT IMPACT PREVIEW TEST ===");
 }

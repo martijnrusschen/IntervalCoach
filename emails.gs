@@ -519,6 +519,20 @@ Recovery Notes: ${weeklyPlan.recoveryNotes}
 `;
     }
 
+    // Weekly Impact Preview - show how this plan affects fitness
+    try {
+      const weeklyImpact = generateWeeklyImpactPreview(weeklyPlan.days, fitnessMetrics, 7);
+      if (weeklyImpact && weeklyImpact.projections.length > 0) {
+        const weeklyNarrative = generateAIWeeklyImpactNarrative(weeklyImpact, goals, phaseInfo);
+        const impactSection = formatWeeklyImpactSection(weeklyImpact, weeklyNarrative);
+        if (impactSection) {
+          body += impactSection;
+        }
+      }
+    } catch (e) {
+      Logger.log("Weekly impact preview failed: " + e.toString());
+    }
+
     // Calendar sync info
     if (calendarResults.created > 0) {
       body += `

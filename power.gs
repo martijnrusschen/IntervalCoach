@@ -1098,3 +1098,291 @@ function generateWorkoutImpactPreview(todaysTSS, fitnessMetrics, days) {
     }
   };
 }
+
+// =========================================================
+// WEEKLY IMPACT PREVIEW
+// =========================================================
+
+/**
+ * Generate a weekly impact preview showing how planned workouts affect fitness over the week
+ * @param {Array} plannedDays - Array of planned workout days from generateAIWeeklyPlan
+ * @param {object} fitnessMetrics - Current CTL/ATL/TSB
+ * @param {number} days - Number of days to project (default 7)
+ * @returns {object} Weekly projection with day-by-day metrics and summary
+ */
+function generateWeeklyImpactPreview(plannedDays, fitnessMetrics, days) {
+  days = days || 7;
+
+  var currentCTL = fitnessMetrics.ctl || 0;
+  var currentATL = fitnessMetrics.atl || 0;
+  var currentTSB = currentCTL - currentATL;
+
+  // Build planned workouts array with TSS estimates
+  var plannedWorkouts = [];
+
+  if (plannedDays && plannedDays.length > 0) {
+    for (var i = 0; i < plannedDays.length; i++) {
+      var day = plannedDays[i];
+      var tss = day.estimatedTSS || 0;
+
+      // If no TSS but has workout type, estimate it
+      if (!tss && day.workoutType && day.activity !== 'Rest') {
+        tss = estimateWorkoutTSS({
+          type: day.workoutType,
+          duration: day.duration || 60
+        });
+      }
+
+      plannedWorkouts.push({
+        date: day.date,
+        tss: tss,
+        workoutType: day.workoutType || day.activity || 'Rest',
+        dayName: day.dayName
+      });
+    }
+  }
+
+  // Project fitness metrics for the week
+  var projections = projectFitnessMetrics(currentCTL, currentATL, plannedWorkouts, days);
+
+  // Merge workout info with projections
+  var weeklyProjection = [];
+  for (var j = 0; j < projections.length; j++) {
+    var proj = projections[j];
+    var workout = plannedWorkouts.find(function(w) { return w.date === proj.date; });
+
+    weeklyProjection.push({
+      date: proj.date,
+      dayName: proj.dayName,
+      workoutType: workout ? workout.workoutType : 'Rest',
+      tss: proj.tss,
+      ctl: proj.ctl,
+      atl: proj.atl,
+      tsb: proj.tsb
+    });
+  }
+
+  // Calculate weekly summary
+  var totalTSS = 0;
+  var lowestTSB = currentTSB;
+  var highestTSB = currentTSB;
+  var peakFormDays = [];
+  var fatigueWarningDays = [];
+
+  for (var k = 0; k < weeklyProjection.length; k++) {
+    var day = weeklyProjection[k];
+    totalTSS += day.tss;
+
+    if (day.tsb < lowestTSB) lowestTSB = day.tsb;
+    if (day.tsb > highestTSB) highestTSB = day.tsb;
+
+    // Peak form: TSB between 0 and 20
+    if (day.tsb >= 0 && day.tsb <= 20) {
+      peakFormDays.push(day.dayName + ' ' + day.date.substring(5));
+    }
+
+    // Fatigue warning: TSB below -20
+    if (day.tsb < -20) {
+      fatigueWarningDays.push(day.dayName + ' ' + day.date.substring(5));
+    }
+  }
+
+  var endOfWeek = weeklyProjection[weeklyProjection.length - 1];
+
+  return {
+    projections: weeklyProjection,
+    summary: {
+      totalTSS: totalTSS,
+      startCTL: currentCTL,
+      endCTL: endOfWeek.ctl,
+      ctlChange: Math.round((endOfWeek.ctl - currentCTL) * 10) / 10,
+      startTSB: currentTSB,
+      endTSB: endOfWeek.tsb,
+      lowestTSB: Math.round(lowestTSB * 10) / 10,
+      highestTSB: Math.round(highestTSB * 10) / 10,
+      peakFormDays: peakFormDays,
+      fatigueWarningDays: fatigueWarningDays,
+      sustainableLoad: lowestTSB >= -30 // TSB staying above -30 is generally sustainable
+    }
+  };
+}
+
+/**
+ * Generate AI narrative for weekly impact preview
+ * @param {object} weeklyImpact - Output from generateWeeklyImpactPreview
+ * @param {object} goals - Upcoming goals
+ * @param {object} phaseInfo - Training phase info
+ * @returns {object} AI-generated narrative and insights
+ */
+function generateAIWeeklyImpactNarrative(weeklyImpact, goals, phaseInfo) {
+  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  // Build context for AI
+  var projectionTable = weeklyImpact.projections.map(function(p) {
+    return p.dayName + ' ' + p.date.substring(5) + ': ' + p.workoutType + ' (TSS ' + p.tss + ') -> CTL ' + p.ctl + ', TSB ' + p.tsb;
+  }).join('\n');
+
+  var prompt = `You are a cycling coach analyzing a week of planned training.
+
+CURRENT STATE:
+- CTL (Fitness): ${weeklyImpact.summary.startCTL.toFixed(1)}
+- TSB (Form): ${weeklyImpact.summary.startTSB.toFixed(1)}
+- Training Phase: ${phaseInfo.phaseName}
+- Weeks to Goal: ${phaseInfo.weeksOut}
+${goals && goals.primaryGoal ? '- Goal: ' + goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : ''}
+
+PLANNED WEEK:
+${projectionTable}
+
+END OF WEEK:
+- CTL Change: ${weeklyImpact.summary.ctlChange > 0 ? '+' : ''}${weeklyImpact.summary.ctlChange.toFixed(1)}
+- End TSB: ${weeklyImpact.summary.endTSB.toFixed(1)}
+- Lowest TSB: ${weeklyImpact.summary.lowestTSB.toFixed(1)}
+- Total TSS: ${weeklyImpact.summary.totalTSS}
+${weeklyImpact.summary.peakFormDays.length > 0 ? '- Peak Form Days: ' + weeklyImpact.summary.peakFormDays.join(', ') : ''}
+${weeklyImpact.summary.fatigueWarningDays.length > 0 ? '- HIGH FATIGUE WARNING: ' + weeklyImpact.summary.fatigueWarningDays.join(', ') : ''}
+
+Provide a brief analysis in ${USER_SETTINGS.LANGUAGE === 'en' ? 'English' : USER_SETTINGS.LANGUAGE === 'nl' ? 'Dutch' : USER_SETTINGS.LANGUAGE === 'ja' ? 'Japanese' : USER_SETTINGS.LANGUAGE === 'es' ? 'Spanish' : 'French'}.
+
+Return JSON:
+{
+  "weekSummary": "One sentence summarizing the week's training impact",
+  "loadAssessment": "appropriate|aggressive|conservative|overreaching",
+  "keyInsights": ["2-3 bullet points about the week"],
+  "recommendation": "Brief advice for executing this week",
+  "riskLevel": "low|medium|high"
+}`;
+
+  try {
+    var response = callGeminiAPI(prompt);
+    if (!response || typeof response !== 'string') {
+      return generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo);
+    }
+
+    // Parse JSON response
+    var jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo);
+    }
+
+    var parsed = JSON.parse(jsonMatch[0]);
+
+    return {
+      success: true,
+      aiEnhanced: true,
+      weekSummary: parsed.weekSummary || '',
+      loadAssessment: parsed.loadAssessment || 'appropriate',
+      keyInsights: parsed.keyInsights || [],
+      recommendation: parsed.recommendation || '',
+      riskLevel: parsed.riskLevel || 'low'
+    };
+  } catch (e) {
+    Logger.log('AI weekly narrative failed: ' + e.toString());
+    return generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo);
+  }
+}
+
+/**
+ * Fallback narrative when AI is unavailable
+ */
+function generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo) {
+  var summary = weeklyImpact.summary;
+  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  var loadAssessment = 'appropriate';
+  var riskLevel = 'low';
+
+  if (summary.lowestTSB < -30) {
+    loadAssessment = 'overreaching';
+    riskLevel = 'high';
+  } else if (summary.lowestTSB < -20) {
+    loadAssessment = 'aggressive';
+    riskLevel = 'medium';
+  } else if (summary.ctlChange < 0) {
+    loadAssessment = 'conservative';
+  }
+
+  var insights = [];
+
+  if (summary.ctlChange > 0) {
+    insights.push('Fitness (CTL) will increase by ' + summary.ctlChange.toFixed(1) + ' points');
+  } else {
+    insights.push('Fitness (CTL) will decrease by ' + Math.abs(summary.ctlChange).toFixed(1) + ' points (recovery week)');
+  }
+
+  if (summary.peakFormDays.length > 0) {
+    insights.push('Peak form window: ' + summary.peakFormDays.slice(0, 2).join(', '));
+  }
+
+  if (summary.fatigueWarningDays.length > 0) {
+    insights.push('High fatigue expected: ' + summary.fatigueWarningDays.join(', '));
+  }
+
+  return {
+    success: true,
+    aiEnhanced: false,
+    weekSummary: 'Total ' + summary.totalTSS + ' TSS planned, ending with TSB ' + summary.endTSB.toFixed(1),
+    loadAssessment: loadAssessment,
+    keyInsights: insights,
+    recommendation: summary.sustainableLoad ? 'Load is sustainable for this phase.' : 'Consider adding recovery if fatigue accumulates.',
+    riskLevel: riskLevel
+  };
+}
+
+/**
+ * Format weekly impact preview for email inclusion
+ * @param {object} weeklyImpact - Output from generateWeeklyImpactPreview
+ * @param {object} narrative - Output from generateAIWeeklyImpactNarrative
+ * @returns {string} Formatted text section for email
+ */
+function formatWeeklyImpactSection(weeklyImpact, narrative) {
+  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+
+  var section = '\n-----------------------------------\n';
+  section += (t.weekly_impact_title || 'Weekly Training Impact') + '\n';
+  section += '-----------------------------------\n';
+
+  if (narrative && narrative.weekSummary) {
+    section += narrative.weekSummary + '\n\n';
+  }
+
+  // Projection table
+  section += 'Day       | Workout              | TSS | CTL  | TSB\n';
+  section += '----------|----------------------|-----|------|-----\n';
+
+  for (var i = 0; i < weeklyImpact.projections.length; i++) {
+    var p = weeklyImpact.projections[i];
+    var dayLabel = (p.dayName + ' ' + p.date.substring(5)).padEnd(9);
+    var workoutLabel = (p.workoutType || 'Rest').substring(0, 20).padEnd(20);
+    var tssLabel = String(p.tss).padStart(3);
+    var ctlLabel = p.ctl.toFixed(1).padStart(4);
+    var tsbLabel = (p.tsb >= 0 ? '+' : '') + p.tsb.toFixed(1);
+
+    section += dayLabel + ' | ' + workoutLabel + ' | ' + tssLabel + ' | ' + ctlLabel + ' | ' + tsbLabel + '\n';
+  }
+
+  // Summary
+  section += '\n';
+  section += (t.weekly_summary || 'Week Summary') + ':\n';
+  section += '• Total TSS: ' + weeklyImpact.summary.totalTSS + '\n';
+  section += '• CTL: ' + weeklyImpact.summary.startCTL.toFixed(1) + ' → ' + weeklyImpact.summary.endCTL.toFixed(1);
+  section += ' (' + (weeklyImpact.summary.ctlChange >= 0 ? '+' : '') + weeklyImpact.summary.ctlChange.toFixed(1) + ')\n';
+  section += '• TSB range: ' + weeklyImpact.summary.lowestTSB.toFixed(1) + ' to ' + weeklyImpact.summary.highestTSB.toFixed(1) + '\n';
+
+  if (weeklyImpact.summary.peakFormDays.length > 0) {
+    section += '• ' + (t.peak_form_days || 'Peak form') + ': ' + weeklyImpact.summary.peakFormDays.slice(0, 3).join(', ') + '\n';
+  }
+
+  if (narrative && narrative.keyInsights && narrative.keyInsights.length > 0) {
+    section += '\n' + (t.key_insights || 'Key Insights') + ':\n';
+    for (var j = 0; j < narrative.keyInsights.length; j++) {
+      section += '• ' + narrative.keyInsights[j] + '\n';
+    }
+  }
+
+  if (narrative && narrative.recommendation) {
+    section += '\n' + narrative.recommendation + '\n';
+  }
+
+  return section;
+}
