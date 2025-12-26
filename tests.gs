@@ -1289,6 +1289,31 @@ function testWeekProgress() {
     Logger.log("  Missed Types: " + progress.missedTypes.join(", "));
   }
 
+  // Show day-by-day breakdown
+  if (progress.dayByDay?.length > 0) {
+    Logger.log("\nDay-by-Day Breakdown:");
+    for (const day of progress.dayByDay) {
+      const planned = day.planned ? `${day.planned.type} (${day.planned.intensity})` : 'Rest';
+      const completed = day.completed ? `${day.completed.type} (${day.completed.tss} TSS)` : 'None';
+      Logger.log(`  ${day.dayName}: Planned=${planned}, Completed=${completed}, Status=${day.status}`);
+    }
+  }
+
+  // Show missed workouts with event IDs
+  if (progress.missedWorkouts?.length > 0) {
+    Logger.log("\nMissed Workouts (would be cleaned up):");
+    for (const missed of progress.missedWorkouts) {
+      Logger.log(`  ${missed.day} (${missed.date}): ${missed.workoutType} - ${missed.intensity} (TSS ~${missed.tss})`);
+      Logger.log(`    Event ID: ${missed.eventId || 'Not found'}`);
+    }
+  }
+
+  // Show adaptation advice
+  if (progress.adaptationAdvice) {
+    Logger.log("\nAdaptation Advice:");
+    Logger.log("  " + progress.adaptationAdvice);
+  }
+
   Logger.log("\n=== TEST COMPLETE ===");
 }
 

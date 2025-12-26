@@ -1431,7 +1431,10 @@ function checkWeekProgress() {
     adherenceRate: 100,
     completedTypes: [],
     missedTypes: [],
+    missedWorkouts: [], // Detailed info about each missed workout
+    dayByDay: [], // Day-by-day breakdown for the week so far
     summary: '',
+    adaptationAdvice: '', // Guidance on how to adapt remaining week
     daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday
   };
 
@@ -1457,37 +1460,89 @@ function checkWeekProgress() {
       return result;
     }
 
-    // Count planned sessions (Weekly Plan markers or workout events)
-    const plannedEvents = (eventsResult.data || []).filter(e =>
-      e.category === 'WORKOUT' &&
-      (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
-    );
+    // Build day-by-day analysis (Monday to yesterday)
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-    result.plannedSessions = plannedEvents.length;
-    result.tssPlanned = plannedEvents.reduce((sum, e) => {
-      // Try to extract TSS from description
-      const tssMatch = e.description?.match(/TSS.*?(\d+)/);
-      return sum + (tssMatch ? parseInt(tssMatch[1]) : 60);
-    }, 0);
+    for (let i = 0; i < result.daysAnalyzed; i++) {
+      const dayDate = new Date(weekStart);
+      dayDate.setDate(weekStart.getDate() + i);
+      const dayStr = formatDateISO(dayDate);
+      const dayName = dayNames[i];
 
-    // Count completed sessions
-    const completedActivities = (activitiesResult.data || []).filter(a =>
-      a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300
-    );
+      // Find planned workout for this day
+      const plannedEvent = (eventsResult.data || []).find(e =>
+        e.start_date_local?.startsWith(dayStr) &&
+        e.category === 'WORKOUT' &&
+        (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
+      );
 
-    result.completedSessions = completedActivities.length;
-    result.tssCompleted = completedActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0);
-    result.completedTypes = completedActivities.map(a => a.type).filter(Boolean);
+      // Find completed activity for this day
+      const completedActivity = (activitiesResult.data || []).find(a =>
+        a.start_date_local?.startsWith(dayStr) &&
+        a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300
+      );
 
-    // Calculate missed vs extra sessions
-    if (result.completedSessions < result.plannedSessions) {
-      result.missedSessions = result.plannedSessions - result.completedSessions;
-      // Try to identify which types were missed
-      result.missedTypes = plannedEvents
-        .slice(result.completedSessions)
-        .map(e => e.name?.split(' - ')[0] || e.type || 'Workout');
-    } else if (result.completedSessions > result.plannedSessions) {
-      result.extraSessions = result.completedSessions - result.plannedSessions;
+      const dayInfo = {
+        date: dayStr,
+        dayName: dayName,
+        planned: null,
+        completed: null,
+        status: 'rest' // rest, completed, missed, extra
+      };
+
+      if (plannedEvent) {
+        // Extract workout type and intensity from name/description
+        const workoutName = plannedEvent.name || 'Workout';
+        const workoutType = workoutName.split(' - ')[0];
+        const tssMatch = plannedEvent.description?.match(/TSS.*?(\d+)/);
+        const intensityMatch = plannedEvent.description?.match(/(Threshold|VO2max|Endurance|Sweet Spot|Tempo|Recovery|Long)/i);
+
+        dayInfo.planned = {
+          eventId: plannedEvent.id, // Store event ID for cleanup
+          name: workoutName,
+          type: workoutType,
+          tss: tssMatch ? parseInt(tssMatch[1]) : 60,
+          intensity: intensityMatch ? intensityMatch[1] : 'Mixed',
+          description: plannedEvent.description
+        };
+        result.plannedSessions++;
+        result.tssPlanned += dayInfo.planned.tss;
+      }
+
+      if (completedActivity) {
+        dayInfo.completed = {
+          type: completedActivity.type,
+          tss: completedActivity.icu_training_load || 0,
+          duration: Math.round((completedActivity.moving_time || 0) / 60),
+          name: completedActivity.name
+        };
+        result.completedSessions++;
+        result.tssCompleted += dayInfo.completed.tss;
+        result.completedTypes.push(completedActivity.type);
+      }
+
+      // Determine status
+      if (dayInfo.planned && dayInfo.completed) {
+        dayInfo.status = 'completed';
+      } else if (dayInfo.planned && !dayInfo.completed) {
+        dayInfo.status = 'missed';
+        result.missedSessions++;
+        result.missedTypes.push(dayInfo.planned.type);
+        result.missedWorkouts.push({
+          eventId: dayInfo.planned.eventId, // For cleanup
+          day: dayName,
+          date: dayStr,
+          workoutType: dayInfo.planned.type,
+          intensity: dayInfo.planned.intensity,
+          tss: dayInfo.planned.tss,
+          description: dayInfo.planned.name
+        });
+      } else if (!dayInfo.planned && dayInfo.completed) {
+        dayInfo.status = 'extra';
+        result.extraSessions++;
+      }
+
+      result.dayByDay.push(dayInfo);
     }
 
     // Calculate adherence
@@ -1497,18 +1552,113 @@ function checkWeekProgress() {
 
     // Build summary
     if (result.missedSessions > 0) {
-      result.summary = `Behind plan: ${result.completedSessions}/${result.plannedSessions} sessions completed (${result.missedSessions} missed). TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+      const missedDays = result.missedWorkouts.map(m => m.day).join(', ');
+      result.summary = `Behind plan: ${result.completedSessions}/${result.plannedSessions} sessions (missed: ${missedDays}). TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+
+      // Build adaptation advice based on what was missed
+      result.adaptationAdvice = buildAdaptationAdvice(result.missedWorkouts, result.tssPlanned - result.tssCompleted);
     } else if (result.extraSessions > 0) {
       result.summary = `Ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+      result.adaptationAdvice = 'Consider easier remaining workouts to avoid overtraining this week.';
     } else if (result.plannedSessions === 0) {
-      result.summary = `No workouts were planned. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
+      result.summary = `No workouts planned so far. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
     } else {
       result.summary = `On track: ${result.completedSessions}/${result.plannedSessions} sessions. TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+      result.adaptationAdvice = 'Stick with the planned workouts for the remainder of the week.';
     }
 
   } catch (e) {
     Logger.log("Error checking week progress: " + e.toString());
     result.summary = "Unable to check week progress";
+  }
+
+  return result;
+}
+
+/**
+ * Build adaptation advice based on missed workouts
+ * Prioritizes key intensity sessions and provides specific guidance
+ * @param {Array} missedWorkouts - Array of missed workout details
+ * @param {number} tssDelta - TSS behind plan
+ * @returns {string} Advice for adapting remaining week
+ */
+function buildAdaptationAdvice(missedWorkouts, tssDelta) {
+  if (!missedWorkouts || missedWorkouts.length === 0) {
+    return '';
+  }
+
+  const advice = [];
+  const priorityIntensities = ['VO2max', 'Threshold', 'Sweet Spot'];
+  const lowPriorityIntensities = ['Endurance', 'Recovery', 'Long'];
+
+  // Find high-priority missed sessions
+  const missedHighPriority = missedWorkouts.filter(m =>
+    priorityIntensities.some(p => m.intensity?.toLowerCase().includes(p.toLowerCase()))
+  );
+
+  const missedLowPriority = missedWorkouts.filter(m =>
+    lowPriorityIntensities.some(p => m.intensity?.toLowerCase().includes(p.toLowerCase()))
+  );
+
+  if (missedHighPriority.length > 0) {
+    const types = [...new Set(missedHighPriority.map(m => m.intensity))].join(', ');
+    advice.push(`PRIORITY: Missed key intensity session(s): ${types}. If recovery allows, try to include this stimulus in today's workout or later this week.`);
+  }
+
+  if (missedLowPriority.length > 0 && missedHighPriority.length === 0) {
+    advice.push('Missed endurance/recovery session. This is less critical - focus on remaining quality sessions.');
+  }
+
+  // TSS guidance
+  if (tssDelta > 100) {
+    advice.push(`Significant TSS deficit (${tssDelta}). Consider slightly longer or more intense remaining workouts if feeling fresh.`);
+  } else if (tssDelta > 0 && tssDelta <= 100) {
+    advice.push(`Minor TSS deficit (${tssDelta}). Can be recovered with normal remaining workouts.`);
+  }
+
+  // General guidance
+  if (missedWorkouts.length >= 2) {
+    advice.push('Multiple sessions missed. Prioritize quality over volume for remaining days.');
+  }
+
+  return advice.join(' ');
+}
+
+/**
+ * Clean up missed placeholders from past days
+ * Removes workout events from days where the workout was not completed
+ * @param {object} weekProgress - Week progress data from checkWeekProgress()
+ * @returns {object} { cleaned: number, errors: string[] }
+ */
+function cleanupMissedPlaceholders(weekProgress) {
+  const result = { cleaned: 0, errors: [] };
+
+  if (!weekProgress?.missedWorkouts?.length) {
+    return result;
+  }
+
+  for (const missed of weekProgress.missedWorkouts) {
+    if (!missed.eventId) {
+      result.errors.push(`No event ID for ${missed.day}`);
+      continue;
+    }
+
+    try {
+      // deleteIntervalEvent expects object with id property
+      const deleted = deleteIntervalEvent({ id: missed.eventId });
+      if (deleted) {
+        Logger.log(`Cleaned up missed placeholder: ${missed.day} (${missed.workoutType})`);
+        result.cleaned++;
+      } else {
+        result.errors.push(`Failed to delete ${missed.day}`);
+      }
+    } catch (e) {
+      result.errors.push(`Error deleting ${missed.day}: ${e.toString()}`);
+    }
+  }
+
+  if (result.cleaned > 0) {
+    Logger.log(`Cleaned up ${result.cleaned} missed placeholder(s) from past days`);
   }
 
   return result;

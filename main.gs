@@ -274,6 +274,14 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const weekProgress = checkWeekProgress();
   Logger.log("Week Progress: " + weekProgress.summary);
 
+  // Clean up missed placeholders from past days
+  if (weekProgress.missedSessions > 0) {
+    const cleanup = cleanupMissedPlaceholders(weekProgress);
+    if (cleanup.cleaned > 0) {
+      Logger.log(`Cleaned ${cleanup.cleaned} missed placeholder(s) from calendar`);
+    }
+  }
+
   // ===== REST DAY ASSESSMENT (with full context) =====
   // The early RED check (line 66) handles emergencies, this considers full context
   const restDayContext = {

@@ -557,12 +557,13 @@ The weekly plan suggests "${context.suggestedType}" for today.
 Consider this as a starting point, but adjust based on current conditions (especially recovery, TSB, and yesterday's intensity).
 If conditions have changed significantly, choose a more appropriate workout type.
 ` : ''}${context.weekProgress ? `
-**THIS WEEK'S PROGRESS:**
+**THIS WEEK'S PROGRESS (Monday-Sunday week):**
 - ${context.weekProgress.summary}
-- Adherence: ${context.weekProgress.adherenceRate}%${context.weekProgress.missedSessions > 0 ? `
-- Missed sessions: ${context.weekProgress.missedTypes.join(', ')}
-  Consider: If key intensity was missed earlier, might be appropriate to include today if recovery allows.` : ''}${context.weekProgress.extraSessions > 0 ? `
-- Extra sessions completed: May need easier day to balance weekly load.` : ''}
+- Adherence: ${context.weekProgress.adherenceRate}%${context.weekProgress.missedWorkouts?.length > 0 ? `
+- MISSED WORKOUTS (need adaptation):
+${context.weekProgress.missedWorkouts.map(m => `  * ${m.day}: ${m.workoutType} (${m.intensity}, TSS ~${m.tss})`).join('\n')}
+- ADAPTATION ADVICE: ${context.weekProgress.adaptationAdvice}` : ''}${context.weekProgress.extraSessions > 0 ? `
+- Extra sessions completed (${context.weekProgress.extraSessions}): May need easier remaining days to balance weekly load.` : ''}
 ` : ''}
 **AVAILABLE WORKOUT TYPES:**
 ${workoutOptions}
