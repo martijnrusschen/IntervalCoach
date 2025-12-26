@@ -93,7 +93,8 @@ function fetchUpcomingGoals() {
         return {
           name: e.name,
           date: e.start_date_local.split('T')[0],
-          type: e.type
+          type: e.type,
+          description: e.description || ''
         };
       });
 
@@ -104,7 +105,8 @@ function fetchUpcomingGoals() {
         return {
           name: e.name,
           date: e.start_date_local.split('T')[0],
-          type: e.type
+          type: e.type,
+          description: e.description || ''
         };
       });
   }

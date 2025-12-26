@@ -170,6 +170,7 @@ ${workout.recommendationReason || workout.explanation || ''}
   } else if (type === 'group_ride') {
     // C event day - group ride with unstructured training
     const eventName = params.cEventName || t.group_ride || "Group Ride";
+    const eventDescription = params.cEventDescription || null;
     const advice = params.groupRideAdvice || {};
 
     // Intensity labels
@@ -183,7 +184,7 @@ ${workout.recommendationReason || workout.explanation || ''}
 ===================================
 ${t.group_ride_title || "GROUP RIDE DAY"}
 ===================================
-${t.event_label || "Event"}: ${eventName}
+${t.event_label || "Event"}: ${eventName}${eventDescription ? '\n' + eventDescription : ''}
 
 ${t.recommended_intensity || "Recommended Intensity"}: ${intensityLabel}
 

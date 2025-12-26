@@ -389,7 +389,7 @@ function generateGroupRideAdvice(context) {
   const prompt = `You are an expert coach advising on how hard to push during today's GROUP RIDE.
 
 **TODAY'S EVENT:**
-${context.eventName || 'Group Ride'}
+${context.eventName || 'Group Ride'}${context.eventDescription ? '\nDescription: ' + context.eventDescription : ''}
 
 **RECOVERY DATA:**
 - Recovery Status: ${context.wellness?.recoveryStatus || 'Unknown'}

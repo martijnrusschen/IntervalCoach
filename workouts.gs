@@ -165,23 +165,20 @@ function checkAvailability(wellness) {
   const eventToday = hasEventOnDate(0);
   if (eventToday.hasEvent && eventToday.category === "C") {
     // C event = group ride, no structured workout needed
-    // Fetch the event name for context
-    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + todayStr + "&newest=" + todayStr);
-    let cEventName = null;
-    if (eventsResult.success && Array.isArray(eventsResult.data)) {
-      const cEvent = eventsResult.data.find(e => e.category === "RACE_C");
-      cEventName = cEvent?.name || "Group Ride";
-    }
+    // Use event name and description from hasEventOnDate
+    const cEventName = eventToday.eventName || "Group Ride";
+    const cEventDescription = eventToday.eventDescription || null;
 
     return {
       shouldGenerate: false,
-      reason: "C event today: " + (cEventName || "Group Ride") + " - unstructured training, no workout generation needed.",
+      reason: "C event today: " + cEventName + (cEventDescription ? " (" + cEventDescription + ")" : "") + " - unstructured training, no workout generation needed.",
       duration: null,
       placeholder: null,
       activityType: null,
       isExisting: false,
       isCEvent: true,
-      cEventName: cEventName
+      cEventName: cEventName,
+      cEventDescription: cEventDescription
     };
   }
 

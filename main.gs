@@ -44,7 +44,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
 
     // Check if this is a C event (group ride) day
     if (availability.isCEvent) {
-      Logger.log("C Event day: " + availability.cEventName);
+      Logger.log("C Event day: " + availability.cEventName + (availability.cEventDescription ? " (" + availability.cEventDescription + ")" : ""));
 
       // Get recent workout context for AI advice
       const recentTypes = getRecentWorkoutTypes(7);
@@ -57,6 +57,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
         atl: fitnessMetrics.atl_7 || fitnessMetrics.atl,
         eventName: availability.cEventName,
+        eventDescription: availability.cEventDescription,
         eventTomorrow: hasEventTomorrow(),
         eventIn2Days: hasEventInDays(2),
         recentWorkouts: {
@@ -78,6 +79,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         weekProgress: weekProgress,
         upcomingDays: upcomingDays,
         cEventName: availability.cEventName,
+        cEventDescription: availability.cEventDescription,
         groupRideAdvice: groupRideAdvice
       });
     } else {
