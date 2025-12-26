@@ -152,14 +152,33 @@ ${buildZoneContext(powerProfile)}
     const w = wellness.today;
     const avg = wellness.averages;
 
+    // Build sleep quality details if available
+    let sleepDetails = '';
+    if (w.remSleep || w.deepSleep) {
+      const parts = [];
+      if (w.deepSleep) parts.push(`Deep: ${w.deepSleep.toFixed(1)}h`);
+      if (w.remSleep) parts.push(`REM: ${w.remSleep.toFixed(1)}h`);
+      if (w.sleepEfficiency) parts.push(`Efficiency: ${w.sleepEfficiency.toFixed(0)}%`);
+      sleepDetails = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+    }
+
+    // Build physiological indicators
+    let physioIndicators = '';
+    if (w.spO2 || w.skinTemp) {
+      const parts = [];
+      if (w.spO2) parts.push(`SpO2: ${w.spO2.toFixed(1)}%`);
+      if (w.skinTemp) parts.push(`Skin Temp: ${w.skinTemp.toFixed(1)}°C`);
+      physioIndicators = `\n- **Physiological:** ${parts.join(' | ')}`;
+    }
+
     wellnessContext = `
-**1b. Recovery & Wellness Data (from Whoop/wearable):**
+**1b. Recovery & Wellness Data (${w.source === 'whoop_api' ? 'Whoop API - real-time' : 'Intervals.icu'}):**
 - **Recovery Status:** ${wellness.recoveryStatus}
 - **Recommended Intensity Modifier:** ${(wellness.intensityModifier * 100).toFixed(0)}%
-- **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus}) | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
-- **HRV (rMSSD):** ${w.hrv || 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
+- **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})${sleepDetails} | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
+- **HRV (rMSSD):** ${w.hrv ? w.hrv.toFixed(0) : 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
-- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}
+- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 ${w.stress ? `- **Stress:** ${w.stress}/5` : ''}
@@ -170,6 +189,8 @@ ${w.mood ? `- **Mood:** ${w.mood}/5` : ''}
 - If Recovery Status is "Yellow (Recovering)": Reduce interval intensity by 5-10%. Favor Tempo/SST over VO2max.
 - If Recovery Status is "Green (Primed)": Full intensity is appropriate. High-intensity workouts can score higher.
 - Poor sleep (<6h) should reduce recommendation scores for high-intensity work.
+- Low deep sleep (<1.5h) indicates poor recovery quality even if total sleep is adequate.
+- Low SpO2 (<95%) or elevated skin temp may indicate illness - recommend easier workout.
 `;
   }
 

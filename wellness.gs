@@ -295,10 +295,19 @@ function createWellnessSummary(wellnessRecords) {
       restingHR: latestWithData.restingHR,
       hrv: latestWithData.hrv,
       recovery: latestWithData.recovery,
+      // Whoop-specific metrics
+      spO2: latestWithData.spO2,
+      skinTemp: latestWithData.skinTemp,
+      remSleep: latestWithData.remSleep,
+      deepSleep: latestWithData.deepSleep,
+      sleepEfficiency: latestWithData.sleepEfficiency,
+      // Subjective markers
       soreness: latestWithData.soreness,
       fatigue: latestWithData.fatigue,
       stress: latestWithData.stress,
-      mood: latestWithData.mood
+      mood: latestWithData.mood,
+      // Data source
+      source: latestWithData.source
     },
     averages: {
       sleep: avgSleep,

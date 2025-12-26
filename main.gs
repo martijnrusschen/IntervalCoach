@@ -6,6 +6,97 @@
  */
 
 // =========================================================
+// SMART HOURLY TRIGGER
+// =========================================================
+
+/**
+ * Smart hourly trigger for workout generation
+ * Runs hourly but only triggers workout generation once per day when:
+ * 1. Today's wellness data (recovery score) is available
+ * 2. We haven't already generated a workout today
+ *
+ * Set up: Create hourly trigger for this function
+ * ScriptApp.newTrigger('checkAndGenerateWorkout').timeBased().everyHours(1).create()
+ */
+function checkAndGenerateWorkout() {
+  const props = PropertiesService.getScriptProperties();
+  const today = formatDateISO(new Date());
+  const lastRunDate = props.getProperty('LAST_WORKOUT_RUN_DATE');
+
+  // Already ran today - skip
+  if (lastRunDate === today) {
+    Logger.log('Already generated workout today (' + today + ') - skipping');
+    return;
+  }
+
+  // Check if wellness data is available
+  Logger.log('Checking for wellness data...');
+
+  let wellnessAvailable = false;
+  let wellnessSource = 'none';
+
+  // Try Whoop API first
+  if (typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
+    try {
+      const whoopData = fetchWhoopWellnessData();
+      if (whoopData.available && whoopData.recovery != null) {
+        wellnessAvailable = true;
+        wellnessSource = 'whoop_api';
+        Logger.log('Whoop API: Recovery ' + whoopData.recovery + '% available');
+      } else {
+        Logger.log('Whoop API: No recovery data yet - ' + (whoopData.reason || 'unknown'));
+      }
+    } catch (e) {
+      Logger.log('Whoop API error: ' + e.toString());
+    }
+  }
+
+  // Fallback to Intervals.icu if Whoop not available
+  if (!wellnessAvailable) {
+    try {
+      const icuRecords = fetchWellnessData(1, 0);
+      if (icuRecords.length > 0 && icuRecords[0].date === today && icuRecords[0].recovery != null) {
+        wellnessAvailable = true;
+        wellnessSource = 'intervals_icu';
+        Logger.log('Intervals.icu: Recovery ' + icuRecords[0].recovery + '% available');
+      } else {
+        Logger.log('Intervals.icu: No recovery data for today yet');
+      }
+    } catch (e) {
+      Logger.log('Intervals.icu error: ' + e.toString());
+    }
+  }
+
+  // If no wellness data, wait for next hour
+  if (!wellnessAvailable) {
+    Logger.log('No wellness data available yet - will retry next hour');
+    return;
+  }
+
+  // Wellness data available - run workout generation
+  Logger.log('Wellness data ready from ' + wellnessSource + ' - generating workout');
+
+  try {
+    generateOptimalZwiftWorkoutsAutoByGemini();
+
+    // Mark as completed for today
+    props.setProperty('LAST_WORKOUT_RUN_DATE', today);
+    Logger.log('Workout generation complete - marked ' + today + ' as done');
+  } catch (e) {
+    Logger.log('Workout generation failed: ' + e.toString());
+    // Don't mark as complete so it retries next hour
+  }
+}
+
+/**
+ * Reset the daily run flag (useful for testing)
+ */
+function resetDailyWorkoutFlag() {
+  PropertiesService.getScriptProperties().deleteProperty('LAST_WORKOUT_RUN_DATE');
+  Logger.log('Daily workout flag reset - next hourly check will run');
+}
+
+// =========================================================
 // MAIN ENTRY POINT: Generate Daily Workout
 // =========================================================
 
