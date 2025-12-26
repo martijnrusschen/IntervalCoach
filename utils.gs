@@ -1199,7 +1199,7 @@ function getDateOffset(daysOffset) {
  * Check if there's a race event on a specific date offset from today
  * Consolidates hasEventTomorrow, hasEventYesterday, hasEventInDays
  * @param {number} daysOffset - Days from today (0 = today, 1 = tomorrow, -1 = yesterday)
- * @returns {object} Object with hasEvent boolean and category (A, B, C, or null)
+ * @returns {object} Object with hasEvent boolean, category (A, B, C, or null), and eventName
  */
 function hasEventOnDate(daysOffset) {
   const dateStr = getDateOffset(daysOffset);
@@ -1207,16 +1207,16 @@ function hasEventOnDate(daysOffset) {
   const result = fetchIcuApi(endpoint);
 
   if (!result.success || !Array.isArray(result.data)) {
-    return { hasEvent: false, category: null };
+    return { hasEvent: false, category: null, eventName: null };
   }
 
   for (const e of result.data) {
-    if (e.category === "RACE_A") return { hasEvent: true, category: "A" };
-    if (e.category === "RACE_B") return { hasEvent: true, category: "B" };
-    if (e.category === "RACE_C") return { hasEvent: true, category: "C" };
+    if (e.category === "RACE_A") return { hasEvent: true, category: "A", eventName: e.name || null };
+    if (e.category === "RACE_B") return { hasEvent: true, category: "B", eventName: e.name || null };
+    if (e.category === "RACE_C") return { hasEvent: true, category: "C", eventName: e.name || null };
   }
 
-  return { hasEvent: false, category: null };
+  return { hasEvent: false, category: null, eventName: null };
 }
 
 // =========================================================

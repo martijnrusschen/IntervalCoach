@@ -253,10 +253,16 @@ function generateAIRestDayAssessment(context) {
   // Build events context
   let eventsContext = '';
   if (context.eventTomorrow?.hasEvent) {
-    eventsContext += '\n- EVENT TOMORROW: ' + context.eventTomorrow.category + ' priority race';
+    const eventDesc = context.eventTomorrow.eventName
+      ? `${context.eventTomorrow.category} - ${context.eventTomorrow.eventName}`
+      : `${context.eventTomorrow.category} priority race`;
+    eventsContext += '\n- EVENT TOMORROW: ' + eventDesc;
   }
   if (context.eventIn2Days?.hasEvent) {
-    eventsContext += '\n- Event in 2 days: ' + context.eventIn2Days.category + ' priority';
+    const eventDesc = context.eventIn2Days.eventName
+      ? `${context.eventIn2Days.category} - ${context.eventIn2Days.eventName}`
+      : `${context.eventIn2Days.category} priority`;
+    eventsContext += '\n- Event in 2 days: ' + eventDesc;
   }
 
   // Build recent training context
@@ -342,10 +348,16 @@ function generateGroupRideAdvice(context) {
   // Build upcoming events context
   let upcomingContext = '';
   if (context.eventTomorrow?.hasEvent) {
-    upcomingContext += '\n- EVENT TOMORROW: ' + context.eventTomorrow.category + ' priority';
+    const eventDesc = context.eventTomorrow.eventName
+      ? `${context.eventTomorrow.category} - ${context.eventTomorrow.eventName}`
+      : `${context.eventTomorrow.category} priority`;
+    upcomingContext += '\n- EVENT TOMORROW: ' + eventDesc;
   }
   if (context.eventIn2Days?.hasEvent) {
-    upcomingContext += '\n- Event in 2 days: ' + context.eventIn2Days.category + ' priority';
+    const eventDesc = context.eventIn2Days.eventName
+      ? `${context.eventIn2Days.category} - ${context.eventIn2Days.eventName}`
+      : `${context.eventIn2Days.category} priority`;
+    upcomingContext += '\n- Event in 2 days: ' + eventDesc;
   }
 
   // Build recent training context

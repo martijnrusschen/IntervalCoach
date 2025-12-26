@@ -569,8 +569,8 @@ ${zoneProgressionContext}
 - Recovery Status: ${context.recoveryStatus || 'Unknown'}${context.recoveryScore ? ' (' + context.recoveryScore + '%)' : ''}
 
 **EVENT CONTEXT:**
-- Event Tomorrow: ${context.eventTomorrow?.hasEvent ? context.eventTomorrow.category + ' priority event' : 'No'}
-- Event Yesterday: ${context.eventYesterday?.hadEvent ? context.eventYesterday.category + ' priority event' : 'No'}
+- Event Tomorrow: ${context.eventTomorrow?.hasEvent ? (context.eventTomorrow.eventName ? context.eventTomorrow.category + ' - ' + context.eventTomorrow.eventName : context.eventTomorrow.category + ' priority event') : 'No'}
+- Event Yesterday: ${context.eventYesterday?.hadEvent ? (context.eventYesterday.eventName ? context.eventYesterday.category + ' - ' + context.eventYesterday.eventName : context.eventYesterday.category + ' priority event') : 'No'}
 
 **RECENT TRAINING (for variety):**
 - Recent ${context.activityType}s: ${recentStr}
@@ -808,7 +808,7 @@ function hasEventTomorrow() {
 function hasEventYesterday() {
   const result = hasEventOnDate(-1);
   // Maintain backward compatibility with 'hadEvent' property name
-  return { hadEvent: result.hasEvent, category: result.category };
+  return { hadEvent: result.hasEvent, category: result.category, eventName: result.eventName };
 }
 
 /**
