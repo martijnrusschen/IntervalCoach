@@ -1161,67 +1161,70 @@ function testAIWeeklyPlan() {
 }
 
 /**
- * Test daily status email (no-placeholder day email)
+ * Test unified daily email - tests all three types
+ * @param {string} emailType - 'workout', 'rest', or 'status' (default: 'status')
  */
-function testDailyStatusEmail() {
-  Logger.log("=== DAILY STATUS EMAIL TEST ===");
+function testUnifiedDailyEmail(emailType) {
+  const type = emailType || 'status';
+  Logger.log("=== UNIFIED DAILY EMAIL TEST (" + type.toUpperCase() + ") ===");
   requireValidConfig();
 
-  // Fetch wellness
+  // Fetch all required data
   const wellnessRecords = fetchWellnessData(7);
   const wellness = createWellnessSummary(wellnessRecords);
-
-  Logger.log("Wellness: " + (wellness.available ? wellness.recoveryStatus : "Not available"));
-
-  // Fetch fitness metrics
   const fitnessMetrics = fetchFitnessMetrics();
-  Logger.log("Fitness: CTL=" + fitnessMetrics.ctl?.toFixed(1) +
-             " ATL=" + fitnessMetrics.atl?.toFixed(1) +
-             " TSB=" + fitnessMetrics.tsb?.toFixed(1));
-
-  // Fetch goals and phase
   const goals = fetchUpcomingGoals();
   const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
   const phaseInfo = calculateTrainingPhase(targetDate);
-
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
-
-  // Fetch upcoming week
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  Logger.log("\n--- Upcoming 7 Days ---");
-  for (const day of upcomingDays) {
-    let info = day.dayName + " (" + day.date + "): ";
-    if (day.hasEvent) {
-      info += "EVENT - " + day.eventCategory;
-    } else if (day.activityType) {
-      info += day.activityType + " (" + day.duration?.min + "-" + day.duration?.max + " min)";
-      if (day.placeholderName) {
-        info += " [" + day.placeholderName + "]";
-      }
-    } else {
-      info += "No placeholder";
-    }
-    Logger.log("  " + info);
-  }
-
-  // Check weekly plan adaptation
+  const weekProgress = checkWeekProgress();
   const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
 
-  Logger.log("\n--- Weekly Plan Adaptation Check ---");
-  if (weeklyPlanContext.needsAdaptation) {
-    Logger.log("⚠️ ADAPTATION SUGGESTED:");
-    Logger.log("  Reason: " + weeklyPlanContext.adaptationReason);
-    Logger.log("  Suggestion: " + weeklyPlanContext.suggestion);
-  } else {
-    Logger.log("✓ No adaptation needed - plan looks good for current conditions");
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Week Progress: " + weekProgress.summary);
+
+  // Build email params based on type
+  const emailParams = {
+    type: type,
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    weeklyPlanContext: weeklyPlanContext
+  };
+
+  // Add type-specific params
+  if (type === 'workout') {
+    emailParams.workout = {
+      type: 'Test_Workout',
+      explanation: 'This is a test workout explanation.',
+      recommendationReason: 'Testing the unified email with a fake workout.',
+      recommendationScore: 8
+    };
+    emailParams.powerProfile = { available: false };
+  } else if (type === 'rest') {
+    emailParams.restAssessment = {
+      reasoning: 'Test rest day reasoning - your body needs recovery.',
+      alternatives: '• Light walk\n• Stretching\n• Foam rolling',
+      confidence: 'high'
+    };
   }
 
-  // Send the email
-  Logger.log("\n--- Sending Daily Status Email ---");
-  sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext);
+  Logger.log("\n--- Sending Unified Daily Email (" + type + ") ---");
+  sendDailyEmail(emailParams);
 
   Logger.log("\n=== TEST COMPLETE ===");
+  Logger.log("Check your inbox for the email.");
 }
+
+/**
+ * Quick test wrappers for each email type
+ */
+function testUnifiedEmail_Status() { testUnifiedDailyEmail('status'); }
+function testUnifiedEmail_Rest() { testUnifiedDailyEmail('rest'); }
+function testUnifiedEmail_Workout() { testUnifiedDailyEmail('workout'); }
 
 /**
  * Test weekly plan adaptation check

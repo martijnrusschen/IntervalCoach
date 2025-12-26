@@ -37,16 +37,22 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
     const phaseInfo = calculateTrainingPhase(targetDate);
 
-    // Fetch upcoming week schedule
+    // Fetch upcoming week schedule and progress
     const upcomingDays = fetchUpcomingPlaceholders(7);
-
-    // Check if weekly plan needs adaptation based on current conditions
+    const weekProgress = checkWeekProgress();
     const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
 
-    // Send daily status email
-    sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext);
+    // Send unified daily email (status type)
+    sendDailyEmail({
+      type: 'status',
+      summary: fitnessMetrics,
+      phaseInfo: phaseInfo,
+      wellness: wellness,
+      weekProgress: weekProgress,
+      upcomingDays: upcomingDays,
+      weeklyPlanContext: weeklyPlanContext
+    });
 
-    Logger.log("Daily status email sent (no placeholder day)");
     return;
   }
 
@@ -91,8 +97,17 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Keep the placeholder for tomorrow (don't delete - user may want to train when recovered)
     Logger.log("Keeping placeholder for potential rescheduling");
 
-    // Send rest day email with advice
-    sendRestDayEmail(wellness, phaseInfo);
+    // Send unified daily email (rest type)
+    const upcomingDays = fetchUpcomingPlaceholders(7);
+    const weekProgress = checkWeekProgress();
+    sendDailyEmail({
+      type: 'rest',
+      summary: { ctl_90: 0, tsb_current: 0 }, // Will be fetched in full flow
+      phaseInfo: phaseInfo,
+      wellness: wellness,
+      weekProgress: weekProgress,
+      upcomingDays: upcomingDays
+    });
 
     Logger.log("Workout generation skipped - rest day email sent");
     return;
@@ -293,8 +308,17 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       // Keep the placeholder for tomorrow (don't delete - user may want to train when recovered)
       Logger.log("Keeping placeholder for potential rescheduling");
 
-      // Send rest day email with reasoning
-      sendRestDayEmail(wellness, phaseInfo, restAssessment);
+      // Send unified daily email (rest type with AI assessment)
+      const upcomingDays = fetchUpcomingPlaceholders(7);
+      sendDailyEmail({
+        type: 'rest',
+        summary: summary,
+        phaseInfo: phaseInfo,
+        wellness: wellness,
+        restAssessment: restAssessment,
+        weekProgress: weekProgress,
+        upcomingDays: upcomingDays
+      });
 
       Logger.log("Workout generation skipped - rest day email sent");
       return;
@@ -422,8 +446,18 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     uploadWorkoutToIntervals(fileName.replace('.zwo', ''), result.xml, isoDateStr, availability.placeholder);
   }
 
-  // Send Email
-  sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, isRun ? null : powerProfile);
+  // Send unified daily email (workout type)
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  sendDailyEmail({
+    type: 'workout',
+    summary: summary,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    workout: workout,
+    powerProfile: isRun ? null : powerProfile,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays
+  });
 }
 
 // =========================================================

@@ -223,11 +223,14 @@ function fetchUpcomingPlaceholders(days = 7) {
     let placeholder = null;
     let eventCategory = null;
 
+    let eventName = null;
+
     if (result.success && Array.isArray(result.data)) {
       // Check for race events
       for (const e of result.data) {
         if (e.category === "RACE_A" || e.category === "RACE_B" || e.category === "RACE_C") {
           eventCategory = e.category.replace("RACE_", "");
+          eventName = e.name || null;
           break;
         }
       }
@@ -242,27 +245,27 @@ function fetchUpcomingPlaceholders(days = 7) {
       });
     }
 
-    if (placeholder || eventCategory) {
-      let activityType = null;
-      let duration = null;
+    // Always add the day (even if no placeholder/event)
+    let activityType = null;
+    let duration = null;
 
-      if (placeholder) {
-        const nameLower = placeholder.name.toLowerCase();
-        const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
-        activityType = isRun ? "Run" : "Ride";
-        duration = parseDurationFromName(placeholder.name, activityType);
-      }
-
-      upcoming.push({
-        date: dateStr,
-        dayName: dayName,
-        activityType: activityType,
-        duration: duration,
-        hasEvent: eventCategory !== null,
-        eventCategory: eventCategory,
-        placeholderName: placeholder ? placeholder.name : null
-      });
+    if (placeholder) {
+      const nameLower = placeholder.name.toLowerCase();
+      const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
+      activityType = isRun ? "Run" : "Ride";
+      duration = parseDurationFromName(placeholder.name, activityType);
     }
+
+    upcoming.push({
+      date: dateStr,
+      dayName: dayName,
+      activityType: activityType,
+      duration: duration,
+      hasEvent: eventCategory !== null,
+      eventCategory: eventCategory,
+      eventName: eventName,
+      placeholderName: placeholder ? placeholder.name : null
+    });
   }
 
   return upcoming;

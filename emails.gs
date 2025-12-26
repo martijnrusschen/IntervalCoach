@@ -5,205 +5,265 @@
  */
 
 // =========================================================
-// DAILY WORKOUT EMAIL
+// UNIFIED DAILY EMAIL
 // =========================================================
 
 /**
- * Send smart summary email with workout details - simplified structure
- * @param {object} summary - Athlete summary
- * @param {object} phaseInfo - Training phase info
- * @param {object} workout - Generated workout
- * @param {object} wellness - Wellness data
- * @param {object} powerProfile - Power profile (null for runs)
+ * Send unified daily email - handles workout, rest day, and no-placeholder scenarios
+ * @param {object} params - All parameters for the daily email
+ * @param {string} params.type - 'workout' | 'rest' | 'status' (no placeholder)
+ * @param {object} params.summary - Athlete summary (CTL/ATL/TSB)
+ * @param {object} params.phaseInfo - Training phase info
+ * @param {object} params.wellness - Wellness data
+ * @param {object} params.workout - Generated workout (for type='workout')
+ * @param {object} params.powerProfile - Power profile (for rides)
+ * @param {object} params.restAssessment - AI rest assessment (for type='rest')
+ * @param {object} params.weekProgress - Week progress data
+ * @param {Array} params.upcomingDays - Upcoming 7 days schedule
+ * @param {object} params.weeklyPlanContext - Plan adaptation context
  */
-function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfile) {
+/**
+ * Determine the reason for a rest day based on context
+ * @param {object} params - Email parameters
+ * @returns {object} { message, showAlternatives }
+ */
+function determineRestReason(params) {
   const t = getTranslations();
+  const { wellness, restAssessment, weekProgress, upcomingDays } = params;
 
-  // Generate AI-powered subject line
-  const aiSubject = generateAIEmailSubject(phaseInfo, workout, wellness);
-  const dateStr = Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd");
-  const subject = `[IntervalCoach] ${aiSubject} (${dateStr})`;
-
-  let body = `${t.greeting}\n\n`;
-
-  // --- Section 1: Coach's Note ---
-  const coachNote = generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile);
-  if (coachNote) {
-    body += `===================================
-${t.coach_note_title || "Coach's Note"}
-===================================
-${coachNote}
-
-`;
+  // 1. Explicit AI rest assessment (red recovery, illness, etc.)
+  if (restAssessment?.reasoning) {
+    return {
+      message: restAssessment.reasoning,
+      showAlternatives: true
+    };
   }
 
-  // --- Section 2: Vandaag (compact overview) ---
-  body += buildTodaySection(t, workout, wellness, summary, phaseInfo);
-
-  // --- Section 3: Workout Strategie ---
-  body += buildWorkoutStrategySection(t, workout);
-
-  // --- Footer ---
-  body += `\n${t.footer}`;
-
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach", attachments: [workout.blob] });
-  Logger.log("Email sent successfully.");
-}
-
-/**
- * Build compact "Vandaag" section with workout, recovery, fitness, impact
- */
-function buildTodaySection(t, workout, wellness, summary, phaseInfo) {
-  let section = `-----------------------------------
-${t.today || 'Vandaag'}
------------------------------------
-`;
-
-  // Line 1: Workout
-  const duration = workout.duration?.max || workout.duration?.min || '';
-  section += `${t.workout || 'Workout'}: ${workout.type}${duration ? ' (' + duration + ' min)' : ''}\n`;
-
-  // Line 2: Recovery (compact)
-  if (wellness && wellness.available) {
-    const w = wellness.today;
-    const recoveryShort = wellness.recoveryStatus?.split(' ')[0] || 'N/A'; // Just "Green" or "Yellow"
-    const recoveryPct = w.recovery != null ? ` (${w.recovery}%)` : '';
-    const sleepStr = w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A';
-    const hrvStr = w.hrv ? Math.round(w.hrv) + 'ms' : 'N/A';
-
-    section += `${t.recovery || 'Herstel'}: ${recoveryShort}${recoveryPct} | ${t.sleep || 'Slaap'} ${sleepStr} | HRV ${hrvStr}\n`;
+  // 2. Low recovery status
+  const recoveryStatus = wellness?.recoveryStatus || '';
+  if (recoveryStatus.includes('Red') || recoveryStatus.includes('Strained')) {
+    return {
+      message: t.rest_day_reason || "Your recovery status indicates you need rest to allow adaptation.",
+      showAlternatives: true
+    };
   }
 
-  // Line 3: Fitness (compact)
-  const ctl = summary.ctl_90?.toFixed(0) || summary.ctl?.toFixed(0) || 'N/A';
-  const tsb = summary.tsb_current?.toFixed(0) || summary.tsb?.toFixed(0) || 'N/A';
-  section += `${t.fitness || 'Fitness'}: CTL ${ctl} | TSB ${tsb}\n`;
-
-  // Line 4: Impact (if available)
-  const impact = calculateWorkoutImpact(summary, workout);
-  if (impact) {
-    const ctlChange = impact.ctlChange > 0 ? '+' + impact.ctlChange.toFixed(1) : impact.ctlChange.toFixed(1);
-    section += `\n${t.impact || 'Impact'}: CTL ${ctlChange} ${t.tomorrow || 'morgen'} | ${phaseInfo.phaseName} ${t.phase || 'fase'}\n`;
+  // 3. Recently trained (yesterday or day before)
+  const completedRecently = weekProgress?.completedSessions > 0 && weekProgress?.daysAnalyzed <= 2;
+  if (completedRecently) {
+    const lastType = weekProgress?.completedTypes?.[weekProgress.completedTypes.length - 1] || 'workout';
+    return {
+      message: t.rest_after_training || `Recovery day after recent ${lastType.toLowerCase()}. Your body adapts during rest.`,
+      showAlternatives: true
+    };
   }
 
-  section += '\n';
-  return section;
-}
-
-/**
- * Build "Workout Strategie" section with explanation and details
- */
-function buildWorkoutStrategySection(t, workout) {
-  let section = `-----------------------------------
-${t.workout_strategy || 'Workout Strategie'}
------------------------------------
-`;
-
-  // Main explanation/strategy
-  if (workout.explanation) {
-    section += `${workout.explanation}\n`;
+  // 4. Hard workout coming tomorrow
+  const tomorrow = upcomingDays?.find((d, i) => i === 1); // Second day in list
+  const tomorrowHasIntensity = tomorrow?.placeholderName?.match(/VO2|Threshold|Intervals|Tempo|SweetSpot/i);
+  if (tomorrowHasIntensity) {
+    return {
+      message: t.rest_before_intensity || `Rest day before tomorrow's ${tomorrow.placeholderName}. Arrive fresh for quality work.`,
+      showAlternatives: false
+    };
   }
 
-  // Run workout description (structured text)
-  if (workout.workoutDescription) {
-    section += `\n${workout.workoutDescription}\n`;
+  // 5. Event coming soon
+  const upcomingEvent = upcomingDays?.find(d => d.hasEvent);
+  if (upcomingEvent) {
+    const daysUntil = upcomingDays.indexOf(upcomingEvent);
+    if (daysUntil <= 2) {
+      return {
+        message: t.rest_before_event || `Rest day - ${upcomingEvent.eventCategory} event in ${daysUntil} day(s).`,
+        showAlternatives: false
+      };
+    }
   }
 
-  return section;
-}
-
-/**
- * Calculate simple workout impact on CTL
- */
-function calculateWorkoutImpact(summary, workout) {
-  if (!summary || !workout) return null;
-
-  const currentCTL = summary.ctl_90 || summary.ctl || 0;
-  const estimatedTSS = workout.estimatedTSS || 50; // Default estimate
-
-  // CTL change = (TSS - CTL) / 42
-  const ctlChange = (estimatedTSS - currentCTL) / 42;
-
+  // 6. Default - planned or unplanned rest
   return {
-    ctlChange: ctlChange,
-    estimatedTSS: estimatedTSS
+    message: t.rest_day_default || "Rest day. Recovery is as important as training. Enjoy!",
+    showAlternatives: true
   };
 }
 
-// =========================================================
-// REST DAY EMAIL
-// =========================================================
-
-/**
- * Send rest day email when recovery is red or AI recommends rest
- * @param {object} wellness - Wellness summary
- * @param {object} phaseInfo - Training phase info
- * @param {object} aiAssessment - Optional AI rest day assessment with reasoning
- */
-function sendRestDayEmail(wellness, phaseInfo, aiAssessment) {
+function sendDailyEmail(params) {
   const t = getTranslations();
+  const today = new Date();
+  const dayName = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+  const dateStr = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd");
 
-  // Indicate if this is an AI-recommended rest day
-  const isAIRecommended = aiAssessment && aiAssessment.isRestDay;
-  const subjectSuffix = isAIRecommended ? " (AI Recommended)" : "";
-  const subject = t.rest_day_subject + subjectSuffix + " (" + Utilities.formatDate(new Date(), SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+  const {
+    type,
+    summary,
+    phaseInfo,
+    wellness,
+    workout,
+    powerProfile,
+    restAssessment,
+    weekProgress,
+    upcomingDays,
+    weeklyPlanContext
+  } = params;
 
-  // Generate AI advice (fallback if no assessment provided)
-  const aiAdvice = isAIRecommended ? null : generateRestDayAdvice(wellness);
-
-  let body = `${t.rest_day_greeting}\n\n`;
-
-  // Phase info
-  body += `===================================
-${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
-===================================\n`;
-
-  // Recovery section
-  const w = wellness.today || {};
-  body += `
------------------------------------
-${t.recovery_title}
------------------------------------
-${t.recovery_status}: ${wellness.recoveryStatus}
-${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
-${t.hrv}: ${w.hrv ? Math.round(w.hrv) : 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
-${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
-${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
-`;
-
-  // Rest day recommendation
-  body += `
-===================================
-${t.rest_day_title}
-===================================
-`;
-
-  if (isAIRecommended) {
-    // Use AI assessment reasoning
-    body += `**Why rest today?**
-${aiAssessment.reasoning}
-
-**Confidence:** ${aiAssessment.confidence}
-
-**Recommended alternatives:**
-${aiAssessment.alternatives}`;
-  } else if (aiAdvice) {
-    body += aiAdvice;
+  // Build subject based on type
+  let subject;
+  if (type === 'workout') {
+    subject = `${t.subject_prefix}${workout?.type || 'Workout'} (${dateStr})`;
+  } else if (type === 'rest') {
+    subject = `${t.rest_day_subject} (${dateStr})`;
   } else {
-    body += `${t.rest_day_reason}
-
-${t.rest_day_alternatives}:
-• ${t.rest_day_walk}
-• ${t.rest_day_strength}
-
-${t.rest_day_note}`;
+    subject = `[IntervalCoach] ${t.daily_status_subject || 'Daily Update'} - ${dayName} (${dateStr})`;
   }
 
-  body += `\n\n${t.rest_day_footer}`;
+  let body = '';
+
+  // === HEADER: Phase Info ===
+  body += `===================================
+${t.phase_title}: ${phaseInfo?.phaseName || 'Build'}
+(${t.weeks_to_goal}: ${phaseInfo?.weeksOut || '?'} ${t.weeks_unit})
+===================================\n`;
+
+  // === SECTION 1: Today's Status (compact) ===
+  const ctl = summary?.ctl_90 || summary?.ctl || 0;
+  const tsb = summary?.tsb_current || summary?.tsb || 0;
+  const recoveryStatus = wellness?.recoveryStatus || 'Unknown';
+
+  body += `
+-----------------------------------
+${t.status || "Today's Status"}
+-----------------------------------
+${t.recovery_status}: ${recoveryStatus} | TSB: ${tsb.toFixed(1)} | CTL: ${ctl.toFixed(0)}`;
+
+  if (wellness?.available && wellness.today) {
+    const w = wellness.today;
+    body += `
+${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus || ''})`;
+    body += ` | ${t.hrv}: ${w.hrv ? Math.round(w.hrv) : 'N/A'} ms`;
+    body += ` | ${t.resting_hr}: ${w.restingHR || 'N/A'} bpm`;
+    if (w.recovery != null) {
+      body += `\nWhoop: ${w.recovery}%`;
+    }
+  }
+  body += '\n';
+
+  // === SECTION 2: Today's Plan (conditional) ===
+  if (type === 'workout' && workout) {
+    // Workout day
+    body += `
+===================================
+${t.recommendation_title || "TODAY'S WORKOUT"}
+===================================
+${t.workout_details || 'Workout'}: ${workout.type}
+${t.why_title}
+${workout.recommendationReason || workout.explanation || ''}
+`;
+    if (workout.recommendationScore) {
+      body += `\n${t.strategy_title}\n${workout.explanation || ''}\n`;
+    }
+  } else {
+    // Rest day (either explicit rest or no placeholder)
+    // Determine the reason for rest
+    const restReason = determineRestReason(params);
+
+    body += `
+===================================
+${t.rest_day_title || "REST DAY"}
+===================================
+${restReason.message}
+`;
+
+    if (restAssessment?.alternatives || restReason.showAlternatives) {
+      body += `
+${t.rest_day_alternatives || "Light alternatives"}:
+${restAssessment?.alternatives || `• ${t.rest_day_walk || "Easy walk (20-30 min)"}\n• ${t.rest_day_strength || "Light mobility/stretching"}`}
+`;
+    }
+  }
+
+  // === SECTION 3: Week Progress ===
+  if (weekProgress && weekProgress.daysAnalyzed > 0) {
+    body += `
+-----------------------------------
+${t.weekly_overview || "Week Progress"}
+-----------------------------------
+`;
+    // Format week progress with translations
+    const wp = weekProgress;
+    if (wp.missedSessions > 0) {
+      body += `${t.behind_plan || "Behind plan"}: ${wp.completedSessions}/${wp.plannedSessions} ${t.sessions || "sessions"} (${wp.missedSessions} ${t.missed || "missed"})`;
+    } else if (wp.extraSessions > 0) {
+      body += `${t.ahead_of_plan || "Ahead of plan"}: ${wp.completedSessions} ${t.completed || "completed"} (${wp.extraSessions} ${t.extra || "extra"})`;
+    } else if (wp.plannedSessions === 0) {
+      body += `${wp.completedSessions} ${t.sessions_completed || "sessions completed"}`;
+    } else {
+      body += `${t.on_track || "On track"}: ${wp.completedSessions}/${wp.plannedSessions} ${t.sessions || "sessions"}`;
+    }
+    body += ` | TSS: ${wp.tssCompleted}${wp.tssPlanned > 0 ? '/' + wp.tssPlanned : ''}`;
+
+    if (weeklyPlanContext?.needsAdaptation) {
+      body += `
+
+[!] ${t.plan_adaptation_title || "Adaptation Suggested"}:
+${weeklyPlanContext.adaptationReason}
+${weeklyPlanContext.suggestion || ''}`;
+    }
+    body += '\n';
+  }
+
+  // === SECTION 4: This Week's Schedule (compact) ===
+  if (upcomingDays && upcomingDays.length > 0) {
+    body += `
+-----------------------------------
+${t.upcoming_week_title || "This Week"}
+-----------------------------------
+`;
+    const todayStr = formatDateISO(today);
+
+    for (const day of upcomingDays) {
+      const isToday = day.date === todayStr;
+      const prefix = isToday ? '> ' : '  ';
+      let status = '';
+
+      if (day.hasEvent) {
+        status = `[${day.eventCategory}]${day.eventName ? ' ' + day.eventName : ''}`;
+      } else if (day.activityType) {
+        const duration = day.duration ? ` ${day.duration.min}min` : '';
+        status = `${day.placeholderName || day.activityType}${duration}`;
+      } else {
+        status = '-';
+      }
+
+      body += `${prefix}${day.dayName.substring(0, 3)}: ${status}${isToday ? ` <-- ${t.today || 'Today'}` : ''}\n`;
+    }
+  }
+
+  // === SECTION 5: Power Profile (for workout emails with rides) ===
+  if (type === 'workout' && powerProfile?.available) {
+    const currentEftp = powerProfile.currentEftp || powerProfile.eFTP;
+    body += `
+-----------------------------------
+${t.power_profile_title}
+-----------------------------------
+eFTP: ${currentEftp}W${powerProfile.allTimeEftp && powerProfile.allTimeEftp > currentEftp ? ` (all-time: ${powerProfile.allTimeEftp}W)` : ''}
+${t.peak_powers}: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W
+`;
+    if (powerProfile.strengths?.length > 0) {
+      body += `${t.strengths}: ${powerProfile.strengths.join(', ')}\n`;
+    }
+    if (powerProfile.focusAreas?.length > 0) {
+      body += `${t.focus_areas}: ${powerProfile.focusAreas.join(', ')}\n`;
+    }
+  }
+
+  // === FOOTER ===
+  body += `
+-----------------------------------
+- IntervalCoach
+`;
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Rest day email sent successfully" + (isAIRecommended ? " (AI recommended)" : "") + ".");
+  Logger.log(`Daily email sent (${type}).`);
 }
 
 // =========================================================
@@ -996,121 +1056,6 @@ ${t.keep_training || "Keep up the great work!"}
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
   Logger.log("Post-workout analysis email sent successfully.");
-}
-
-// =========================================================
-// DAILY STATUS EMAIL (No Placeholder Day)
-// =========================================================
-
-/**
- * Send daily status email when no workout placeholder is scheduled
- * Includes fitness status, recovery, and upcoming week overview
- * @param {object} wellness - Wellness summary
- * @param {object} phaseInfo - Current training phase
- * @param {object} fitnessMetrics - CTL/ATL/TSB data
- * @param {Array} upcomingDays - Next 7 days from fetchUpcomingPlaceholders
- * @param {object} weeklyPlanContext - Optional context about weekly plan adaptation
- */
-function sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext) {
-  const t = getTranslations();
-  const today = new Date();
-  const dayName = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
-
-  const subject = `📊 ${t.daily_status_subject || "Training Status"} - ${dayName} (${Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd")})`;
-
-  let body = `${t.daily_status_greeting || "Good morning!"}\n\n`;
-  body += `${t.no_workout_scheduled || "No workout scheduled for today."}\n\n`;
-
-  // Phase info
-  body += `===================================
-${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
-===================================\n`;
-
-  // Current Fitness
-  body += `
------------------------------------
-${t.current_fitness || "Current Fitness"}
------------------------------------
-CTL: ${fitnessMetrics.ctl ? fitnessMetrics.ctl.toFixed(1) : 'N/A'}
-ATL: ${fitnessMetrics.atl ? fitnessMetrics.atl.toFixed(1) : 'N/A'}
-TSB: ${fitnessMetrics.tsb ? fitnessMetrics.tsb.toFixed(1) : 'N/A'}
-${t.ramp_rate || "Ramp Rate"}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(1) : 'N/A'} TSS/week
-`;
-
-  // Recovery section
-  if (wellness && wellness.available) {
-    const w = wellness.today || {};
-    body += `
------------------------------------
-${t.recovery_title}
------------------------------------
-${t.recovery_status}: ${wellness.recoveryStatus}
-${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
-${t.hrv}: ${w.hrv ? Math.round(w.hrv) : 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
-${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
-${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
-`;
-  }
-
-  // Weekly Plan Adaptation Note
-  if (weeklyPlanContext && weeklyPlanContext.needsAdaptation) {
-    body += `
-===================================
-⚠️ ${t.plan_adaptation_title || "Plan Adaptation Suggested"}
-===================================
-${weeklyPlanContext.adaptationReason}
-${weeklyPlanContext.suggestion || ''}
-`;
-  }
-
-  // Upcoming Week
-  body += `
-===================================
-${t.upcoming_week_title || "This Week's Schedule"}
-===================================
-`;
-
-  if (upcomingDays && upcomingDays.length > 0) {
-    const scheduledDays = upcomingDays.filter(d => d.activityType || d.hasEvent);
-
-    if (scheduledDays.length > 0) {
-      for (const day of upcomingDays) {
-        let dayLine = `${day.dayName} (${day.date}): `;
-
-        if (day.hasEvent) {
-          dayLine += `[${day.eventCategory || 'Event'}]${day.placeholderName ? ' ' + day.placeholderName : ''}`;
-        } else if (day.activityType) {
-          const duration = day.duration ? ` (${day.duration.min}-${day.duration.max} min)` : '';
-          dayLine += `${day.activityType}${duration}`;
-          if (day.placeholderName && day.placeholderName !== day.activityType) {
-            dayLine += ` - ${day.placeholderName}`;
-          }
-        } else {
-          dayLine += `${t.rest_or_unscheduled || "Rest / Not scheduled"}`;
-        }
-
-        body += dayLine + '\n';
-      }
-    } else {
-      body += `${t.no_workouts_scheduled || "No workouts scheduled this week."}\n`;
-      body += `\n💡 ${t.add_placeholder_hint || "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation."}\n`;
-    }
-  } else {
-    body += `${t.no_workouts_scheduled || "No workouts scheduled this week."}\n`;
-    body += `\n💡 ${t.add_placeholder_hint || "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation."}\n`;
-  }
-
-  // Footer with suggestion
-  body += `
------------------------------------
-${t.daily_status_footer || "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu."}
-
-- IntervalCoach
-`;
-
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Daily status email sent successfully (no placeholder day).");
 }
 
 // =========================================================
