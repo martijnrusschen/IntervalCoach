@@ -360,9 +360,7 @@ function generateGroupRideAdvice(context) {
   }
 
   // Get language for localized output
-  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
-  const lang = USER_SETTINGS.LANGUAGE || 'en';
-  const langName = langMap[lang] || 'English';
+  const langName = getPromptLanguage();
 
   const prompt = `You are an expert coach advising on how hard to push during today's GROUP RIDE.
 
