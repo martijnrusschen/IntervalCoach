@@ -359,6 +359,11 @@ function generateGroupRideAdvice(context) {
 - Days since last workout: ${context.daysSinceLastWorkout || 0}`;
   }
 
+  // Get language for localized output
+  const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const langName = langMap[lang] || 'English';
+
   const prompt = `You are an expert coach advising on how hard to push during today's GROUP RIDE.
 
 **TODAY'S EVENT:**
@@ -391,11 +396,13 @@ Group rides are unstructured. The athlete can't control intervals but CAN contro
 - MODERATE: Normal TSB (-20 to +5), Green/Yellow recovery, no critical events upcoming
 - HARD (go all out): TSB > 0 (fresh), Green recovery, no important events for 3+ days, recent training was light
 
+**IMPORTANT: Respond in ${langName}.**
+
 **Output JSON only:**
 {
   "intensity": "easy|moderate|hard",
-  "advice": "1-2 sentence personalized advice for today's ride based on their specific metrics",
-  "tips": ["Specific actionable tip 1", "Specific actionable tip 2", "Specific actionable tip 3"]
+  "advice": "1-2 sentence personalized advice in ${langName}",
+  "tips": ["Tip 1 in ${langName}", "Tip 2 in ${langName}", "Tip 3 in ${langName}"]
 }`;
 
   const response = callGeminiAPIText(prompt);
