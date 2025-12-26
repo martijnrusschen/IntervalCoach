@@ -205,198 +205,97 @@ ${t.rest_day_note}`;
 // =========================================================
 
 /**
- * Send weekly training summary email
+ * Send weekly training summary email - simplified structure
  * Set up a weekly trigger (e.g., Sunday evening) to call this function
  */
 function sendWeeklySummaryEmail() {
   requireValidConfig();
 
   const t = getTranslations();
+  const today = new Date();
 
-  // Fetch activities
+  // ===== FETCH ALL DATA =====
   const weekData = fetchWeeklyActivities(7);
   const prevWeekData = fetchWeeklyActivities(14, 7);
 
-  // Fetch fitness metrics
   const fitnessMetrics = fetchFitnessMetrics();
   const prevWeekDate = new Date();
   prevWeekDate.setDate(prevWeekDate.getDate() - 7);
   const prevFitnessMetrics = fetchFitnessMetrics(prevWeekDate);
 
-  // Fetch wellness data
   const wellnessRecords = fetchWellnessData(7);
   const wellnessSummary = createWellnessSummary(wellnessRecords);
   const prevWellnessRecords = fetchWellnessData(14, 7);
   const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
 
-  // Fetch power profile
   const powerProfile = fetchPowerCurve();
 
-  // Fetch goals
   const goals = fetchUpcomingGoals();
   const phaseInfo = goals?.available && goals?.primaryGoal
     ? calculateTrainingPhase(goals.primaryGoal.date)
     : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
 
-  // Build email
-  const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - 6);
-  const dateRange = formatDateISO(weekStart) + " to " + formatDateISO(today);
-
-  const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
-
-  // Calculate load advice first (needed for AI insight)
   const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
-
-  // Fetch upcoming placeholders for next week preview
   const upcoming = fetchUpcomingPlaceholders(7);
 
-  // Generate AI coaching letter (comprehensive narrative)
-  const aiInsight = generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp, prevFitnessMetrics.eftp, phaseInfo, goals, loadAdvice, upcoming);
+  // ===== GENERATE WEEKLY PLAN =====
+  const recentTypes = getRecentWorkoutTypes(7);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const planContext = buildWeeklyPlanContext(
+    tomorrow, phaseInfo, fitnessMetrics, powerProfile, wellnessSummary,
+    goals, weekData, recentTypes, upcoming, loadAdvice, today
+  );
+
+  Logger.log("Generating weekly training plan...");
+  const weeklyPlan = generateAIWeeklyPlan(planContext);
+
+  // ===== GENERATE AI COACH'S BRIEF =====
+  const aiInsight = generateWeeklyInsight(
+    weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics,
+    wellnessSummary, prevWellnessSummary, fitnessMetrics.eftp,
+    prevFitnessMetrics.eftp, phaseInfo, goals, loadAdvice, upcoming
+  );
+
+  // ===== BUILD EMAIL =====
+  const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
 
   let body = `${t.weekly_greeting}\n\n`;
 
-  // AI Coaching Letter - the main content
+  // --- Section 1: Coach's Brief ---
   if (aiInsight) {
     body += `===================================
-${t.coach_note_title || "Coach's Letter"}
+${t.coach_note_title || "Coach's Brief"}
 ===================================
 ${aiInsight}
 
 `;
   }
 
-  // Week Overview
-  body += `===================================
-${t.weekly_overview} (${dateRange})
-===================================
-${t.total_activities}: ${weekData.totalActivities}
-  - ${t.rides}: ${weekData.rides}
-  - ${t.runs}: ${weekData.runs}
-${t.total_time}: ${formatDuration(weekData.totalTime)}
-${t.total_tss}: ${weekData.totalTss.toFixed(0)}
-${t.total_distance}: ${(weekData.totalDistance / 1000).toFixed(1)} km
-`;
+  // --- Section 2: Week in Cijfers (compact with diffs) ---
+  body += buildWeekInCijfersSection(
+    t, weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics,
+    wellnessSummary, prevWellnessSummary
+  );
 
-  // Comparison with previous week
-  if (prevWeekData.totalActivities > 0) {
-    const tssDiff = weekData.totalTss - prevWeekData.totalTss;
-    const timeDiff = weekData.totalTime - prevWeekData.totalTime;
-    const tssSign = tssDiff >= 0 ? "+" : "";
-
-    body += `
------------------------------------
-${t.weekly_comparison}
------------------------------------
-TSS: ${tssSign}${tssDiff.toFixed(0)} (${prevWeekData.totalTss.toFixed(0)} → ${weekData.totalTss.toFixed(0)})
-${t.total_time}: ${formatDuration(timeDiff, true)} (${formatDuration(prevWeekData.totalTime)} → ${formatDuration(weekData.totalTime)})
-`;
+  // --- Section 3: Komende Week (compact day-by-day) ---
+  if (weeklyPlan) {
+    const calendarResults = createWeeklyPlanEvents(weeklyPlan);
+    body += buildKomendeWeekSection(t, weeklyPlan, calendarResults);
   }
 
-  // Fitness Progress
-  const ctlChange = formatChange(fitnessMetrics.ctl, prevFitnessMetrics.ctl, 1);
-  const atlChange = formatChange(fitnessMetrics.atl, prevFitnessMetrics.atl, 1);
-  const tsbChange = formatChange(fitnessMetrics.tsb, prevFitnessMetrics.tsb, 1);
+  // --- Footer ---
+  body += `\n${t.weekly_footer}`;
 
-  body += `
------------------------------------
-${t.weekly_fitness}
------------------------------------
-CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)}${ctlChange}
-ATL (Fatigue): ${fitnessMetrics.atl.toFixed(1)}${atlChange}
-TSB (Form): ${fitnessMetrics.tsb.toFixed(1)}${tsbChange}
-${t.ramp_rate}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A'}`;
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Weekly summary email sent successfully.");
+}
 
-  // eFTP
-  if (fitnessMetrics.eftp) {
-    const eftpChange = formatChange(fitnessMetrics.eftp, prevFitnessMetrics.eftp, 0, 'W');
-    body += `
-eFTP: ${fitnessMetrics.eftp}W${eftpChange}`;
-  } else if (powerProfile && powerProfile.available) {
-    body += `
-eFTP: ${powerProfile.currentEftp || powerProfile.ftp || 'N/A'}W`;
-  }
-
-  // eFTP Trajectory Analysis (AI-enhanced)
-  if (powerProfile && powerProfile.available && powerProfile.manualFTP) {
-    try {
-      const trajectoryAnalysis = generateAIEftpTrajectoryAnalysis(powerProfile, fitnessMetrics, phaseInfo, goals);
-      if (trajectoryAnalysis) {
-        Logger.log("AI eFTP Trajectory: " + JSON.stringify(trajectoryAnalysis));
-        const statusEmoji = trajectoryAnalysis.onTrack ? '✓' : '⚠';
-        body += `
-${statusEmoji} ${t.eftp_trajectory || 'FTP Trajectory'}: ${trajectoryAnalysis.assessment}`;
-        if (trajectoryAnalysis.adjustments && trajectoryAnalysis.adjustments.length > 0) {
-          body += `
-  → ${trajectoryAnalysis.adjustments[0]}`;
-        }
-      }
-    } catch (e) {
-      Logger.log("eFTP trajectory analysis failed: " + e.toString());
-    }
-  }
-
-  // Health & Recovery
-  if (wellnessSummary.available) {
-    const prevAvg = prevWellnessSummary.available ? prevWellnessSummary.averages : {};
-    const sleepChange = formatChange(wellnessSummary.averages.sleep, prevAvg.sleep, 1, 'h');
-    const hrvChange = formatChange(wellnessSummary.averages.hrv, prevAvg.hrv, 0);
-    const rhrChange = formatChange(wellnessSummary.averages.restingHR, prevAvg.restingHR, 0);
-    const recoveryChange = formatChange(wellnessSummary.averages.recovery, prevAvg.recovery, 0, '%');
-
-    body += `
-
------------------------------------
-${t.weekly_health}
------------------------------------
-${t.avg_sleep}: ${wellnessSummary.averages.sleep ? wellnessSummary.averages.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange}
-${t.avg_hrv}: ${wellnessSummary.averages.hrv ? wellnessSummary.averages.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange}
-${t.avg_rhr}: ${wellnessSummary.averages.restingHR ? wellnessSummary.averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}${rhrChange}
-${t.avg_recovery}: ${wellnessSummary.averages.recovery ? wellnessSummary.averages.recovery.toFixed(0) + '%' : 'N/A'}${recoveryChange}`;
-  }
-
-  // Training Load Advice (uses loadAdvice calculated earlier)
-  body += `
-
------------------------------------
-${t.training_load_title}
------------------------------------
-${t.target_ctl}: ${loadAdvice.currentCTL.toFixed(0)} → ${loadAdvice.targetCTL} (${loadAdvice.weeksToGoal} ${t.weeks_unit})
-${t.weekly_tss_target}: ${loadAdvice.tssRange.min}-${loadAdvice.tssRange.max}
-${t.daily_tss_range}: ${loadAdvice.dailyTSSRange.min}-${loadAdvice.dailyTSSRange.max}
-${t.load_advice}: ${loadAdvice.loadAdvice}`;
-
-  if (loadAdvice.warning) {
-    body += `
-WARNING: ${loadAdvice.warning}`;
-  }
-
-  // Phase & Goal
-  if (goals?.available && goals?.primaryGoal) {
-    body += `
------------------------------------
-${t.phase_title}: ${phaseInfo.phaseName}
------------------------------------
-${t.goal_section}: ${goals.primaryGoal.name} (${goals.primaryGoal.date})
-${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
-${t.focus}: ${phaseInfo.focus}
-`;
-  }
-
-  // ===================================
-  // WEEKLY PLAN SECTION (Forward-looking)
-  // ===================================
-
-  // Uses 'upcoming' fetched earlier for AI insight
-
-  // Get recent workout types for variety
-  const recentTypes = getRecentWorkoutTypes(7);
-
-  // Build context for AI planning - start from tomorrow, not today
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
+/**
+ * Build context object for AI weekly plan generation
+ */
+function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfile, wellnessSummary, goals, weekData, recentTypes, upcoming, loadAdvice, today) {
   const planContext = {
     startDate: formatDateISO(tomorrow),
     phase: phaseInfo.phaseName,
@@ -417,12 +316,12 @@ ${t.focus}: ${phaseInfo.focus}
       activities: weekData.totalActivities,
       rideTypes: recentTypes.rides,
       runTypes: recentTypes.runs,
-      highIntensityDays: recentTypes.all.filter(t => {
-        const catalog = { ...WORKOUT_TYPES.ride, ...WORKOUT_TYPES.run };
+      highIntensityDays: recentTypes.all.filter(function(t) {
+        const catalog = Object.assign({}, WORKOUT_TYPES.ride, WORKOUT_TYPES.run);
         return catalog[t]?.intensity >= 4;
       }).length
     },
-    scheduledDays: upcoming.filter(d => d.activityType),
+    scheduledDays: upcoming.filter(function(d) { return d.activityType; }),
     tssTarget: loadAdvice.tssRange,
     dailyTss: { min: loadAdvice.dailyTSSMin, max: loadAdvice.dailyTSSMax },
     twoWeekHistory: getTwoWeekWorkoutHistory()
@@ -446,7 +345,7 @@ ${t.focus}: ${phaseInfo.focus}
 
   // Get existing scheduled workouts for next 7 days
   const existingWorkouts = [];
-  for (let i = 1; i <= 7; i++) {  // Start from tomorrow (i=1)
+  for (let i = 1; i <= 7; i++) {
     const checkDate = new Date(today);
     checkDate.setDate(today.getDate() + i);
     const dateStr = formatDateISO(checkDate);
@@ -454,12 +353,11 @@ ${t.focus}: ${phaseInfo.focus}
 
     const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr);
     if (eventsResult.success && eventsResult.data?.length > 0) {
-      const workout = eventsResult.data.find(e => e.category === 'WORKOUT');
+      const workout = eventsResult.data.find(function(e) { return e.category === 'WORKOUT'; });
       if (workout) {
         const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workout.name || '');
         const isWeeklyPlan = workout.description?.includes('[Weekly Plan]');
         if (!isSimplePlaceholder && !isWeeklyPlan) {
-          // User has a specific workout scheduled
           existingWorkouts.push({
             date: dateStr,
             dayName: dayName,
@@ -473,80 +371,127 @@ ${t.focus}: ${phaseInfo.focus}
   }
   planContext.existingWorkouts = existingWorkouts;
 
-  // Generate AI weekly plan
-  Logger.log("Generating weekly training plan...");
-  const weeklyPlan = generateAIWeeklyPlan(planContext);
+  return planContext;
+}
 
-  if (weeklyPlan) {
-    // Create calendar events from the weekly plan
-    const calendarResults = createWeeklyPlanEvents(weeklyPlan);
+/**
+ * Build compact "Week in Cijfers" section with diffs vs previous week
+ */
+function buildWeekInCijfersSection(t, weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary) {
+  // Calculate diffs
+  const sessionsDiff = weekData.totalActivities - prevWeekData.totalActivities;
+  const timeDiff = weekData.totalTime - prevWeekData.totalTime;
+  const tssDiff = weekData.totalTss - prevWeekData.totalTss;
 
-    // Add plan section to email
-    body += `
-===================================
-${t.weekly_plan_title || 'WEEK AHEAD PLAN'}
-===================================
-${weeklyPlan.weeklyStrategy}
+  const ctlDiff = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
+  const atlDiff = fitnessMetrics.atl - (prevFitnessMetrics.atl || 0);
+  const tsbDiff = fitnessMetrics.tsb - (prevFitnessMetrics.tsb || 0);
+  const eftpDiff = (fitnessMetrics.eftp && prevFitnessMetrics.eftp)
+    ? fitnessMetrics.eftp - prevFitnessMetrics.eftp : null;
 
-Target TSS: ${weeklyPlan.totalPlannedTSS}
-Intensity Mix: ${weeklyPlan.intensityDistribution.high} hard | ${weeklyPlan.intensityDistribution.medium} medium | ${weeklyPlan.intensityDistribution.low} easy | ${weeklyPlan.intensityDistribution.rest} rest
+  const prevAvg = prevWellnessSummary?.available ? prevWellnessSummary.averages : {};
+  const currAvg = wellnessSummary?.available ? wellnessSummary.averages : {};
+  const sleepDiff = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
+  const hrvDiff = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
+  const recoveryDiff = (currAvg.recovery && prevAvg.recovery) ? currAvg.recovery - prevAvg.recovery : null;
 
+  // Format helpers
+  const formatDiff = function(val, decimals) {
+    if (val == null) return '';
+    const sign = val >= 0 ? '+' : '';
+    return ' (' + sign + val.toFixed(decimals || 0) + ')';
+  };
+
+  const formatTimeDiff = function(secs) {
+    if (secs == null) return '';
+    const sign = secs >= 0 ? '+' : '-';
+    const absSecs = Math.abs(secs);
+    const h = Math.floor(absSecs / 3600);
+    const m = Math.floor((absSecs % 3600) / 60);
+    if (h > 0) return ' (' + sign + h + 'h ' + m + 'm)';
+    return ' (' + sign + m + 'm)';
+  };
+
+  let section = `-----------------------------------
+${t.weekly_overview || 'Week in Cijfers'} (vs ${t.previous_week || 'vorige week'})
+-----------------------------------
 `;
 
-    // Day by day plan
-    for (const day of weeklyPlan.days) {
-      body += `${day.dayName} (${day.date})
-${day.activity}${day.workoutType ? ': ' + day.workoutType : ''}
-${day.activity !== 'Rest' ? 'TSS: ~' + day.estimatedTSS + ' | ' + day.duration + ' min' : ''}
-${day.focus}
+  // Line 1: Training volume
+  section += `${t.sessions || 'Sessies'}: ${weekData.totalActivities}${formatDiff(sessionsDiff)}  |  `;
+  section += `${t.time || 'Tijd'}: ${formatDuration(weekData.totalTime)}${formatTimeDiff(timeDiff)}  |  `;
+  section += `TSS: ${weekData.totalTss.toFixed(0)}${formatDiff(tssDiff)}\n`;
 
-`;
-    }
+  // Line 2: Fitness metrics
+  section += `${t.fitness || 'Fitness'}: CTL ${fitnessMetrics.ctl.toFixed(1)}${formatDiff(ctlDiff, 1)}  |  `;
+  section += `ATL ${fitnessMetrics.atl.toFixed(1)}${formatDiff(atlDiff, 1)}  |  `;
+  section += `TSB ${fitnessMetrics.tsb.toFixed(1)}${formatDiff(tsbDiff, 1)}`;
 
-    // Key workouts
-    if (weeklyPlan.keyWorkouts && weeklyPlan.keyWorkouts.length > 0) {
-      body += `Key Workouts This Week:
-`;
-      weeklyPlan.keyWorkouts.forEach(kw => {
-        body += `• ${kw}\n`;
-      });
-    }
-
-    // Recovery notes
-    if (weeklyPlan.recoveryNotes) {
-      body += `
-Recovery Notes: ${weeklyPlan.recoveryNotes}
-`;
-    }
-
-    // Weekly Impact Preview - show how this plan affects fitness
-    try {
-      const weeklyImpact = generateWeeklyImpactPreview(weeklyPlan.days, fitnessMetrics, 7);
-      if (weeklyImpact && weeklyImpact.projections.length > 0) {
-        const weeklyNarrative = generateAIWeeklyImpactNarrative(weeklyImpact, goals, phaseInfo);
-        const impactSection = formatWeeklyImpactSection(weeklyImpact, weeklyNarrative);
-        if (impactSection) {
-          body += impactSection;
-        }
-      }
-    } catch (e) {
-      Logger.log("Weekly impact preview failed: " + e.toString());
-    }
-
-    // Calendar sync info
-    if (calendarResults.created > 0) {
-      body += `
-${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} added to your Intervals.icu calendar.
-`;
-    }
+  // eFTP if available
+  if (fitnessMetrics.eftp) {
+    section += `\neFTP: ${fitnessMetrics.eftp}W${eftpDiff != null ? formatDiff(eftpDiff) + 'W' : ''}\n`;
   } else {
-    Logger.log("Failed to generate weekly plan");
+    section += '\n';
   }
 
-  body += `\n${t.weekly_footer}`;
+  // Line 3: Recovery/wellness
+  if (wellnessSummary?.available) {
+    section += `\n${t.recovery || 'Herstel'}: `;
+    section += `${t.sleep || 'Slaap'} ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepDiff != null ? formatDiff(sleepDiff, 1) : ''}  |  `;
+    section += `HRV ${currAvg.hrv ? currAvg.hrv.toFixed(0) + 'ms' : 'N/A'}${hrvDiff != null ? formatDiff(hrvDiff) : ''}  |  `;
+    section += `${t.recovery_score || 'Recovery'} ${currAvg.recovery ? currAvg.recovery.toFixed(0) + '%' : 'N/A'}${recoveryDiff != null ? formatDiff(recoveryDiff) : ''}\n`;
+  }
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Weekly summary email sent successfully.");
+  section += '\n';
+  return section;
+}
+
+/**
+ * Build compact "Komende Week" section with day-by-day plan
+ */
+function buildKomendeWeekSection(t, weeklyPlan, calendarResults) {
+  let section = `-----------------------------------
+${t.weekly_plan_title || 'Komende Week'}
+-----------------------------------
+`;
+
+  // Day by day - compact format: "Ma  Endurance · 60min · TSS ~45"
+  for (const day of weeklyPlan.days) {
+    const dayAbbrev = day.dayName.substring(0, 2);
+
+    // Treat as rest if activity is Rest/Rust OR if duration/TSS are 0 or missing
+    const isRest = day.activity === 'Rest' || day.activity === 'Rust' ||
+                   (!day.duration && !day.estimatedTSS) ||
+                   (day.duration === 0 && day.estimatedTSS === 0);
+
+    if (isRest) {
+      section += `${dayAbbrev}  ${t.rest || 'Rest'}\n`;
+    } else {
+      const workoutName = day.workoutType || day.activity;
+      const isKeyWorkout = weeklyPlan.keyWorkouts?.some(function(kw) {
+        return kw.toLowerCase().includes(day.dayName.toLowerCase());
+      });
+      const marker = isKeyWorkout ? ' ⭐' : '';
+      section += `${dayAbbrev}  ${workoutName} · ${day.duration}min · TSS ~${day.estimatedTSS}${marker}\n`;
+    }
+  }
+
+  // Week summary line
+  const dist = weeklyPlan.intensityDistribution || {};
+  section += `\n${t.week_target || 'Weekdoel'}: ${weeklyPlan.totalPlannedTSS} TSS | `;
+  section += `Mix: ${dist.high || 0} hard, ${dist.medium || 0} medium, ${dist.low || 0} easy, ${dist.rest || 0} ${t.rest || 'rust'}\n`;
+
+  // Key workout highlight
+  if (weeklyPlan.keyWorkouts && weeklyPlan.keyWorkouts.length > 0) {
+    section += `\n${t.key_workout || 'Key workout'}: ${weeklyPlan.keyWorkouts[0]}\n`;
+  }
+
+  // Calendar sync info
+  if (calendarResults && calendarResults.created > 0) {
+    section += `\n${calendarResults.created} workout${calendarResults.created > 1 ? 's' : ''} ${t.added_to_calendar || 'added to Intervals.icu calendar'}.\n`;
+  }
+
+  return section;
 }
 
 // =========================================================
