@@ -554,6 +554,9 @@ function testTrainingProposal() {
     let info = day.dayName + " (" + day.date + "): ";
     if (day.hasEvent) {
       info += day.eventCategory + " Event" + (day.eventName ? " - " + day.eventName : "");
+      if (day.eventDescription) {
+        info += " (" + day.eventDescription + ")";
+      }
     } else if (day.activityType) {
       info += day.activityType + " (" + day.duration.min + "-" + day.duration.max + " min)";
     }

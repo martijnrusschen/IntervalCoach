@@ -249,8 +249,8 @@ function fetchUpcomingPlaceholders(days = 7) {
 
     let placeholder = null;
     let eventCategory = null;
-
     let eventName = null;
+    let eventDescription = null;
 
     if (result.success && Array.isArray(result.data)) {
       // Check for race events
@@ -258,6 +258,7 @@ function fetchUpcomingPlaceholders(days = 7) {
         if (e.category === "RACE_A" || e.category === "RACE_B" || e.category === "RACE_C") {
           eventCategory = e.category.replace("RACE_", "");
           eventName = e.name || null;
+          eventDescription = e.description || null;
           break;
         }
       }
@@ -291,6 +292,7 @@ function fetchUpcomingPlaceholders(days = 7) {
       hasEvent: eventCategory !== null,
       eventCategory: eventCategory,
       eventName: eventName,
+      eventDescription: eventDescription,
       placeholderName: placeholder ? placeholder.name : null
     });
   }
@@ -881,6 +883,9 @@ function generateWeeklyTrainingProposal(params) {
     let desc = day.dayName + " (" + day.date + "): ";
     if (day.hasEvent) {
       desc += day.eventCategory + " Event" + (day.eventName ? " - " + day.eventName : "");
+      if (day.eventDescription) {
+        desc += " (" + day.eventDescription + ")";
+      }
       if (day.activityType) {
         desc += " + " + day.activityType + " placeholder";
       }
