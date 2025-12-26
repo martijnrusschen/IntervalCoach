@@ -464,8 +464,21 @@ function testWorkoutSelection() {
   Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
   Logger.log("Recent runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
 
-  // Test with real data - Ride
-  Logger.log("\n--- Ride Selection (Real Data) ---");
+  // Fetch zone progression
+  Logger.log("\n--- Zone Progression Context ---");
+  const zoneProgression = getZoneProgression();
+  if (zoneProgression && zoneProgression.available) {
+    Logger.log("Zone levels:");
+    for (const [zone, data] of Object.entries(zoneProgression.progression)) {
+      Logger.log("  " + zone + ": " + data.level.toFixed(1) + " (" + data.trend + ")");
+    }
+    Logger.log("Focus areas: " + zoneProgression.focusAreas.join(", "));
+  } else {
+    Logger.log("Zone progression not available");
+  }
+
+  // Test with real data - Ride (no AI)
+  Logger.log("\n--- Ride Selection (Fallback) ---");
   const rideSelection = selectWorkoutTypes({
     wellness: wellness,
     recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
@@ -478,7 +491,27 @@ function testWorkoutSelection() {
   });
   Logger.log("Max intensity: " + rideSelection.maxIntensity);
   Logger.log("Reason: " + rideSelection.reason);
-  Logger.log("Recommended types: " + rideSelection.types.slice(0, 5).join(", "));
+  Logger.log("Recommended types: " + rideSelection.types.slice(0, 3).join(", "));
+
+  // Test with AI enabled + zone progression
+  Logger.log("\n--- Ride Selection (AI + Zone Progression) ---");
+  const aiRideSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    eventTomorrow: eventTomorrow,
+    eventYesterday: eventYesterday,
+    zoneProgression: zoneProgression,
+    enableAI: true
+  });
+  Logger.log("Selected type: " + aiRideSelection.types[0]);
+  Logger.log("Max intensity: " + aiRideSelection.maxIntensity);
+  Logger.log("Reason: " + aiRideSelection.reason);
+  if (aiRideSelection.zoneNote) {
+    Logger.log("Zone note: " + aiRideSelection.zoneNote);
+  }
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
