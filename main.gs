@@ -285,10 +285,10 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const eventTomorrow = hasEventTomorrow();
   const eventYesterday = hasEventYesterday();
   if (eventTomorrow.hasEvent) {
-    Logger.log("Event tomorrow: " + eventTomorrow.category + " priority");
+    Logger.log("Event tomorrow: " + eventTomorrow.category + (eventTomorrow.eventName ? " - " + eventTomorrow.eventName : " priority"));
   }
   if (eventYesterday.hadEvent) {
-    Logger.log("Event yesterday: " + eventYesterday.category + " priority");
+    Logger.log("Event yesterday: " + eventYesterday.category + (eventYesterday.eventName ? " - " + eventYesterday.eventName : " priority"));
   }
 
   // Get adaptive training context (RPE/Feel feedback + training gap analysis)

@@ -459,8 +459,8 @@ function testWorkoutSelection() {
   Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
   Logger.log("TSB: " + summary.tsb_current.toFixed(1));
   Logger.log("Recovery: " + wellness.recoveryStatus + (wellness.today?.recovery ? " (" + wellness.today.recovery + "%)" : ""));
-  Logger.log("Event Tomorrow: " + (eventTomorrow.hasEvent ? eventTomorrow.category : "None"));
-  Logger.log("Event Yesterday: " + (eventYesterday.hadEvent ? eventYesterday.category : "None"));
+  Logger.log("Event Tomorrow: " + (eventTomorrow.hasEvent ? eventTomorrow.category + (eventTomorrow.eventName ? " - " + eventTomorrow.eventName : "") : "None"));
+  Logger.log("Event Yesterday: " + (eventYesterday.hadEvent ? eventYesterday.category + (eventYesterday.eventName ? " - " + eventYesterday.eventName : "") : "None"));
   Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
   Logger.log("Recent runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
 
@@ -553,7 +553,7 @@ function testTrainingProposal() {
   upcoming.forEach(function(day) {
     let info = day.dayName + " (" + day.date + "): ";
     if (day.hasEvent) {
-      info += day.eventCategory + " Event";
+      info += day.eventCategory + " Event" + (day.eventName ? " - " + day.eventName : "");
     } else if (day.activityType) {
       info += day.activityType + " (" + day.duration.min + "-" + day.duration.max + " min)";
     }
@@ -1100,7 +1100,8 @@ function testAIWeeklyPlan() {
       upcomingEvents.push({
         date: formatDateISO(eventDate),
         dayName: Utilities.formatDate(eventDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE"),
-        eventCategory: eventCheck.category
+        eventCategory: eventCheck.category,
+        name: eventCheck.eventName
       });
     }
   }

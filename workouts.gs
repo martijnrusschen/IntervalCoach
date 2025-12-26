@@ -880,7 +880,7 @@ function generateWeeklyTrainingProposal(params) {
   const upcomingText = upcoming.map(function(day) {
     let desc = day.dayName + " (" + day.date + "): ";
     if (day.hasEvent) {
-      desc += day.eventCategory + " Event";
+      desc += day.eventCategory + " Event" + (day.eventName ? " - " + day.eventName : "");
       if (day.activityType) {
         desc += " + " + day.activityType + " placeholder";
       }

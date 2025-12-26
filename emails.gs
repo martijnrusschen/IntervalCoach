@@ -73,8 +73,11 @@ function determineRestReason(params) {
   if (upcomingEvent) {
     const daysUntil = upcomingDays.indexOf(upcomingEvent);
     if (daysUntil <= 2) {
+      const eventDesc = upcomingEvent.eventName
+        ? `${upcomingEvent.eventCategory} - ${upcomingEvent.eventName}`
+        : `${upcomingEvent.eventCategory} event`;
       return {
-        message: t.rest_before_event || `Rest day - ${upcomingEvent.eventCategory} event in ${daysUntil} day(s).`,
+        message: t.rest_before_event || `Rest day - ${eventDesc} in ${daysUntil} day(s).`,
         showAlternatives: false
       };
     }
@@ -433,7 +436,8 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
       upcomingEvents.push({
         date: formatDateISO(eventDate),
         dayName: Utilities.formatDate(eventDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE"),
-        eventCategory: eventCheck.category
+        eventCategory: eventCheck.category,
+        name: eventCheck.eventName
       });
     }
   }
