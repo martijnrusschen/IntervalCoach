@@ -342,7 +342,7 @@ function getRecentWorkoutTypes(daysBack = 7) {
 
   if (activitiesResult.success && Array.isArray(activitiesResult.data)) {
     activitiesResult.data.forEach(function(a) {
-      if (a.type === "Ride" || a.type === "VirtualRide" || a.type === "Run" || a.type === "VirtualRun") {
+      if (isSportActivity(a)) {
         const classified = classifyActivityType(a);
         if (classified) {
           result.all.push(classified.type);
@@ -1422,7 +1422,7 @@ function analyzeWeeklyPlanExecution(weeksBack = 1) {
   const activitiesResult = fetchIcuApi(`/athlete/0/activities?oldest=${startStr}&newest=${endStr}`);
   if (activitiesResult.success && Array.isArray(activitiesResult.data)) {
     activitiesResult.data.forEach(function(a) {
-      if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
+      if (isSportActivity(a)) {
         const classified = classifyActivityType(a);
         result.actual.push({
           date: a.start_date_local?.substring(0, 10),
