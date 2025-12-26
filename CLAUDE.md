@@ -34,7 +34,7 @@ The codebase is organized into modular files by domain:
 | `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
 | `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `createWellnessSummary()`, `isRestDayRecommended()` |
 | `workouts.gs` | Workout selection logic | `checkAvailability()`, `selectWorkoutTypes()`, `uploadWorkoutToIntervals()` |
-| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()` |
+| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()` |
 | `prompts.gs` | AI prompt construction | `createPrompt()`, `createRunPrompt()`, `generatePersonalizedCoachingNote()` |
 | `emails.gs` | Email sending | `sendSmartSummaryEmail()`, `sendRestDayEmail()`, `sendWeeklySummaryEmail()` |
 | `utils.gs` | Helper functions | `formatDateISO()`, `average()`, `sum()`, `getAdaptiveTrainingContext()` |
@@ -58,6 +58,7 @@ The codebase is organized into modular files by domain:
 - `testCoachingNote()` - Test AI coaching note generation
 - `testRestDayEmail()` - Test rest day email functionality
 - `testTrainingProposal()` - Test weekly training proposal
+- `testWorkoutImpactPreview()` - Test workout impact preview with 2-week projections
 
 ### Core Data Structures
 

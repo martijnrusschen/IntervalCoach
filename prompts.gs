@@ -1702,3 +1702,144 @@ Use ${langName} for all string values within the JSON:
   }
 }
 
+// =========================================================
+// WORKOUT IMPACT PREVIEW
+// =========================================================
+
+/**
+ * Generate AI-powered workout impact preview narrative
+ * Explains how today's workout affects fitness over the next 2 weeks
+ * @param {object} impactData - Data from generateWorkoutImpactPreview()
+ * @param {object} goals - Upcoming goals/races
+ * @param {object} phaseInfo - Current training phase info
+ * @returns {object} {summary, narrative, keyInsights, aiEnhanced}
+ */
+function generateAIWorkoutImpactPreview(impactData, goals, phaseInfo) {
+  const analysisLang = getPromptLanguage();
+
+  // Format 2-week projection for AI
+  const projectionSummary = impactData.withWorkout.map(function(p) {
+    return p.dayName + " " + p.date.substring(5) + ": TSS=" + p.tss + " -> CTL=" + p.ctl + ", TSB=" + p.tsb;
+  }).join("\n");
+
+  // Format goals if available
+  let goalContext = "No specific events in next 2 weeks";
+  if (goals && goals.length > 0) {
+    const upcomingGoals = goals.filter(function(g) {
+      const goalDate = new Date(g.date);
+      const twoWeeksOut = new Date();
+      twoWeeksOut.setDate(twoWeeksOut.getDate() + 14);
+      return goalDate <= twoWeeksOut;
+    });
+    if (upcomingGoals.length > 0) {
+      goalContext = upcomingGoals.map(function(g) {
+        return g.name + " (" + g.category + ") on " + g.date;
+      }).join(", ");
+    }
+  }
+
+  const prompt = `You are an expert cycling coach analyzing how today's workout impacts an athlete's fitness trajectory.
+
+CURRENT STATE:
+- CTL (Fitness): ${impactData.currentMetrics.ctl}
+- ATL (Fatigue): ${impactData.currentMetrics.atl}
+- TSB (Form): ${impactData.currentMetrics.tsb}
+- Training Phase: ${phaseInfo ? phaseInfo.phaseName : 'Build'}
+- Weeks to Goal: ${phaseInfo ? phaseInfo.weeksOut : 'Unknown'}
+
+TODAY'S WORKOUT:
+- Estimated TSS: ${impactData.todaysTSS}
+
+IMPACT ANALYSIS:
+- Tomorrow's TSB change: ${impactData.impact.tomorrowTSBDelta.toFixed(1)} (more negative = more tired)
+- 2-week CTL gain: +${impactData.impact.twoWeekCTLDelta.toFixed(1)} fitness points
+- Lowest TSB this week: ${impactData.impact.lowestTSB.toFixed(1)}
+- Days until positive TSB: ${impactData.impact.daysToPositiveTSB !== null ? impactData.impact.daysToPositiveTSB : "14+"}
+${impactData.impact.peakFormWindow.length > 0 ? "- Peak form window (TSB 0-20): " + impactData.impact.peakFormWindow.slice(0, 3).join(", ") : "- No peak form days in next 2 weeks"}
+
+2-WEEK PROJECTION:
+${projectionSummary}
+
+UPCOMING EVENTS:
+${goalContext}
+
+Provide a concise workout impact analysis in ${analysisLang}. Return JSON:
+{
+  "summary": "One-sentence summary of the workout's impact (e.g., 'This workout builds fitness while keeping you fresh for Sunday')",
+  "narrative": "2-3 sentence coaching explanation of the trade-offs. Mention specific CTL/TSB values when relevant. Connect to their goals.",
+  "keyInsights": [
+    "Insight 1 (e.g., 'TSB drops to -15 tomorrow but recovers by Friday')",
+    "Insight 2 (e.g., 'On track for peak form on race day')"
+  ],
+  "formStatus": "optimal|building|fatigued|recovering",
+  "recommendation": "proceed|modify|skip"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+
+    if (!response) {
+      Logger.log("Workout impact preview: No response from Gemini");
+      return createFallbackImpactPreview(impactData);
+    }
+
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    const result = JSON.parse(cleaned);
+    result.success = true;
+    result.aiEnhanced = true;
+    return result;
+  } catch (e) {
+    Logger.log("Failed to parse workout impact preview: " + e.toString());
+    return createFallbackImpactPreview(impactData);
+  }
+}
+
+/**
+ * Create fallback impact preview when AI is unavailable
+ * @param {object} impactData - Data from generateWorkoutImpactPreview()
+ * @returns {object} Basic impact preview
+ */
+function createFallbackImpactPreview(impactData) {
+  const tsbDelta = impactData.impact.tomorrowTSBDelta;
+  const ctlGain = impactData.impact.twoWeekCTLDelta;
+  const daysToRecover = impactData.impact.daysToPositiveTSB;
+
+  let summary = "";
+  let formStatus = "building";
+  let recommendation = "proceed";
+
+  if (impactData.currentMetrics.tsb < -20) {
+    summary = "Adds training load during a fatigued period";
+    formStatus = "fatigued";
+    recommendation = "modify";
+  } else if (impactData.currentMetrics.tsb > 10) {
+    summary = "Builds fitness from a well-rested state";
+    formStatus = "recovering";
+  } else {
+    summary = "Contributes +" + ctlGain.toFixed(1) + " CTL over 2 weeks";
+    formStatus = "building";
+  }
+
+  const narrative = "This " + impactData.todaysTSS + " TSS workout will drop your TSB by " +
+    Math.abs(tsbDelta).toFixed(1) + " points tomorrow. " +
+    (daysToRecover ? "You'll return to positive form in " + daysToRecover + " days." : "Recovery may take over 2 weeks.");
+
+  const keyInsights = [];
+  keyInsights.push("CTL gain: +" + ctlGain.toFixed(1) + " over 2 weeks");
+  if (daysToRecover !== null && daysToRecover <= 3) {
+    keyInsights.push("Quick recovery: positive TSB in " + daysToRecover + " days");
+  } else if (impactData.impact.lowestTSB < -25) {
+    keyInsights.push("Watch fatigue: TSB dips to " + impactData.impact.lowestTSB.toFixed(0));
+  }
+
+  return {
+    success: true,
+    aiEnhanced: false,
+    summary: summary,
+    narrative: narrative,
+    keyInsights: keyInsights,
+    formStatus: formStatus,
+    recommendation: recommendation
+  };
+}

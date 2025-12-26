@@ -51,7 +51,7 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Smart Limits:** Max 3 rides and 1-2 runs per week (adjustable based on athlete capacity)
 - **Variety Tracking:** Uses 2-week workout history to ensure training variety
 
-### Post-Workout AI Analysis (NEW)
+### Post-Workout AI Analysis
 - **Hourly Checks:** Automatically detects when you complete a workout (checked every hour)
 - **AI Analysis:** Evaluates workout effectiveness, difficulty match, and execution quality
 - **Recovery Impact:** Estimates recovery time and provides recommendations for next workout
@@ -60,6 +60,16 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Adaptive Learning:** Analysis stored and used to improve future workout predictions
 - **Performance Tracking:** Highlights strengths, concerns, and training adjustments needed
 - **Cost:** ~$0.05-0.10/month in Gemini API costs (only calls AI when workouts are completed)
+
+### Workout Impact Preview (NEW)
+- **2-Week Projection:** Shows how today's workout affects CTL/ATL/TSB over the next 14 days
+- **With/Without Comparison:** Compares fitness trajectory if you do vs skip the workout
+- **AI-Powered Insights:** AI generates summary, narrative, and key insights about the impact
+- **Peak Form Detection:** Identifies days when you'll be in optimal form (TSB 0-20)
+- **TSS Estimation:** Automatically estimates workout TSS based on type and duration
+- **Daily Email Integration:** Impact preview included in daily workout emails
+- **Recovery Timeline:** Shows days until positive TSB (fresh/recovered state)
+- **7-Day Table:** Visual projection of each day's TSS and resulting TSB
 
 ## How It Works
 

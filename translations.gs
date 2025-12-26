@@ -16,6 +16,7 @@ const TRANSLATIONS = {
     goal_section: "Current Goal",
     status: "Athlete Status",
     recovery_title: "Recovery & Wellness",
+    impact_preview_title: "Workout Impact Preview",
     recovery_status: "Recovery Status",
     sleep: "Sleep",
     hrv: "HRV",
@@ -87,7 +88,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Suggested Training Plan",
     training_proposal_no_placeholders: "No workouts scheduled yet. Add placeholders to your Intervals.icu calendar.",
-    weekly_plan_title: "WEEK AHEAD PLAN"
+    weekly_plan_title: "WEEK AHEAD PLAN",
+    // Weekly impact preview
+    weekly_impact_title: "Weekly Training Impact",
+    weekly_summary: "Week Summary",
+    peak_form_days: "Peak Form",
+    key_insights: "Key Insights"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -99,6 +105,7 @@ const TRANSLATIONS = {
     goal_section: "【設定目標】",
     status: "コンディション",
     recovery_title: "リカバリー＆ウェルネス",
+    impact_preview_title: "トレーニング効果予測",
     recovery_status: "回復状態",
     sleep: "睡眠",
     hrv: "HRV",
@@ -163,7 +170,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "提案トレーニングプラン",
     training_proposal_no_placeholders: "予定されたワークアウトがありません。カレンダーにプレースホルダーを追加してください。",
-    weekly_plan_title: "来週のトレーニングプラン"
+    weekly_plan_title: "来週のトレーニングプラン",
+    // Weekly impact preview
+    weekly_impact_title: "週間トレーニング効果",
+    weekly_summary: "週間サマリー",
+    peak_form_days: "ピークフォーム",
+    key_insights: "重要なポイント"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -175,6 +187,7 @@ const TRANSLATIONS = {
     goal_section: "Objetivo Actual",
     status: "Estado del Atleta",
     recovery_title: "Recuperación y Bienestar",
+    impact_preview_title: "Previsión de Impacto del Entrenamiento",
     recovery_status: "Estado de Recuperación",
     sleep: "Sueño",
     hrv: "VFC",
@@ -239,7 +252,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Plan de Entrenamiento Sugerido",
     training_proposal_no_placeholders: "No hay entrenamientos programados. Añade marcadores a tu calendario de Intervals.icu.",
-    weekly_plan_title: "PLAN SEMANAL"
+    weekly_plan_title: "PLAN SEMANAL",
+    // Weekly impact preview
+    weekly_impact_title: "Impacto Semanal del Entrenamiento",
+    weekly_summary: "Resumen Semanal",
+    peak_form_days: "Forma Óptima",
+    key_insights: "Puntos Clave"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -251,6 +269,7 @@ const TRANSLATIONS = {
     goal_section: "Objectif Actuel",
     status: "Statut de l'athlète",
     recovery_title: "Récupération et Bien-être",
+    impact_preview_title: "Prévision d'Impact de l'Entraînement",
     recovery_status: "État de Récupération",
     sleep: "Sommeil",
     hrv: "VFC",
@@ -321,7 +340,12 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Plan d'Entraînement Suggéré",
     training_proposal_no_placeholders: "Aucun entraînement prévu. Ajoutez des marqueurs à votre calendrier Intervals.icu.",
-    weekly_plan_title: "PLAN DE LA SEMAINE"
+    weekly_plan_title: "PLAN DE LA SEMAINE",
+    // Weekly impact preview
+    weekly_impact_title: "Impact Hebdomadaire de l'Entraînement",
+    weekly_summary: "Résumé de la Semaine",
+    peak_form_days: "Forme Optimale",
+    key_insights: "Points Clés"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -333,6 +357,7 @@ const TRANSLATIONS = {
     goal_section: "Huidig Doel",
     status: "Atleet Status",
     recovery_title: "Herstel & Welzijn",
+    impact_preview_title: "Impact Vooruitblik",
     recovery_status: "Herstelstatus",
     sleep: "Slaap",
     hrv: "HRV",
@@ -404,6 +429,11 @@ const TRANSLATIONS = {
     // Training proposal (weekly)
     training_proposal_title: "Voorgesteld Trainingsplan",
     training_proposal_no_placeholders: "Geen workouts gepland. Voeg placeholders toe aan je Intervals.icu kalender.",
-    weekly_plan_title: "WEEKPLAN"
+    weekly_plan_title: "WEEKPLAN",
+    // Weekly impact preview
+    weekly_impact_title: "Wekelijkse Training Impact",
+    weekly_summary: "Weeksamenvatting",
+    peak_form_days: "Piekvorm",
+    key_insights: "Belangrijke Inzichten"
   }
 };

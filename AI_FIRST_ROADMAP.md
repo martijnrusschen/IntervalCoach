@@ -20,6 +20,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **AI Weekly Email Summary** - Enhanced coaching narrative with load advice and next week preview
 - [x] **AI Training Gap Analysis** - Context-aware gap interpretation (planned rest vs illness vs life)
 - [x] **AI eFTP Trajectory Analysis** - Predicts if athlete is on track to hit target FTP
+- [x] **Workout Impact Preview** - Shows how today's workout affects CTL/ATL/TSB over next 2 weeks
 
 ---
 
@@ -29,7 +30,6 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 
 | Priority | Feature | Description | Source |
 |----------|---------|-------------|--------|
-| 🔴 **HIGH** | **Workout Impact Preview** | Show how today's ride affects TSB/CTL over next 2 weeks | TrainerRoad AI |
 | 🔴 **HIGH** | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | TrainerRoad |
 | 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
@@ -74,7 +74,7 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 | Custom AI models (not ChatGPT) | ✓ Proprietary models | ✓ Custom prompts + Gemini | Similar approach |
 | Workout Simulation | ✓ Simulates hundreds of workouts | ✗ Direct AI recommendation | **Add simulation** |
 | Predicted FTP | ✓ Shows future FTP based on training | ✓ AI eFTP Trajectory Analysis | Similar |
-| Impact Preview | ✓ See how changes affect future weeks | ✗ Not implemented | **Add impact preview** |
+| Impact Preview | ✓ See how changes affect future weeks | ✓ AI Workout Impact Preview | Similar - 2-week CTL/TSB projection |
 | Workout Feel Prediction | ✓ Explains how workout will feel | ~ Partial (difficulty 1-5) | **Enhance feel prediction** |
 | Training Future Visibility | ✓ Multi-week forward view | ✓ Weekly planning only | **Extend to multi-week** |
 | Fatigue Prediction | ✓ Predicts burnout before it happens | ✓ AI Cumulative Fatigue Prediction | **Ahead** - distinguishes FOR/NFOR/OTS |
@@ -292,6 +292,37 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Feed FTP calibration recommendations into power profile analysis
 - Compare predicted vs actual recovery time to improve future estimates
 
+### Feature: Workout Impact Preview ✅ COMPLETE
+
+**Implementation:**
+- Added `projectFitnessMetrics()` in `power.gs` - Projects CTL/ATL/TSB using standard 42/7-day constants
+- Added `fetchUpcomingPlannedTSS()` in `power.gs` - Fetches next 14 days of planned workouts with TSS values
+- Added `generateWorkoutImpactPreview()` in `power.gs` - Compares with/without today's workout scenarios
+- Added `generateAIWorkoutImpactPreview()` in `prompts.gs` - AI prompt for narrative explanation
+- Added `createFallbackImpactPreview()` in `prompts.gs` - Rule-based fallback when AI unavailable
+- Added `generateWorkoutImpactSection()` in `emails.gs` - Formats impact preview for daily email
+- Added `estimateWorkoutTSS()` in `emails.gs` - Estimates TSS from workout type and duration
+- Added `testWorkoutImpactPreview()` in `tests.gs` - Comprehensive test function
+
+**Key features:**
+- Projects CTL/ATL/TSB for next 14 days based on planned workouts
+- Compares "with workout" vs "without workout" (rest day) scenarios
+- Calculates key metrics: tomorrow's TSB delta, 2-week CTL gain, lowest TSB, days to positive TSB
+- Identifies peak form windows (TSB 0-20)
+- AI generates summary, narrative, key insights, form status, and recommendation
+- TSS estimation based on workout type (Recovery ~0.4, Endurance ~0.55, Threshold ~0.92 TSS/min)
+- Falls back to rule-based analysis if AI unavailable
+- Shows 7-day projection table in email
+
+**Email section includes:**
+- AI summary of workout impact
+- Today's estimated TSS
+- Tomorrow's projected CTL/TSB
+- 2-week CTL gain
+- Key insights (e.g., "TSB drops to -15 tomorrow but recovers by Friday")
+- AI coaching narrative
+- 7-day projection table
+
 ---
 
 ## How to Use This Document
@@ -304,4 +335,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-25 (Unified backlog with TrainerRoad AI competitor analysis)*
+*Last updated: 2025-12-25 (Added Workout Impact Preview feature)*
