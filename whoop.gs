@@ -18,7 +18,7 @@
 const WHOOP_API = {
   AUTH_URL: 'https://api.prod.whoop.com/oauth/oauth2/auth',
   TOKEN_URL: 'https://api.prod.whoop.com/oauth/oauth2/token',
-  API_BASE: 'https://api.prod.whoop.com/developer/v1',
+  API_BASE: 'https://api.prod.whoop.com/developer/v2',
   SCOPES: 'read:cycles read:recovery read:sleep offline'
 };
 
@@ -349,7 +349,7 @@ function getWhoopRecoveryForCycle(cycleId) {
 
 /**
  * Get current recovery data from Whoop
- * Combines cycle + recovery API calls
+ * Uses v2/recovery endpoint directly
  * @returns {object} { available, recovery, hrv, restingHR, spo2, skinTemp, sleepId }
  */
 function getWhoopCurrentRecovery() {
@@ -357,17 +357,19 @@ function getWhoopCurrentRecovery() {
     return { available: false, reason: 'Whoop not configured' };
   }
 
-  // Step 1: Get current cycle
-  const cycle = getWhoopCurrentCycle();
-  if (!cycle) {
-    return { available: false, reason: 'No current cycle' };
+  // Get most recent recovery directly from /recovery endpoint
+  const result = fetchWhoopApi('/recovery', { limit: 1 });
+
+  if (!result.success) {
+    return { available: false, reason: 'Failed to fetch recovery: ' + result.error };
   }
 
-  // Step 2: Get recovery for this cycle
-  const recovery = getWhoopRecoveryForCycle(cycle.id);
-  if (!recovery) {
-    return { available: false, reason: 'No recovery data for current cycle' };
+  const records = result.data?.records || [];
+  if (records.length === 0) {
+    return { available: false, reason: 'No recovery records found' };
   }
+
+  const recovery = records[0];
 
   // Check if scored
   if (recovery.score_state !== 'SCORED') {
@@ -381,7 +383,7 @@ function getWhoopCurrentRecovery() {
   return {
     available: true,
     source: 'whoop_api',
-    cycleId: cycle.id,
+    cycleId: recovery.cycle_id,
     sleepId: recovery.sleep_id,
     recovery: score.recovery_score,
     hrv: score.hrv_rmssd_milli,
@@ -430,18 +432,27 @@ function getWhoopCurrentSleep() {
   // Convert milliseconds to hours
   const msToHours = (ms) => ms ? (ms / 3600000) : 0;
 
+  // Calculate stages
+  const remHours = msToHours(stages.total_rem_sleep_time_milli);
+  const deepHours = msToHours(stages.total_slow_wave_sleep_time_milli);
+  const lightHours = msToHours(stages.total_light_sleep_time_milli);
+  const awakeHours = msToHours(stages.total_awake_time_milli);
+
+  // Calculate actual sleep from stages if not directly available
+  const actualSleepHours = msToHours(stages.total_sleep_time_milli) || (remHours + deepHours + lightHours);
+
   return {
     available: true,
     source: 'whoop_api',
     sleepId: sleep.id,
     // Duration
-    totalSleepHours: msToHours(stages.total_in_bed_time_milli),
-    actualSleepHours: msToHours(stages.total_sleep_time_milli),
+    totalSleepHours: msToHours(stages.total_in_bed_time_milli) || (actualSleepHours + awakeHours),
+    actualSleepHours: actualSleepHours,
     // Stages (in hours)
-    remHours: msToHours(stages.total_rem_sleep_time_milli),
-    deepHours: msToHours(stages.total_slow_wave_sleep_time_milli),
-    lightHours: msToHours(stages.total_light_sleep_time_milli),
-    awakeHours: msToHours(stages.total_awake_time_milli),
+    remHours: remHours,
+    deepHours: deepHours,
+    lightHours: lightHours,
+    awakeHours: awakeHours,
     // Scores
     sleepPerformance: score.sleep_performance_percentage,
     sleepConsistency: score.sleep_consistency_percentage,
@@ -504,6 +515,53 @@ function fetchWhoopWellnessData() {
 // =========================================================
 // TEST FUNCTION
 // =========================================================
+
+/**
+ * Debug Whoop API - shows raw responses
+ */
+function debugWhoopApi() {
+  Logger.log("=== WHOOP API DEBUG ===\n");
+
+  const accessToken = getWhoopAccessToken();
+
+  // Try v1 recovery endpoint directly
+  Logger.log("--- Try /v1/recovery ---");
+  try {
+    const v1Recovery = UrlFetchApp.fetch('https://api.prod.whoop.com/developer/v1/recovery?limit=3', {
+      headers: { 'Authorization': 'Bearer ' + accessToken },
+      muteHttpExceptions: true
+    });
+    Logger.log("v1 recovery: " + v1Recovery.getContentText());
+  } catch(e) {
+    Logger.log("v1 error: " + e);
+  }
+
+  // Try v2 recovery endpoint
+  Logger.log("\n--- Try /v2/recovery ---");
+  try {
+    const v2Recovery = UrlFetchApp.fetch('https://api.prod.whoop.com/developer/v2/recovery?limit=3', {
+      headers: { 'Authorization': 'Bearer ' + accessToken },
+      muteHttpExceptions: true
+    });
+    Logger.log("v2 recovery: " + v2Recovery.getContentText());
+  } catch(e) {
+    Logger.log("v2 error: " + e);
+  }
+
+  // Try v2 cycle with recovery
+  Logger.log("\n--- Try /v2/cycle ---");
+  try {
+    const v2Cycle = UrlFetchApp.fetch('https://api.prod.whoop.com/developer/v2/cycle?limit=1', {
+      headers: { 'Authorization': 'Bearer ' + accessToken },
+      muteHttpExceptions: true
+    });
+    Logger.log("v2 cycle: " + v2Cycle.getContentText());
+  } catch(e) {
+    Logger.log("v2 cycle error: " + e);
+  }
+
+  Logger.log("\n=== DEBUG COMPLETE ===");
+}
 
 /**
  * Test Whoop API integration
