@@ -50,6 +50,19 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Daily Refresh:** Each day, workouts are regenerated with the latest wellness/fitness data
 - **Smart Limits:** Max 3 rides and 1-2 runs per week (adjustable based on athlete capacity)
 - **Variety Tracking:** Uses 2-week workout history to ensure training variety
+- **Week Progress Tracking:** Compares planned vs completed sessions with adherence rate
+- **Plan Adaptation:** Suggests adjustments if conditions change (wellness, fatigue)
+
+### Unified Daily Email
+- **Single Email Format:** Consistent structure for workout days, rest days, and status updates
+- **Smart Rest Day Detection:** Automatically determines why today is a rest day:
+  - After recent training → "Recovery day after recent training"
+  - Before hard workout → "Rest before tomorrow's intensity"
+  - Before event → "Rest day before your event"
+  - Low recovery/illness → AI-generated reasoning
+- **Week Schedule:** Shows all 7 days with events, placeholders, and rest days
+- **Week Progress:** Shows completed vs planned sessions with TSS comparison
+- **Placeholder Preservation:** Rest day recommendations keep your placeholder for rescheduling
 
 ### Post-Workout AI Analysis
 - **Hourly Checks:** Automatically detects when you complete a workout (checked every hour)
