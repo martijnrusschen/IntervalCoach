@@ -47,8 +47,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       Logger.log("C Event day: " + availability.cEventName);
 
       // Get recent workout context for AI advice
-      const activities = fetchRecentActivities(7);
-      const recentTypes = analyzeRecentWorkoutTypes(activities);
+      const recentTypes = getRecentWorkoutTypes(7);
       const adaptiveContext = getAdaptiveTrainingContext();
 
       // Get AI advice on how hard to push in the group ride

@@ -1214,8 +1214,7 @@ function testUnifiedDailyEmail(emailType) {
     emailParams.cEventName = 'Zwift Crit City Race';
 
     // Fetch real context for AI advice
-    const activities = fetchRecentActivities(7);
-    const recentTypes = analyzeRecentWorkoutTypes(activities);
+    const recentTypes = getRecentWorkoutTypes(7);
     const adaptiveContext = getAdaptiveTrainingContext();
 
     // Get AI advice on how hard to push
