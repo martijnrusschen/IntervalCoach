@@ -2110,3 +2110,241 @@ function formatWeeklyImpactSection(weeklyImpact, narrative) {
 
   return section;
 }
+
+// =========================================================
+// PERSONALIZED ZONE BOUNDARIES
+// =========================================================
+
+/**
+ * Analyze power curve to determine personalized zone boundaries
+ * Uses power duration decay patterns to identify individual physiology
+ * @returns {object} Zone boundary analysis with recommendations
+ */
+function analyzeZoneBoundaries() {
+  const powerCurve = fetchPowerCurve();
+
+  if (!powerCurve || !powerCurve.available) {
+    return { available: false, reason: 'Power curve not available' };
+  }
+
+  const ftp = powerCurve.currentEftp || powerCurve.eFTP || powerCurve.ftp;
+  if (!ftp) {
+    return { available: false, reason: 'FTP not available' };
+  }
+
+  // Calculate key power ratios (relative to FTP)
+  const ratios = {
+    peak5s: powerCurve.peak5s / ftp,
+    peak1min: powerCurve.peak1min / ftp,
+    peak5min: powerCurve.peak5min / ftp,
+    peak20min: powerCurve.peak20min / ftp,
+    peak60min: powerCurve.peak60min / ftp
+  };
+
+  // Standard benchmarks for comparison
+  const benchmarks = {
+    peak5s: 2.0,    // Typical 5s/FTP ratio
+    peak1min: 1.35, // Typical 1min/FTP ratio
+    peak5min: 1.10, // Typical 5min/FTP ratio
+    peak20min: 1.05,// Typical 20min/FTP ratio (by definition ~1.05)
+    peak60min: 0.95 // Typical 60min/FTP ratio
+  };
+
+  // Analyze decay patterns
+  const analysis = {
+    available: true,
+    ftp: ftp,
+    ratios: ratios,
+
+    // Neuromuscular/Sprint capacity
+    sprintCapacity: ratios.peak5s > benchmarks.peak5s * 1.1 ? 'high' :
+                    ratios.peak5s < benchmarks.peak5s * 0.9 ? 'low' : 'normal',
+
+    // Anaerobic capacity (1min power relative to FTP)
+    anaerobicCapacity: ratios.peak1min > benchmarks.peak1min * 1.1 ? 'high' :
+                       ratios.peak1min < benchmarks.peak1min * 0.9 ? 'low' : 'normal',
+
+    // VO2max capacity (5min power relative to FTP)
+    vo2maxCapacity: ratios.peak5min > benchmarks.peak5min * 1.05 ? 'high' :
+                    ratios.peak5min < benchmarks.peak5min * 0.95 ? 'low' : 'normal',
+
+    // Aerobic durability (how well power is maintained from 20min to 60min)
+    aerobicDurability: ratios.peak60min / ratios.peak20min > 0.92 ? 'high' :
+                       ratios.peak60min / ratios.peak20min < 0.88 ? 'low' : 'normal',
+
+    // TTE estimate from W'
+    tteEstimate: powerCurve.wPrime ? Math.round(powerCurve.wPrime / 500) : null
+  };
+
+  // Derive zone boundary recommendations
+  analysis.zoneRecommendations = deriveZoneRecommendations(analysis, ftp);
+
+  return analysis;
+}
+
+/**
+ * Derive personalized zone boundary recommendations based on power analysis
+ * @param {object} analysis - Output from power ratio analysis
+ * @param {number} ftp - Current FTP
+ * @returns {object} Recommended zone boundaries with reasoning
+ */
+function deriveZoneRecommendations(analysis, ftp) {
+  const recommendations = {
+    // Default zones (standard percentages)
+    currentZones: {
+      z1: { low: 0, high: 55, name: 'Recovery' },
+      z2: { low: 55, high: 75, name: 'Endurance' },
+      z3: { low: 75, high: 90, name: 'Tempo' },
+      z4: { low: 90, high: 105, name: 'Threshold' },
+      z5: { low: 105, high: 120, name: 'VO2max' },
+      z6: { low: 120, high: 150, name: 'Anaerobic' }
+    },
+    suggestedZones: {},
+    adjustments: [],
+    insights: []
+  };
+
+  // Copy current zones as starting point
+  Object.keys(recommendations.currentZones).forEach(zone => {
+    recommendations.suggestedZones[zone] = { ...recommendations.currentZones[zone] };
+  });
+
+  // Adjustment 1: Aerobic durability affects Z2/Z3 boundary
+  if (analysis.aerobicDurability === 'high') {
+    recommendations.suggestedZones.z2.high = 78; // Extended endurance zone
+    recommendations.suggestedZones.z3.low = 78;
+    recommendations.adjustments.push('Extended Z2 upper limit (78% vs 75%) - high aerobic durability');
+    recommendations.insights.push('You can sustain steady endurance efforts longer than average - your Z2 ceiling is higher');
+  } else if (analysis.aerobicDurability === 'low') {
+    recommendations.suggestedZones.z2.high = 72; // Narrower endurance zone
+    recommendations.suggestedZones.z3.low = 72;
+    recommendations.adjustments.push('Lowered Z2 upper limit (72% vs 75%) - limited aerobic durability');
+    recommendations.insights.push('Power drops faster over long efforts - keep endurance rides truly easy');
+  }
+
+  // Adjustment 2: VO2max capacity affects Z4/Z5 boundary
+  if (analysis.vo2maxCapacity === 'high') {
+    recommendations.suggestedZones.z4.high = 108; // Extended threshold
+    recommendations.suggestedZones.z5.low = 108;
+    recommendations.adjustments.push('Raised Z4/Z5 boundary (108% vs 105%) - strong VO2max');
+    recommendations.insights.push('Your high aerobic capacity means you can sustain above-FTP efforts longer');
+  } else if (analysis.vo2maxCapacity === 'low') {
+    recommendations.suggestedZones.z4.high = 102;
+    recommendations.suggestedZones.z5.low = 102;
+    recommendations.adjustments.push('Lowered Z4/Z5 boundary (102% vs 105%) - developing VO2max');
+    recommendations.insights.push('Focus on building VO2max - intervals at 102-115% will be challenging');
+  }
+
+  // Adjustment 3: Anaerobic capacity affects Z5/Z6 boundary
+  if (analysis.anaerobicCapacity === 'high') {
+    recommendations.suggestedZones.z5.high = 125;
+    recommendations.suggestedZones.z6.low = 125;
+    recommendations.adjustments.push('Raised Z5/Z6 boundary (125% vs 120%) - high anaerobic capacity');
+    recommendations.insights.push('Strong anaerobic system - you can handle higher VO2max targets');
+  } else if (analysis.anaerobicCapacity === 'low') {
+    recommendations.suggestedZones.z5.high = 115;
+    recommendations.suggestedZones.z6.low = 115;
+    recommendations.adjustments.push('Lowered Z5/Z6 boundary (115% vs 120%) - developing anaerobic');
+    recommendations.insights.push('Anaerobic capacity needs development - focus on repeatability over peak power');
+  }
+
+  // Adjustment 4: TTE affects threshold zone width
+  if (analysis.tteEstimate) {
+    if (analysis.tteEstimate > 50) {
+      recommendations.insights.push('High W\' (' + analysis.tteEstimate + ' min TTE) - can tolerate longer threshold efforts');
+    } else if (analysis.tteEstimate < 30) {
+      recommendations.insights.push('Lower W\' (' + analysis.tteEstimate + ' min TTE) - use shorter threshold intervals with more recovery');
+    }
+  }
+
+  return recommendations;
+}
+
+/**
+ * Generate AI-powered zone boundary recommendations
+ * Provides natural language explanations for zone personalization
+ * @param {object} zoneAnalysis - Output from analyzeZoneBoundaries()
+ * @param {object} goals - Goal events for context
+ * @returns {object} AI recommendations
+ */
+function generateAIZoneRecommendations(zoneAnalysis, goals) {
+  if (!zoneAnalysis || !zoneAnalysis.available) {
+    return { available: false };
+  }
+
+  const langName = getPromptLanguage();
+
+  // Simplified prompt with shorter JSON structure
+  const prompt = `Analyze this cyclist's power profile and explain the personalized zone recommendations.
+
+**Power Ratios (vs FTP ${zoneAnalysis.ftp}W):**
+5s: ${zoneAnalysis.ratios.peak5s.toFixed(2)}x | 1min: ${zoneAnalysis.ratios.peak1min.toFixed(2)}x | 5min: ${zoneAnalysis.ratios.peak5min.toFixed(2)}x | 60min: ${zoneAnalysis.ratios.peak60min.toFixed(2)}x
+
+**Assessment:** Sprint=${zoneAnalysis.sprintCapacity}, Anaerobic=${zoneAnalysis.anaerobicCapacity}, VO2max=${zoneAnalysis.vo2maxCapacity}, Durability=${zoneAnalysis.aerobicDurability}
+
+**Zone Adjustments Made:**
+${zoneAnalysis.zoneRecommendations.adjustments.join('; ')}
+
+${goals?.primaryGoal ? 'Goal: ' + goals.primaryGoal.name + ' in ' + goals.primaryGoal.weeksOut + ' weeks' : ''}
+
+Return JSON:
+{
+  "profileType": "short name like 'Sprinter', 'Diesel', 'Puncher', 'Time-Trialist', 'All-Rounder'",
+  "summary": "2 sentences describing this athlete's power characteristics",
+  "philosophy": "1 sentence on zone personalization approach",
+  "implications": ["training implication 1", "training implication 2"],
+  "warning": "optional caution or null"
+}
+
+Write in ${langName}.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      const parsed = parseGeminiJsonResponse(response);
+      if (parsed && parsed.profileType) {
+        return {
+          available: true,
+          aiEnhanced: true,
+          profileType: parsed.profileType,
+          profileSummary: parsed.summary,
+          zonePhilosophy: parsed.philosophy,
+          trainingImplications: parsed.implications || [],
+          warnings: parsed.warning ? [parsed.warning] : []
+        };
+      }
+    }
+  } catch (e) {
+    Logger.log('AI zone recommendation failed: ' + e.toString());
+  }
+
+  // Fallback to rule-based insights
+  return {
+    available: true,
+    aiEnhanced: false,
+    profileType: determineProfileType(zoneAnalysis),
+    profileSummary: 'Power profile analysis complete',
+    zonePhilosophy: 'Zones adjusted based on power duration curve shape',
+    trainingImplications: zoneAnalysis.zoneRecommendations.insights,
+    warnings: []
+  };
+}
+
+/**
+ * Determine athlete profile type from analysis
+ */
+function determineProfileType(analysis) {
+  if (analysis.sprintCapacity === 'high' && analysis.anaerobicCapacity === 'high') {
+    return analysis.aerobicDurability === 'high' ? 'All-Rounder' : 'Puncher';
+  }
+  if (analysis.aerobicDurability === 'high' && analysis.vo2maxCapacity !== 'high') {
+    return 'Diesel';
+  }
+  if (analysis.vo2maxCapacity === 'high' && analysis.aerobicDurability === 'high') {
+    return 'Time-Trialist';
+  }
+  if (analysis.sprintCapacity === 'high') {
+    return 'Sprinter';
+  }
+  return 'Balanced';
+}

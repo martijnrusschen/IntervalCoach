@@ -26,6 +26,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Week Progress Tracking** - Day-by-day planned vs completed with auto-cleanup of missed workouts
 - [x] **C Event (Group Ride) Support** - AI intensity advice for unstructured group rides
 - [x] **Cross-Sport Zone Equivalency** - AI calculates equivalent efforts between cycling and running
+- [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
 
 ---
 
@@ -42,7 +43,6 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 | 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
 | 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
 | 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
-| 🟡 **MEDIUM** | **Personalized Zone Boundaries** | AI adjusts zones based on lactate patterns, HRV response, time-at-power | AI-First |
 | 🟡 **MEDIUM** | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 | 🟡 **MEDIUM** | **Whoop API Fallback** | Add Whoop API as alternative/supplementary data source | Infrastructure |
 | 🟢 **LOW** | **Training Outcome Simulation** | Simulate multiple workout options before deciding | TrainerRoad AI |
@@ -362,6 +362,38 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 | VO2max | 106-120% | 100-108% |
 | Anaerobic | > 121% | > 108% |
 
+### Feature: Personalized Zone Boundaries ✅ COMPLETE
+
+**Implementation:**
+- Added `analyzeZoneBoundaries()` in `power.gs` - Analyzes power curve ratios to determine athlete physiology
+- Added `deriveZoneRecommendations()` in `power.gs` - Rule-based zone boundary adjustments
+- Added `generateAIZoneRecommendations()` in `power.gs` - AI-enhanced profile explanation
+- Added `determineProfileType()` in `power.gs` - Classifies athlete type (Sprinter, Diesel, Puncheur, etc.)
+- Added `buildZoneContext()` in `prompts.gs` - Formats zone data for workout generation prompt
+- Integrated into `main.gs` - Zone analysis attached to powerProfile
+- Added `testPersonalizedZones()` in `tests.gs`
+
+**Key features:**
+- Analyzes power ratios at key durations (5s, 1min, 5min, 20min, 60min) vs FTP
+- Compares to benchmarks: 5s=2.0x, 1min=1.35x, 5min=1.10x, 20min=1.05x, 60min=0.95x
+- Assesses capacities: sprint, anaerobic, VO2max, aerobic durability
+- Profile types: Sprinter, Diesel, Puncheur, Time-Trialist, All-Rounder, Balanced
+
+**Zone Adjustments:**
+| Capacity | Assessment | Zone Adjustment |
+|----------|------------|-----------------|
+| Aerobic Durability | High | Z2 upper: 75% → 78% |
+| Aerobic Durability | Low | Z2 upper: 75% → 72% |
+| VO2max | High | Z4/Z5 boundary: 105% → 108% |
+| VO2max | Low | Z4/Z5 boundary: 105% → 102% |
+| Anaerobic | High | Z5/Z6 boundary: 120% → 125% |
+| Anaerobic | Low | Z5/Z6 boundary: 120% → 115% |
+
+**Integration:**
+- Zone analysis included in workout generation prompt (section 1f)
+- AI uses personalized zones for interval power targets
+- Profile type and capacity insights guide workout intensity selection
+
 ---
 
 ## How to Use This Document
@@ -374,4 +406,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-25 (Added Workout Impact Preview feature)*
+*Last updated: 2025-12-26 (Added Personalized Zone Boundaries feature)*

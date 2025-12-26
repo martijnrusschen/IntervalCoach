@@ -2637,6 +2637,183 @@ function testCalendarNotes() {
 }
 
 /**
+ * Test function to explore sport settings and zones from Intervals.icu
+ * Used for personalized zone boundaries feature
+ */
+/**
+ * Test personalized zone boundaries analysis
+ */
+function testPersonalizedZones() {
+  Logger.log("=== PERSONALIZED ZONE BOUNDARIES TEST ===\n");
+
+  // 1. Analyze zone boundaries
+  Logger.log("--- Power Curve Analysis ---");
+  const zoneAnalysis = analyzeZoneBoundaries();
+
+  if (!zoneAnalysis.available) {
+    Logger.log("ERROR: " + zoneAnalysis.reason);
+    return;
+  }
+
+  Logger.log("FTP: " + zoneAnalysis.ftp + "W");
+  Logger.log("\nPower Ratios (vs FTP):");
+  Logger.log("  5s:  " + zoneAnalysis.ratios.peak5s.toFixed(2) + " (benchmark: 2.0)");
+  Logger.log("  1min: " + zoneAnalysis.ratios.peak1min.toFixed(2) + " (benchmark: 1.35)");
+  Logger.log("  5min: " + zoneAnalysis.ratios.peak5min.toFixed(2) + " (benchmark: 1.10)");
+  Logger.log("  20min: " + zoneAnalysis.ratios.peak20min.toFixed(2) + " (benchmark: 1.05)");
+  Logger.log("  60min: " + zoneAnalysis.ratios.peak60min.toFixed(2) + " (benchmark: 0.95)");
+
+  Logger.log("\nCapacity Assessment:");
+  Logger.log("  Sprint: " + zoneAnalysis.sprintCapacity);
+  Logger.log("  Anaerobic: " + zoneAnalysis.anaerobicCapacity);
+  Logger.log("  VO2max: " + zoneAnalysis.vo2maxCapacity);
+  Logger.log("  Aerobic Durability: " + zoneAnalysis.aerobicDurability);
+  if (zoneAnalysis.tteEstimate) {
+    Logger.log("  TTE Estimate: " + zoneAnalysis.tteEstimate + " min");
+  }
+
+  // 2. Show zone recommendations
+  Logger.log("\n--- Zone Recommendations ---");
+  const recs = zoneAnalysis.zoneRecommendations;
+
+  Logger.log("\nCurrent vs Suggested Zones:");
+  Logger.log("Zone       | Current     | Suggested");
+  Logger.log("-----------|-------------|-------------");
+  Object.keys(recs.currentZones).forEach(zone => {
+    const curr = recs.currentZones[zone];
+    const sugg = recs.suggestedZones[zone];
+    const changed = curr.low !== sugg.low || curr.high !== sugg.high;
+    Logger.log(
+      zone.toUpperCase().padEnd(10) + " | " +
+      (curr.low + "-" + curr.high + "%").padEnd(11) + " | " +
+      (sugg.low + "-" + sugg.high + "%") +
+      (changed ? " *" : "")
+    );
+  });
+
+  if (recs.adjustments.length > 0) {
+    Logger.log("\nAdjustments:");
+    recs.adjustments.forEach(a => Logger.log("  • " + a));
+  }
+
+  if (recs.insights.length > 0) {
+    Logger.log("\nInsights:");
+    recs.insights.forEach(i => Logger.log("  • " + i));
+  }
+
+  // 3. Get AI recommendations
+  Logger.log("\n--- AI Zone Recommendations ---");
+  const goals = fetchUpcomingGoals();
+  const aiRecs = generateAIZoneRecommendations(zoneAnalysis, goals);
+
+  if (aiRecs.available) {
+    Logger.log("AI Enhanced: " + aiRecs.aiEnhanced);
+    Logger.log("\nProfile Type: " + aiRecs.profileType);
+    Logger.log("\nSummary:");
+    Logger.log("  " + aiRecs.profileSummary);
+    Logger.log("\nZone Philosophy:");
+    Logger.log("  " + aiRecs.zonePhilosophy);
+
+    if (aiRecs.trainingImplications && aiRecs.trainingImplications.length > 0) {
+      Logger.log("\nTraining Implications:");
+      aiRecs.trainingImplications.forEach(t => Logger.log("  • " + t));
+    }
+
+    if (aiRecs.warnings && aiRecs.warnings.length > 0) {
+      Logger.log("\nWarnings:");
+      aiRecs.warnings.forEach(w => Logger.log("  ⚠ " + w));
+    }
+  } else {
+    Logger.log("AI recommendations not available");
+  }
+
+  Logger.log("\n=== PERSONALIZED ZONE BOUNDARIES TEST COMPLETE ===");
+}
+
+function testSportSettings() {
+  Logger.log("=== SPORT SETTINGS & ZONES DISCOVERY ===\n");
+
+  // 1. Fetch athlete info (includes sportSettings)
+  Logger.log("--- Fetching Athlete Info ---");
+  const athleteResult = fetchIcuApi("/athlete/0");
+
+  if (!athleteResult.success) {
+    Logger.log("ERROR: Failed to fetch athlete info - " + athleteResult.error);
+    return;
+  }
+
+  const athlete = athleteResult.data;
+  Logger.log("Athlete ID: " + athlete.id);
+  Logger.log("Name: " + athlete.name);
+
+  // 2. Check sportSettings
+  if (athlete.sportSettings && athlete.sportSettings.length > 0) {
+    Logger.log("\n--- Sport Settings ---");
+    athlete.sportSettings.forEach((sport, i) => {
+      Logger.log("\n[" + (sport.type || sport.types?.join(",") || "Sport " + i) + "]");
+      Logger.log("  FTP: " + (sport.ftp || "N/A") + "W");
+      Logger.log("  Indoor FTP: " + (sport.indoor_ftp || "N/A") + "W");
+      Logger.log("  LTHR: " + (sport.lthr || "N/A") + " bpm");
+      Logger.log("  Max HR: " + (sport.max_hr || "N/A") + " bpm");
+      Logger.log("  Resting HR: " + (sport.resting_hr || "N/A") + " bpm");
+      Logger.log("  Threshold Pace: " + (sport.threshold_pace || "N/A"));
+
+      // Log power zones if available
+      if (sport.power_zones) {
+        Logger.log("  Power Zones: " + JSON.stringify(sport.power_zones));
+      }
+      if (sport.hr_zones) {
+        Logger.log("  HR Zones: " + JSON.stringify(sport.hr_zones));
+      }
+      if (sport.pace_zones) {
+        Logger.log("  Pace Zones: " + JSON.stringify(sport.pace_zones));
+      }
+
+      // Log all fields for discovery
+      Logger.log("  All fields: " + Object.keys(sport).join(", "));
+    });
+  } else {
+    Logger.log("No sportSettings found on athlete object");
+  }
+
+  // 3. Try fetching sport-settings endpoint directly
+  Logger.log("\n--- Direct Sport Settings Endpoint ---");
+  const settingsResult = fetchIcuApi("/athlete/0/sport-settings");
+
+  if (settingsResult.success && settingsResult.data) {
+    const settings = Array.isArray(settingsResult.data) ? settingsResult.data : [settingsResult.data];
+    settings.forEach((s, i) => {
+      Logger.log("\nSport " + i + ":");
+      Logger.log("  " + JSON.stringify(s).substring(0, 500));
+    });
+  } else {
+    Logger.log("Could not fetch sport-settings: " + (settingsResult.error || "No data"));
+  }
+
+  // 4. Check for zone-related data in recent activities
+  Logger.log("\n--- Zone Data from Recent Activities ---");
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
+
+  const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + formatDateISO(weekAgo) +
+                                       "&newest=" + formatDateISO(today));
+
+  if (activitiesResult.success && activitiesResult.data?.length > 0) {
+    const activity = activitiesResult.data.find(a => a.icu_training_load > 0) || activitiesResult.data[0];
+    Logger.log("Sample activity: " + activity.name);
+    Logger.log("  Decoupling: " + (activity.decoupling != null ? activity.decoupling + "%" : "N/A"));
+    Logger.log("  Efficiency Factor: " + (activity.icu_efficiency_factor || "N/A"));
+    Logger.log("  HR Zone Times: " + (activity.icu_hr_zone_times ? activity.icu_hr_zone_times.join(", ") : "N/A"));
+    Logger.log("  Power Zones: " + (activity.icu_power_zones ? activity.icu_power_zones.join(", ") : "N/A"));
+    Logger.log("  HR Zones: " + (activity.icu_hr_zones ? activity.icu_hr_zones.join(", ") : "N/A"));
+    Logger.log("  Pace Zones: " + (activity.pace_zones ? activity.pace_zones.join(", ") : "N/A"));
+  }
+
+  Logger.log("\n=== SPORT SETTINGS & ZONES DISCOVERY COMPLETE ===");
+}
+
+/**
  * Test function to find notes on activities (not calendar events)
  * Looks at the description and other text fields on completed activities
  */

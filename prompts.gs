@@ -18,6 +18,39 @@ function getPromptLanguage() {
 }
 
 // =========================================================
+// ZONE CONTEXT HELPER
+// =========================================================
+
+/**
+ * Build personalized zone context string for AI prompt
+ * @param {object} powerProfile - Power profile with optional zoneAnalysis
+ * @returns {string} Zone context string (empty if no analysis available)
+ */
+function buildZoneContext(powerProfile) {
+  if (!powerProfile || !powerProfile.zoneAnalysis || !powerProfile.zoneAnalysis.available) {
+    return '';
+  }
+
+  const za = powerProfile.zoneAnalysis;
+  const recs = za.zoneRecommendations;
+  const profileType = determineProfileType(za);
+
+  // Format suggested zones as percentages
+  const zones = recs.suggestedZones;
+  const zoneStr = `Z1: 0-${zones.z1.high}% | Z2: ${zones.z2.low}-${zones.z2.high}% | Z3: ${zones.z3.low}-${zones.z3.high}% | Z4: ${zones.z4.low}-${zones.z4.high}% | Z5: ${zones.z5.low}-${zones.z5.high}% | Z6: ${zones.z6.low}%+`;
+
+  // Build insights string
+  const insights = recs.insights.length > 0 ? recs.insights.slice(0, 2).join('. ') : '';
+
+  return `
+**1f. Personalized Power Zones (${profileType} Profile):**
+- **Zones:** ${zoneStr}
+- **Capacities:** Sprint=${za.sprintCapacity}, Anaerobic=${za.anaerobicCapacity}, VO2max=${za.vo2maxCapacity}, Durability=${za.aerobicDurability}
+${insights ? `- **Note:** ${insights}` : ''}
+`;
+}
+
+// =========================================================
 // CYCLING WORKOUT PROMPT
 // =========================================================
 
@@ -101,7 +134,7 @@ function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, pow
 - **Weaknesses:** ${powerProfile.weaknesses.length > 0 ? powerProfile.weaknesses.join(", ") : "None identified"}
 ${powerProfile.recommendations.length > 0 ? `- **Training Recommendations:** ${powerProfile.recommendations.join("; ")}` : ''}
 ${powerProfile.climbingStrength ? `- **Note:** ${powerProfile.climbingStrength}` : ''}
-
+${buildZoneContext(powerProfile)}
 **POWER PROFILE RULES:**
 - Use current eFTP (${powerProfile.ftp}W) for zone calculations - this reflects current fitness.
 - **W' (${powerProfile.wPrimeKj || 'N/A'}kJ)** represents anaerobic capacity. If low, include 30s-2min hard efforts to build it.
@@ -109,6 +142,7 @@ ${powerProfile.climbingStrength ? `- **Note:** ${powerProfile.climbingStrength}`
 - Peak powers are all-time bests; current capabilities may be lower due to seasonal fitness variation.
 - Design intervals that target identified weaknesses when appropriate for the phase.
 - For climbing goals, prioritize 5-20 minute power development.
+- **Personalized Zones:** If provided in 1f, use those zone boundaries instead of standard percentages. This ensures intervals match the athlete's unique physiology.
 `;
   }
 

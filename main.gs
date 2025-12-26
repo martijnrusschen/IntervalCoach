@@ -184,6 +184,19 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   } else {
     const powerCurve = fetchPowerCurve();
     powerProfile = analyzePowerProfile(powerCurve, goals);
+
+    // Add personalized zone analysis
+    if (powerProfile.available) {
+      try {
+        const zoneAnalysis = analyzeZoneBoundaries();
+        if (zoneAnalysis.available) {
+          powerProfile.zoneAnalysis = zoneAnalysis;
+          Logger.log("Zone Analysis: Profile type likely " + determineProfileType(zoneAnalysis));
+        }
+      } catch (e) {
+        Logger.log("Zone analysis failed (non-critical): " + e.toString());
+      }
+    }
   }
 
   Logger.log("Athlete Summary: TSB=" + summary.tsb_current.toFixed(1));
