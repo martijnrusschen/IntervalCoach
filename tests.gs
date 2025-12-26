@@ -1925,3 +1925,78 @@ function testWorkoutImpactPreview() {
 
   Logger.log("\n=== END WORKOUT IMPACT PREVIEW TEST ===");
 }
+
+/**
+ * Test daily workout email structure (does not send email)
+ * Verifies the simplified email format with helper functions
+ */
+function testDailyEmailStructure() {
+  Logger.log("=== DAILY EMAIL STRUCTURE TEST ===\n");
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  data.shift();
+  const summary = createAthleteSummary(data);
+
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  const t = getTranslations();
+
+  // Mock workout
+  const mockWorkout = {
+    type: "Tempo_SweetSpot",
+    duration: { min: 60, max: 75 },
+    estimatedTSS: 65,
+    explanation: "Today focuses on sweet spot training to build sustained power at 88-94% FTP.",
+    workoutDescription: "Warmup 10min, 3x12min @ 90% FTP with 4min recovery, cooldown 10min",
+    recommendationReason: "Good recovery status and base phase focus on aerobic development"
+  };
+
+  Logger.log("--- Input Data ---");
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "N/A"));
+  Logger.log("TSB: " + (summary.tsb_current?.toFixed(1) || "N/A"));
+  Logger.log("Workout: " + mockWorkout.type);
+
+  // Test buildTodaySection
+  Logger.log("\n--- buildTodaySection Output ---");
+  const todaySection = buildTodaySection(t, mockWorkout, wellness, summary, phaseInfo);
+  Logger.log(todaySection);
+
+  // Test buildWorkoutStrategySection
+  Logger.log("\n--- buildWorkoutStrategySection Output ---");
+  const strategySection = buildWorkoutStrategySection(t, mockWorkout);
+  Logger.log(strategySection);
+
+  // Test calculateWorkoutImpact
+  Logger.log("\n--- calculateWorkoutImpact ---");
+  const impact = calculateWorkoutImpact(summary, mockWorkout);
+  if (impact) {
+    Logger.log("CTL Change: " + impact.ctlChange.toFixed(2));
+    Logger.log("Estimated TSS: " + impact.estimatedTSS);
+  } else {
+    Logger.log("Impact calculation failed");
+  }
+
+  // Show full email preview (without Coach's Note for speed)
+  Logger.log("\n--- Full Email Preview ---");
+  let preview = t.greeting + "\n\n";
+  preview += "[Coach's Note would appear here]\n\n";
+  preview += todaySection;
+  preview += strategySection;
+  preview += "\n" + t.footer;
+  Logger.log(preview);
+
+  Logger.log("\n=== DAILY EMAIL TEST COMPLETE ===");
+  Logger.log("To send actual email, run generateOptimalZwiftWorkoutsAutoByGemini()");
+}

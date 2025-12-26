@@ -9,7 +9,7 @@
 // =========================================================
 
 /**
- * Send smart summary email with workout details
+ * Send smart summary email with workout details - simplified structure
  * @param {object} summary - Athlete summary
  * @param {object} phaseInfo - Training phase info
  * @param {object} workout - Generated workout
@@ -26,7 +26,7 @@ function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfi
 
   let body = `${t.greeting}\n\n`;
 
-  // Generate personalized coaching note
+  // --- Section 1: Coach's Note ---
   const coachNote = generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile);
   if (coachNote) {
     body += `===================================
@@ -37,91 +37,97 @@ ${coachNote}
 `;
   }
 
-  // Phase & Goal Info
-  body += `
-===================================
-${t.phase_title}: ${phaseInfo.phaseName}
-(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
-${t.focus}: ${phaseInfo.focus}
-===================================
-${t.goal_section}
-${phaseInfo.goalDescription || USER_SETTINGS.GOAL_DESCRIPTION}
+  // --- Section 2: Vandaag (compact overview) ---
+  body += buildTodaySection(t, workout, wellness, summary, phaseInfo);
 
-${t.status}:
-CTL: ${summary.ctl_90.toFixed(1)} / ATL: ${summary.atl ? summary.atl.toFixed(1) : 'N/A'} / TSB: ${summary.tsb_current.toFixed(1)}
-`;
+  // --- Section 3: Workout Strategie ---
+  body += buildWorkoutStrategySection(t, workout);
 
-  // Power Profile Section
-  if (powerProfile && powerProfile.available) {
-    const currentEftp = powerProfile.currentEftp || powerProfile.eFTP;
-    const wpkg = powerProfile.weight ? (powerProfile.ftp / powerProfile.weight).toFixed(2) : 'N/A';
-
-    body += `
------------------------------------
-${t.power_profile_title || 'Power Profile'}
------------------------------------
-${t.current_eftp || 'Current eFTP'}: ${currentEftp || 'N/A'}W`;
-
-    if (powerProfile.allTimeEftp && currentEftp && powerProfile.allTimeEftp > currentEftp) {
-      body += ` (${t.all_time || 'All-time'}: ${powerProfile.allTimeEftp}W)`;
-    }
-
-    body += `
-W/kg: ${wpkg}
-${t.peak_powers || 'Peak Powers'}: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W | 20min=${powerProfile.peak20min}W
-${powerProfile.strengths && powerProfile.strengths.length > 0 ? `${t.strengths || 'Strengths'}: ${powerProfile.strengths.join(', ')}` : ''}
-${powerProfile.weaknesses && powerProfile.weaknesses.length > 0 ? `${t.focus_areas || 'Focus Areas'}: ${powerProfile.weaknesses.join(', ')}` : ''}
-`;
-  }
-
-  // Wellness/Recovery Section
-  if (wellness && wellness.available) {
-    const w = wellness.today;
-    body += `
------------------------------------
-${t.recovery_title}
------------------------------------
-${t.recovery_status}: ${wellness.recoveryStatus}
-${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
-${t.hrv}: ${w.hrv || 'N/A'} ms (avg: ${wellness.averages.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
-${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
-${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
-`;
-  }
-
-  // Workout Impact Preview Section
-  const impactPreview = generateWorkoutImpactSection(summary, phaseInfo, workout);
-  if (impactPreview) {
-    body += impactPreview;
-  }
-
-  body += `
------------------------------------
-${t.recommendation_title}
------------------------------------
-Workout: ${workout.type}
-
-${t.why_title}
-${workout.recommendationReason}
-
-${t.strategy_title}
-${workout.explanation}
-`;
-
-  // Workout description for runs
-  if (workout.workoutDescription) {
-    body += `
------------------------------------
-${t.workout_details || 'Workout Details'}
------------------------------------
-${workout.workoutDescription}
-`;
-  }
-
+  // --- Footer ---
   body += `\n${t.footer}`;
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach", attachments: [workout.blob] });
   Logger.log("Email sent successfully.");
+}
+
+/**
+ * Build compact "Vandaag" section with workout, recovery, fitness, impact
+ */
+function buildTodaySection(t, workout, wellness, summary, phaseInfo) {
+  let section = `-----------------------------------
+${t.today || 'Vandaag'}
+-----------------------------------
+`;
+
+  // Line 1: Workout
+  const duration = workout.duration?.max || workout.duration?.min || '';
+  section += `${t.workout || 'Workout'}: ${workout.type}${duration ? ' (' + duration + ' min)' : ''}\n`;
+
+  // Line 2: Recovery (compact)
+  if (wellness && wellness.available) {
+    const w = wellness.today;
+    const recoveryShort = wellness.recoveryStatus?.split(' ')[0] || 'N/A'; // Just "Green" or "Yellow"
+    const recoveryPct = w.recovery != null ? ` (${w.recovery}%)` : '';
+    const sleepStr = w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A';
+    const hrvStr = w.hrv ? Math.round(w.hrv) + 'ms' : 'N/A';
+
+    section += `${t.recovery || 'Herstel'}: ${recoveryShort}${recoveryPct} | ${t.sleep || 'Slaap'} ${sleepStr} | HRV ${hrvStr}\n`;
+  }
+
+  // Line 3: Fitness (compact)
+  const ctl = summary.ctl_90?.toFixed(0) || summary.ctl?.toFixed(0) || 'N/A';
+  const tsb = summary.tsb_current?.toFixed(0) || summary.tsb?.toFixed(0) || 'N/A';
+  section += `${t.fitness || 'Fitness'}: CTL ${ctl} | TSB ${tsb}\n`;
+
+  // Line 4: Impact (if available)
+  const impact = calculateWorkoutImpact(summary, workout);
+  if (impact) {
+    const ctlChange = impact.ctlChange > 0 ? '+' + impact.ctlChange.toFixed(1) : impact.ctlChange.toFixed(1);
+    section += `\n${t.impact || 'Impact'}: CTL ${ctlChange} ${t.tomorrow || 'morgen'} | ${phaseInfo.phaseName} ${t.phase || 'fase'}\n`;
+  }
+
+  section += '\n';
+  return section;
+}
+
+/**
+ * Build "Workout Strategie" section with explanation and details
+ */
+function buildWorkoutStrategySection(t, workout) {
+  let section = `-----------------------------------
+${t.workout_strategy || 'Workout Strategie'}
+-----------------------------------
+`;
+
+  // Main explanation/strategy
+  if (workout.explanation) {
+    section += `${workout.explanation}\n`;
+  }
+
+  // Run workout description (structured text)
+  if (workout.workoutDescription) {
+    section += `\n${workout.workoutDescription}\n`;
+  }
+
+  return section;
+}
+
+/**
+ * Calculate simple workout impact on CTL
+ */
+function calculateWorkoutImpact(summary, workout) {
+  if (!summary || !workout) return null;
+
+  const currentCTL = summary.ctl_90 || summary.ctl || 0;
+  const estimatedTSS = workout.estimatedTSS || 50; // Default estimate
+
+  // CTL change = (TSS - CTL) / 42
+  const ctlChange = (estimatedTSS - currentCTL) / 42;
+
+  return {
+    ctlChange: ctlChange,
+    estimatedTSS: estimatedTSS
+  };
 }
 
 // =========================================================
