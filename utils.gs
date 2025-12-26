@@ -1207,16 +1207,16 @@ function hasEventOnDate(daysOffset) {
   const result = fetchIcuApi(endpoint);
 
   if (!result.success || !Array.isArray(result.data)) {
-    return { hasEvent: false, category: null, eventName: null };
+    return { hasEvent: false, category: null, eventName: null, eventDescription: null };
   }
 
   for (const e of result.data) {
-    if (e.category === "RACE_A") return { hasEvent: true, category: "A", eventName: e.name || null };
-    if (e.category === "RACE_B") return { hasEvent: true, category: "B", eventName: e.name || null };
-    if (e.category === "RACE_C") return { hasEvent: true, category: "C", eventName: e.name || null };
+    if (e.category === "RACE_A") return { hasEvent: true, category: "A", eventName: e.name || null, eventDescription: e.description || null };
+    if (e.category === "RACE_B") return { hasEvent: true, category: "B", eventName: e.name || null, eventDescription: e.description || null };
+    if (e.category === "RACE_C") return { hasEvent: true, category: "C", eventName: e.name || null, eventDescription: e.description || null };
   }
 
-  return { hasEvent: false, category: null, eventName: null };
+  return { hasEvent: false, category: null, eventName: null, eventDescription: null };
 }
 
 // =========================================================

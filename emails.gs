@@ -437,7 +437,8 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
         date: formatDateISO(eventDate),
         dayName: Utilities.formatDate(eventDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE"),
         eventCategory: eventCheck.category,
-        name: eventCheck.eventName
+        name: eventCheck.eventName,
+        description: eventCheck.eventDescription
       });
     }
   }

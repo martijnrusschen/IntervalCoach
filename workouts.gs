@@ -569,8 +569,8 @@ ${zoneProgressionContext}
 - Recovery Status: ${context.recoveryStatus || 'Unknown'}${context.recoveryScore ? ' (' + context.recoveryScore + '%)' : ''}
 
 **EVENT CONTEXT:**
-- Event Tomorrow: ${context.eventTomorrow?.hasEvent ? (context.eventTomorrow.eventName ? context.eventTomorrow.category + ' - ' + context.eventTomorrow.eventName : context.eventTomorrow.category + ' priority event') : 'No'}
-- Event Yesterday: ${context.eventYesterday?.hadEvent ? (context.eventYesterday.eventName ? context.eventYesterday.category + ' - ' + context.eventYesterday.eventName : context.eventYesterday.category + ' priority event') : 'No'}
+- Event Tomorrow: ${context.eventTomorrow?.hasEvent ? (context.eventTomorrow.eventName ? context.eventTomorrow.category + ' - ' + context.eventTomorrow.eventName + (context.eventTomorrow.eventDescription ? ' (' + context.eventTomorrow.eventDescription + ')' : '') : context.eventTomorrow.category + ' priority event') : 'No'}
+- Event Yesterday: ${context.eventYesterday?.hadEvent ? (context.eventYesterday.eventName ? context.eventYesterday.category + ' - ' + context.eventYesterday.eventName + (context.eventYesterday.eventDescription ? ' (' + context.eventYesterday.eventDescription + ')' : '') : context.eventYesterday.category + ' priority event') : 'No'}
 
 **RECENT TRAINING (for variety):**
 - Recent ${context.activityType}s: ${recentStr}
@@ -808,7 +808,7 @@ function hasEventTomorrow() {
 function hasEventYesterday() {
   const result = hasEventOnDate(-1);
   // Maintain backward compatibility with 'hadEvent' property name
-  return { hadEvent: result.hasEvent, category: result.category, eventName: result.eventName };
+  return { hadEvent: result.hasEvent, category: result.category, eventName: result.eventName, eventDescription: result.eventDescription };
 }
 
 /**
@@ -1068,9 +1068,12 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
   // Build upcoming events context
   let eventsContext = '';
   if (context.upcomingEvents && context.upcomingEvents.length > 0) {
-    eventsContext = '\n**UPCOMING EVENTS:**\n' + context.upcomingEvents.map(e =>
-      `- ${e.date} (${e.dayName}): ${e.eventCategory} priority${e.name ? ' - ' + e.name : ''}`
-    ).join('\n');
+    eventsContext = '\n**UPCOMING EVENTS:**\n' + context.upcomingEvents.map(e => {
+      let eventStr = `- ${e.date} (${e.dayName}): ${e.eventCategory} priority`;
+      if (e.name) eventStr += ' - ' + e.name;
+      if (e.description) eventStr += ' (' + e.description + ')';
+      return eventStr;
+    }).join('\n');
   }
 
   // Build scheduled days context (simple placeholders)

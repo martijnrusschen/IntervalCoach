@@ -253,15 +253,21 @@ function generateAIRestDayAssessment(context) {
   // Build events context
   let eventsContext = '';
   if (context.eventTomorrow?.hasEvent) {
-    const eventDesc = context.eventTomorrow.eventName
+    let eventDesc = context.eventTomorrow.eventName
       ? `${context.eventTomorrow.category} - ${context.eventTomorrow.eventName}`
       : `${context.eventTomorrow.category} priority race`;
+    if (context.eventTomorrow.eventDescription) {
+      eventDesc += ` (${context.eventTomorrow.eventDescription})`;
+    }
     eventsContext += '\n- EVENT TOMORROW: ' + eventDesc;
   }
   if (context.eventIn2Days?.hasEvent) {
-    const eventDesc = context.eventIn2Days.eventName
+    let eventDesc = context.eventIn2Days.eventName
       ? `${context.eventIn2Days.category} - ${context.eventIn2Days.eventName}`
       : `${context.eventIn2Days.category} priority`;
+    if (context.eventIn2Days.eventDescription) {
+      eventDesc += ` (${context.eventIn2Days.eventDescription})`;
+    }
     eventsContext += '\n- Event in 2 days: ' + eventDesc;
   }
 
@@ -348,15 +354,21 @@ function generateGroupRideAdvice(context) {
   // Build upcoming events context
   let upcomingContext = '';
   if (context.eventTomorrow?.hasEvent) {
-    const eventDesc = context.eventTomorrow.eventName
+    let eventDesc = context.eventTomorrow.eventName
       ? `${context.eventTomorrow.category} - ${context.eventTomorrow.eventName}`
       : `${context.eventTomorrow.category} priority`;
+    if (context.eventTomorrow.eventDescription) {
+      eventDesc += ` (${context.eventTomorrow.eventDescription})`;
+    }
     upcomingContext += '\n- EVENT TOMORROW: ' + eventDesc;
   }
   if (context.eventIn2Days?.hasEvent) {
-    const eventDesc = context.eventIn2Days.eventName
+    let eventDesc = context.eventIn2Days.eventName
       ? `${context.eventIn2Days.category} - ${context.eventIn2Days.eventName}`
       : `${context.eventIn2Days.category} priority`;
+    if (context.eventIn2Days.eventDescription) {
+      eventDesc += ` (${context.eventIn2Days.eventDescription})`;
+    }
     upcomingContext += '\n- Event in 2 days: ' + eventDesc;
   }
 
