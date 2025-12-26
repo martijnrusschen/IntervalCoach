@@ -17,7 +17,7 @@
  * @param {object} powerProfile - Power profile (null for runs)
  */
 function sendSmartSummaryEmail(summary, phaseInfo, workout, wellness, powerProfile) {
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
 
   // Generate AI-powered subject line
   const aiSubject = generateAIEmailSubject(phaseInfo, workout, wellness);
@@ -135,7 +135,7 @@ ${workout.workoutDescription}
  * @param {object} aiAssessment - Optional AI rest day assessment with reasoning
  */
 function sendRestDayEmail(wellness, phaseInfo, aiAssessment) {
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
 
   // Indicate if this is an AI-recommended rest day
   const isAIRecommended = aiAssessment && aiAssessment.isRestDay;
@@ -211,7 +211,7 @@ ${t.rest_day_note}`;
 function sendWeeklySummaryEmail() {
   requireValidConfig();
 
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
 
   // Fetch activities
   const weekData = fetchWeeklyActivities(7);
@@ -653,7 +653,7 @@ function fetchMonthlyProgressData(monthOffset = 0) {
 function sendMonthlyProgressEmail() {
   requireValidConfig();
 
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
 
   const currentMonth = fetchMonthlyProgressData(0);
   const previousMonth = fetchMonthlyProgressData(1);
@@ -796,7 +796,7 @@ ${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
  * @param {object} runningData - Running data (null for cycling)
  */
 function sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData) {
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
   const isRun = activity.type === "Run";
 
   // Generate subject line
@@ -969,7 +969,7 @@ ${t.keep_training || "Keep up the great work!"}
  * @returns {string} Formatted email section or empty string if unavailable
  */
 function generateWorkoutImpactSection(summary, phaseInfo, workout) {
-  const t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  const t = getTranslations();
 
   try {
     // Estimate TSS for today's workout based on type and duration

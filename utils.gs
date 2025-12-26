@@ -278,10 +278,7 @@ function getDaysSinceLastWorkout() {
   }
 
   // Filter to cycling and running only
-  const relevantActivities = activities.filter(a =>
-    a.type === 'Ride' || a.type === 'VirtualRide' ||
-    a.type === 'Run' || a.type === 'VirtualRun'
-  );
+  const relevantActivities = activities.filter(isSportActivity);
 
   if (relevantActivities.length > 0) {
     relevantActivities.sort((a, b) =>
@@ -468,7 +465,7 @@ function fetchRecentActivityFeedback(days) {
   let feelCount = 0;
 
   activities.forEach(function(a) {
-    if (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') {
+    if (isSportActivity(a)) {
       const activity = {
         date: a.start_date_local,
         name: a.name,
@@ -918,9 +915,9 @@ function fetchWeeklyActivities(daysBack, daysOffset) {
     result.totalTss += a.icu_training_load || 0;
     result.totalDistance += a.distance || 0;
 
-    if (a.type === 'Ride' || a.type === 'VirtualRide') {
+    if (isCyclingActivity(a)) {
       result.rides++;
-    } else if (a.type === 'Run' || a.type === 'VirtualRun') {
+    } else if (isRunningActivity(a)) {
       result.runs++;
     }
 
@@ -1088,4 +1085,136 @@ function getLastWorkoutAnalysis() {
     Logger.log("Error retrieving last workout analysis: " + e.toString());
     return null;
   }
+}
+
+// =========================================================
+// GEMINI API UTILITIES
+// =========================================================
+
+/**
+ * Parse Gemini API response, cleaning markdown code blocks
+ * @param {string} response - Raw response text from Gemini API
+ * @returns {object|null} Parsed JSON object or null if parsing fails
+ */
+function parseGeminiJsonResponse(response) {
+  if (!response || typeof response !== 'string') {
+    return null;
+  }
+
+  try {
+    let cleaned = response.trim();
+    // Remove markdown code block wrappers
+    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    Logger.log("Error parsing Gemini JSON response: " + e.toString());
+    return null;
+  }
+}
+
+// =========================================================
+// LOCALIZATION UTILITIES
+// =========================================================
+
+/**
+ * Get translations for current language setting
+ * Falls back to English if language not found
+ * @returns {object} Translation object for current language
+ */
+function getTranslations() {
+  return TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+}
+
+// =========================================================
+// ACTIVITY TYPE UTILITIES
+// =========================================================
+
+/**
+ * Check if activity is a cycling workout
+ * @param {object} activity - Activity object with type property
+ * @returns {boolean} True if cycling activity
+ */
+function isCyclingActivity(activity) {
+  return activity && (activity.type === 'Ride' || activity.type === 'VirtualRide');
+}
+
+/**
+ * Check if activity is a running workout
+ * @param {object} activity - Activity object with type property
+ * @returns {boolean} True if running activity
+ */
+function isRunningActivity(activity) {
+  return activity && (activity.type === 'Run' || activity.type === 'VirtualRun');
+}
+
+/**
+ * Check if activity is a relevant sport activity (cycling or running)
+ * @param {object} activity - Activity object with type property
+ * @returns {boolean} True if cycling or running activity
+ */
+function isSportActivity(activity) {
+  return isCyclingActivity(activity) || isRunningActivity(activity);
+}
+
+// =========================================================
+// DATE RANGE UTILITIES
+// =========================================================
+
+/**
+ * Get date range for API queries
+ * @param {number} daysBack - How many days back from reference date
+ * @param {number} daysOffset - Days offset from today (default 0, positive = past)
+ * @returns {object} Object with oldest and newest date strings (yyyy-MM-dd)
+ */
+function getDateRange(daysBack, daysOffset) {
+  daysOffset = daysOffset || 0;
+  const today = new Date();
+  const newest = new Date(today);
+  newest.setDate(today.getDate() - daysOffset);
+  const oldest = new Date(newest);
+  oldest.setDate(newest.getDate() - daysBack + 1);
+
+  return {
+    oldest: formatDateISO(oldest),
+    newest: formatDateISO(newest)
+  };
+}
+
+/**
+ * Get a single date offset from today
+ * @param {number} daysOffset - Days offset from today (positive = future, negative = past)
+ * @returns {string} Date string in yyyy-MM-dd format
+ */
+function getDateOffset(daysOffset) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysOffset);
+  return formatDateISO(date);
+}
+
+// =========================================================
+// EVENT CHECKING UTILITIES
+// =========================================================
+
+/**
+ * Check if there's a race event on a specific date offset from today
+ * Consolidates hasEventTomorrow, hasEventYesterday, hasEventInDays
+ * @param {number} daysOffset - Days from today (0 = today, 1 = tomorrow, -1 = yesterday)
+ * @returns {object} Object with hasEvent boolean and category (A, B, C, or null)
+ */
+function hasEventOnDate(daysOffset) {
+  const dateStr = getDateOffset(daysOffset);
+  const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
+  const result = fetchIcuApi(endpoint);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { hasEvent: false, category: null };
+  }
+
+  for (const e of result.data) {
+    if (e.category === "RACE_A") return { hasEvent: true, category: "A" };
+    if (e.category === "RACE_B") return { hasEvent: true, category: "B" };
+    if (e.category === "RACE_C") return { hasEvent: true, category: "C" };
+  }
+
+  return { hasEvent: false, category: null };
 }

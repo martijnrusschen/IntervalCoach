@@ -738,7 +738,7 @@ function selectWorkoutTypes(params) {
 }
 
 // =========================================================
-// EVENT DETECTION
+// EVENT DETECTION (wrappers for backward compatibility)
 // =========================================================
 
 /**
@@ -746,31 +746,7 @@ function selectWorkoutTypes(params) {
  * @returns {object} { hasEvent, category }
  */
 function hasEventTomorrow() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = formatDateISO(tomorrow);
-
-  const endpoint = "/athlete/0/events?oldest=" + tomorrowStr + "&newest=" + tomorrowStr;
-  const result = fetchIcuApi(endpoint);
-
-  if (!result.success || !Array.isArray(result.data)) {
-    return { hasEvent: false, category: null };
-  }
-
-  // Check for A, B, or C priority events
-  for (const e of result.data) {
-    if (e.category === "RACE_A") {
-      return { hasEvent: true, category: "A" };
-    }
-    if (e.category === "RACE_B") {
-      return { hasEvent: true, category: "B" };
-    }
-    if (e.category === "RACE_C") {
-      return { hasEvent: true, category: "C" };
-    }
-  }
-
-  return { hasEvent: false, category: null };
+  return hasEventOnDate(1);
 }
 
 /**
@@ -778,31 +754,9 @@ function hasEventTomorrow() {
  * @returns {object} { hadEvent, category }
  */
 function hasEventYesterday() {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = formatDateISO(yesterday);
-
-  const endpoint = "/athlete/0/events?oldest=" + yesterdayStr + "&newest=" + yesterdayStr;
-  const result = fetchIcuApi(endpoint);
-
-  if (!result.success || !Array.isArray(result.data)) {
-    return { hadEvent: false, category: null };
-  }
-
-  // Check for A, B, or C priority events
-  for (const e of result.data) {
-    if (e.category === "RACE_A") {
-      return { hadEvent: true, category: "A" };
-    }
-    if (e.category === "RACE_B") {
-      return { hadEvent: true, category: "B" };
-    }
-    if (e.category === "RACE_C") {
-      return { hadEvent: true, category: "C" };
-    }
-  }
-
-  return { hadEvent: false, category: null };
+  const result = hasEventOnDate(-1);
+  // Maintain backward compatibility with 'hadEvent' property name
+  return { hadEvent: result.hasEvent, category: result.category };
 }
 
 /**
@@ -811,30 +765,7 @@ function hasEventYesterday() {
  * @returns {object} { hasEvent, category }
  */
 function hasEventInDays(days) {
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + days);
-  const dateStr = formatDateISO(targetDate);
-
-  const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
-  const result = fetchIcuApi(endpoint);
-
-  if (!result.success || !Array.isArray(result.data)) {
-    return { hasEvent: false, category: null };
-  }
-
-  for (const e of result.data) {
-    if (e.category === "RACE_A") {
-      return { hasEvent: true, category: "A" };
-    }
-    if (e.category === "RACE_B") {
-      return { hasEvent: true, category: "B" };
-    }
-    if (e.category === "RACE_C") {
-      return { hasEvent: true, category: "C" };
-    }
-  }
-
-  return { hasEvent: false, category: null };
+  return hasEventOnDate(days);
 }
 
 /**

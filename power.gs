@@ -1215,7 +1215,7 @@ function generateWeeklyImpactPreview(plannedDays, fitnessMetrics, days) {
  * @returns {object} AI-generated narrative and insights
  */
 function generateAIWeeklyImpactNarrative(weeklyImpact, goals, phaseInfo) {
-  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  var t = getTranslations();
 
   // Build context for AI
   var projectionTable = weeklyImpact.projections.map(function(p) {
@@ -1287,7 +1287,7 @@ Return JSON:
  */
 function generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo) {
   var summary = weeklyImpact.summary;
-  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  var t = getTranslations();
 
   var loadAssessment = 'appropriate';
   var riskLevel = 'low';
@@ -1336,7 +1336,7 @@ function generateFallbackWeeklyNarrative(weeklyImpact, phaseInfo) {
  * @returns {string} Formatted text section for email
  */
 function formatWeeklyImpactSection(weeklyImpact, narrative) {
-  var t = TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+  var t = getTranslations();
 
   var section = '\n-----------------------------------\n';
   section += (t.weekly_impact_title || 'Weekly Training Impact') + '\n';
