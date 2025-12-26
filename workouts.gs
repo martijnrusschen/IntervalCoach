@@ -571,26 +571,17 @@ Recommend ONE specific workout type from the list above. Consider all factors ho
 
   const response = callGeminiAPIText(prompt);
 
-  if (!response) {
-    Logger.log("AI workout decision: No response from Gemini");
+  const decision = parseGeminiJsonResponse(response);
+  if (!decision) {
+    Logger.log("AI workout decision: Failed to parse response");
     return null;
   }
 
-  try {
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    const decision = JSON.parse(cleaned);
-
-    // Validate the workout type exists
-    if (decision.workoutType && catalog[decision.workoutType]) {
-      return decision;
-    } else {
-      Logger.log("AI suggested unknown workout type: " + decision.workoutType);
-      return null;
-    }
-  } catch (e) {
-    Logger.log("Failed to parse AI workout decision: " + e.toString());
-    Logger.log("Raw response: " + response.substring(0, 500));
+  // Validate the workout type exists
+  if (decision.workoutType && catalog[decision.workoutType]) {
+    return decision;
+  } else {
+    Logger.log("AI suggested unknown workout type: " + decision.workoutType);
     return null;
   }
 }
@@ -1099,21 +1090,11 @@ Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each d
 }`;
 
   const response = callGeminiAPIText(prompt);
-
-  if (!response) {
-    Logger.log("AI weekly plan: No response from Gemini");
-    return null;
+  const plan = parseGeminiJsonResponse(response);
+  if (!plan) {
+    Logger.log("AI weekly plan: Failed to parse response");
   }
-
-  try {
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI weekly plan: " + e.toString());
-    Logger.log("Raw response: " + response.substring(0, 500));
-    return null;
-  }
+  return plan;
 }
 
 // =========================================================
@@ -1582,20 +1563,11 @@ Write all text in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI plan adaptation: No response from Gemini");
-      return null;
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI plan adaptation insights: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const insights = parseGeminiJsonResponse(response);
+  if (!insights) {
+    Logger.log("AI plan adaptation: Failed to parse response");
   }
+  return insights;
 }
 

@@ -783,22 +783,11 @@ Consider:
 }`;
 
   const response = callGeminiAPIText(prompt);
-
-  if (!response) {
-    Logger.log("AI phase assessment: No response from Gemini");
-    return null;
+  const assessment = parseGeminiJsonResponse(response);
+  if (!assessment) {
+    Logger.log("AI phase assessment: Failed to parse response");
   }
-
-  try {
-    // Parse JSON from response (handle markdown wrapping if present)
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI phase assessment: " + e.toString());
-    Logger.log("Raw response: " + response.substring(0, 500));
-    return null;
-  }
+  return assessment;
 }
 
 // =========================================================
@@ -878,22 +867,12 @@ Write all text fields in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI power profile analysis: No response from Gemini");
-      return null;
-    }
-
-    // Parse JSON from response (handle markdown wrapping if present)
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI power profile analysis: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const analysis = parseGeminiJsonResponse(response);
+  if (!analysis) {
+    Logger.log("AI power profile analysis: Failed to parse response");
   }
+  return analysis;
 }
 
 // =========================================================
@@ -991,22 +970,12 @@ Write the "personalizedAdvice" and "warnings" in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI training load advice: No response from Gemini");
-      return null;
-    }
-
-    // Parse JSON from response
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI training load advice: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const advice = parseGeminiJsonResponse(response);
+  if (!advice) {
+    Logger.log("AI training load advice: Failed to parse response");
   }
+  return advice;
 }
 
 // =========================================================
@@ -1083,22 +1052,12 @@ Write the "personalizedReason" in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI recovery assessment: No response from Gemini");
-      return null;
-    }
-
-    // Parse JSON from response
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI recovery assessment: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const assessment = parseGeminiJsonResponse(response);
+  if (!assessment) {
+    Logger.log("AI recovery assessment: Failed to parse response");
   }
+  return assessment;
 }
 
 // =========================================================
@@ -1182,21 +1141,12 @@ Write "recommendation" and "reasoning" in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI training gap analysis: No response from Gemini");
-      return null;
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI training gap analysis: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const analysis = parseGeminiJsonResponse(response);
+  if (!analysis) {
+    Logger.log("AI training gap analysis: Failed to parse response");
   }
+  return analysis;
 }
 
 // =========================================================
@@ -1280,21 +1230,12 @@ Write "assessment", "recommendation", and "adjustments" in ${langName}.
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI eFTP trajectory analysis: No response from Gemini");
-      return null;
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI eFTP trajectory analysis: " + e.toString());
-    return null;
+  const response = callGeminiAPIText(prompt);
+  const analysis = parseGeminiJsonResponse(response);
+  if (!analysis) {
+    Logger.log("AI eFTP trajectory analysis: Failed to parse response");
   }
+  return analysis;
 }
 
 /**
@@ -1396,23 +1337,14 @@ Use ${langName} for all string values within the JSON:
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI event analysis: No response from Gemini");
-      return null;
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    const result = JSON.parse(cleaned);
-    result.aiEnhanced = true;
-    return result;
-  } catch (e) {
-    Logger.log("Failed to parse AI event analysis: " + e.toString());
+  const response = callGeminiAPIText(prompt);
+  const result = parseGeminiJsonResponse(response);
+  if (!result) {
+    Logger.log("AI event analysis: Failed to parse response");
     return null;
   }
+  result.aiEnhanced = true;
+  return result;
 }
 
 // =========================================================
@@ -1540,23 +1472,14 @@ Use ${langName} for all string values within the JSON:
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("AI cumulative fatigue analysis: No response from Gemini");
-      return null;
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    const result = JSON.parse(cleaned);
-    result.aiEnhanced = true;
-    return result;
-  } catch (e) {
-    Logger.log("Failed to parse AI cumulative fatigue analysis: " + e.toString());
+  const response = callGeminiAPIText(prompt);
+  const result = parseGeminiJsonResponse(response);
+  if (!result) {
+    Logger.log("AI cumulative fatigue analysis: Failed to parse response");
     return null;
   }
+  result.aiEnhanced = true;
+  return result;
 }
 
 // =========================================================
@@ -1682,24 +1605,15 @@ Use ${langName} for all string values within the JSON:
   "confidence": "high|medium|low"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("Post-workout analysis: No response from Gemini");
-      return { success: false, error: "No response from AI" };
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    const result = JSON.parse(cleaned);
-    result.success = true;
-    result.aiEnhanced = true;
-    return result;
-  } catch (e) {
-    Logger.log("Failed to parse post-workout analysis: " + e.toString());
-    return { success: false, error: e.toString() };
+  const response = callGeminiAPIText(prompt);
+  const result = parseGeminiJsonResponse(response);
+  if (!result) {
+    Logger.log("Post-workout analysis: Failed to parse response");
+    return { success: false, error: "Failed to parse AI response" };
   }
+  result.success = true;
+  result.aiEnhanced = true;
+  return result;
 }
 
 // =========================================================
@@ -1775,24 +1689,15 @@ Provide a concise workout impact analysis in ${analysisLang}. Return JSON:
   "recommendation": "proceed|modify|skip"
 }`;
 
-  try {
-    const response = callGeminiAPIText(prompt);
-
-    if (!response) {
-      Logger.log("Workout impact preview: No response from Gemini");
-      return createFallbackImpactPreview(impactData);
-    }
-
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    const result = JSON.parse(cleaned);
-    result.success = true;
-    result.aiEnhanced = true;
-    return result;
-  } catch (e) {
-    Logger.log("Failed to parse workout impact preview: " + e.toString());
+  const response = callGeminiAPIText(prompt);
+  const result = parseGeminiJsonResponse(response);
+  if (!result) {
+    Logger.log("Workout impact preview: Failed to parse response");
     return createFallbackImpactPreview(impactData);
   }
+  result.success = true;
+  result.aiEnhanced = true;
+  return result;
 }
 
 /**

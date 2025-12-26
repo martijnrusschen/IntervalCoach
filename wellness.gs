@@ -312,19 +312,10 @@ But DON'T recommend rest if:
 }`;
 
   const response = callGeminiAPIText(prompt);
-
-  if (!response) {
-    Logger.log("AI rest day assessment: No response from Gemini");
-    return null;
+  const assessment = parseGeminiJsonResponse(response);
+  if (!assessment) {
+    Logger.log("AI rest day assessment: Failed to parse response");
   }
-
-  try {
-    let cleaned = response.trim();
-    cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    Logger.log("Failed to parse AI rest day assessment: " + e.toString());
-    return null;
-  }
+  return assessment;
 }
 
