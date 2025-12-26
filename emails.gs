@@ -445,7 +445,7 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
   }
   planContext.upcomingEvents = upcomingEvents;
 
-  // Get existing scheduled workouts for next 7 days
+  // Get existing scheduled workouts for next 7 days (uses cached event fetching)
   const existingWorkouts = [];
   for (let i = 1; i <= 7; i++) {
     const checkDate = new Date(today);
@@ -453,21 +453,19 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
     const dateStr = formatDateISO(checkDate);
     const dayName = Utilities.formatDate(checkDate, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
 
-    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr);
-    if (eventsResult.success && eventsResult.data?.length > 0) {
-      const workout = eventsResult.data.find(function(e) { return e.category === 'WORKOUT'; });
-      if (workout) {
-        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workout.name || '');
-        const isWeeklyPlan = workout.description?.includes('[Weekly Plan]');
-        if (!isSimplePlaceholder && !isWeeklyPlan) {
-          existingWorkouts.push({
-            date: dateStr,
-            dayName: dayName,
-            name: workout.name,
-            duration: workout.moving_time ? Math.round(workout.moving_time / 60) : null,
-            type: workout.type || (workout.name?.toLowerCase().includes('run') ? 'Run' : 'Ride')
-          });
-        }
+    const eventData = fetchEventsForDate(dateStr);
+    if (eventData.success && eventData.workoutEvents.length > 0) {
+      const workout = eventData.workoutEvents[0];
+      const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workout.name || '');
+      const isWeeklyPlan = workout.description?.includes('[Weekly Plan]');
+      if (!isSimplePlaceholder && !isWeeklyPlan) {
+        existingWorkouts.push({
+          date: dateStr,
+          dayName: dayName,
+          name: workout.name,
+          duration: workout.moving_time ? Math.round(workout.moving_time / 60) : null,
+          type: workout.type || (workout.name?.toLowerCase().includes('run') ? 'Run' : 'Ride')
+        });
       }
     }
   }

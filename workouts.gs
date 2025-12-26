@@ -10,6 +10,7 @@
 
 /**
  * Check Intervals.icu calendar for workout placeholders or existing generated workouts
+ * Uses cached fetchEventsForDate() to avoid duplicate API calls
  * Looks for:
  * 1. Placeholders starting with "Ride" or "Run" (e.g., "Ride - 90min" or "Run - 45min")
  * 2. Existing generated workouts (workout types from catalog, or workouts with .zwo files)
@@ -17,40 +18,18 @@
  * @returns {object} { hasPlaceholder, placeholder, duration, activityType, isExisting }
  */
 function findIntervalCoachPlaceholder(dateStr) {
-  const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
-  const ridePlaceholder = USER_SETTINGS.PLACEHOLDER_RIDE.toLowerCase();
-  const runPlaceholder = USER_SETTINGS.PLACEHOLDER_RUN.toLowerCase();
+  // Use cached event fetching
+  const eventData = fetchEventsForDate(dateStr);
 
-  const result = fetchIcuApi(endpoint);
-
-  if (!result.success) {
-    Logger.log("Error checking Intervals.icu calendar: " + result.error);
+  if (!eventData.success) {
+    Logger.log("Error checking Intervals.icu calendar");
     return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null, isExisting: false };
   }
 
-  const events = result.data;
-  if (!Array.isArray(events)) {
-    return { hasPlaceholder: false, placeholder: null, duration: null, activityType: null, isExisting: false };
-  }
-
-  // Get all workout type names for matching existing workouts
-  // Normalize by removing underscores for flexible matching
-  const rideWorkoutTypes = Object.keys(WORKOUT_TYPES.ride).map(t => t.toLowerCase().replace(/_/g, ''));
-  const runWorkoutTypes = Object.keys(WORKOUT_TYPES.run).map(t => t.toLowerCase().replace(/_/g, ''));
-
-  // First priority: Find placeholder event starting with "Ride", "Run", or "Hardlopen"
-  const placeholder = events.find(function(e) {
-    if (!e.name) return false;
-    const nameLower = e.name.toLowerCase();
-    return nameLower.startsWith(ridePlaceholder) ||
-           nameLower.startsWith(runPlaceholder) ||
-           nameLower.startsWith("hardlopen");
-  });
-
-  if (placeholder) {
-    const nameLower = placeholder.name.toLowerCase();
-    const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
-    const activityType = isRun ? "Run" : "Ride";
+  // First priority: Check for placeholders (already parsed by fetchEventsForDate)
+  if (eventData.placeholders.length > 0) {
+    const placeholder = eventData.placeholders[0];
+    const activityType = placeholder.type; // "Run" or "Ride"
     const duration = parseDurationFromName(placeholder.name, activityType);
 
     // Check if this is a weekly plan placeholder and extract suggested workout type
@@ -65,9 +44,12 @@ function findIntervalCoachPlaceholder(dateStr) {
       }
     }
 
+    // Find full event data for the placeholder (needed for id, etc.)
+    const fullPlaceholder = eventData.events.find(e => e.id === placeholder.id) || placeholder;
+
     return {
       hasPlaceholder: true,
-      placeholder: placeholder,
+      placeholder: fullPlaceholder,
       duration: duration,
       activityType: activityType,
       isExisting: false,
@@ -77,7 +59,11 @@ function findIntervalCoachPlaceholder(dateStr) {
   }
 
   // Second priority: Find existing generated workout that can be replaced
-  const existingWorkout = events.find(function(e) {
+  // Get all workout type names for matching existing workouts
+  const rideWorkoutTypes = Object.keys(WORKOUT_TYPES.ride).map(t => t.toLowerCase().replace(/_/g, ''));
+  const runWorkoutTypes = Object.keys(WORKOUT_TYPES.run).map(t => t.toLowerCase().replace(/_/g, ''));
+
+  const existingWorkout = eventData.workoutEvents.find(function(e) {
     if (!e.name) return false;
     // Normalize name by removing underscores for flexible matching
     const nameNormalized = e.name.toLowerCase().replace(/_/g, '');
@@ -86,8 +72,8 @@ function findIntervalCoachPlaceholder(dateStr) {
     const isRideType = rideWorkoutTypes.some(t => nameNormalized.includes(t));
     const isRunType = runWorkoutTypes.some(t => nameNormalized.includes(t));
 
-    // Also check for workouts with .zwo files (category WORKOUT)
-    const isZwoWorkout = e.category === 'WORKOUT' && e.filename && e.filename.endsWith('.zwo');
+    // Also check for workouts with .zwo files
+    const isZwoWorkout = e.filename && e.filename.endsWith('.zwo');
 
     // Also check for IntervalCoach prefix
     const hasIntervalCoachPrefix = nameNormalized.includes('intervalcoach');
@@ -105,11 +91,14 @@ function findIntervalCoachPlaceholder(dateStr) {
       ? { min: Math.round(existingWorkout.moving_time / 60 * 0.9), max: Math.round(existingWorkout.moving_time / 60 * 1.1) }
       : (activityType === "Run" ? USER_SETTINGS.DEFAULT_DURATION_RUN : USER_SETTINGS.DEFAULT_DURATION_RIDE);
 
+    // Find full event data (needed for id, etc.)
+    const fullWorkout = eventData.events.find(e => e.id === existingWorkout.id) || existingWorkout;
+
     Logger.log("Found existing workout to replace: " + existingWorkout.name);
 
     return {
       hasPlaceholder: true,
-      placeholder: existingWorkout,
+      placeholder: fullWorkout,
       duration: duration,
       activityType: activityType,
       isExisting: true
@@ -227,13 +216,12 @@ function checkAvailability(wellness) {
 
 /**
  * Fetch upcoming workout placeholders for the next N days
+ * Uses cached fetchEventsForDate() to avoid duplicate API calls
  * @param {number} days - Number of days to look ahead (default 7)
  * @returns {Array} Array of upcoming placeholder info
  */
 function fetchUpcomingPlaceholders(days = 7) {
   const upcoming = [];
-  const ridePlaceholder = USER_SETTINGS.PLACEHOLDER_RIDE.toLowerCase();
-  const runPlaceholder = USER_SETTINGS.PLACEHOLDER_RUN.toLowerCase();
 
   for (let i = 0; i < days; i++) {
     const date = new Date();
@@ -241,43 +229,22 @@ function fetchUpcomingPlaceholders(days = 7) {
     const dateStr = formatDateISO(date);
     const dayName = Utilities.formatDate(date, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
 
-    const endpoint = "/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr;
-    const result = fetchIcuApi(endpoint);
+    // Use cached event fetching
+    const eventData = fetchEventsForDate(dateStr);
 
-    let placeholder = null;
-    let eventCategory = null;
-    let eventName = null;
-    let eventDescription = null;
+    // Get race event info
+    const raceEvent = eventData.raceEvent;
+    const eventCategory = raceEvent ? raceEvent.category : null;
+    const eventName = raceEvent ? raceEvent.name : null;
+    const eventDescription = raceEvent ? raceEvent.description : null;
 
-    if (result.success && Array.isArray(result.data)) {
-      // Check for race events
-      for (const e of result.data) {
-        if (e.category === "RACE_A" || e.category === "RACE_B" || e.category === "RACE_C") {
-          eventCategory = e.category.replace("RACE_", "");
-          eventName = e.name || null;
-          eventDescription = e.description || null;
-          break;
-        }
-      }
-
-      // Check for workout placeholders
-      placeholder = result.data.find(function(e) {
-        if (!e.name) return false;
-        const nameLower = e.name.toLowerCase();
-        return nameLower.startsWith(ridePlaceholder) ||
-               nameLower.startsWith(runPlaceholder) ||
-               nameLower.startsWith("hardlopen");
-      });
-    }
-
-    // Always add the day (even if no placeholder/event)
+    // Get placeholder info
+    const placeholder = eventData.placeholders.length > 0 ? eventData.placeholders[0] : null;
     let activityType = null;
     let duration = null;
 
     if (placeholder) {
-      const nameLower = placeholder.name.toLowerCase();
-      const isRun = nameLower.startsWith(runPlaceholder) || nameLower.startsWith("hardlopen");
-      activityType = isRun ? "Run" : "Ride";
+      activityType = placeholder.type;
       duration = parseDurationFromName(placeholder.name, activityType);
     }
 
