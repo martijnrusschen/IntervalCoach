@@ -501,6 +501,80 @@ ${t.weekly_plan_title || 'Komende Week'}
 }
 
 // =========================================================
+// ZONE PROGRESSION SECTION
+// =========================================================
+
+/**
+ * Build zone progression section for weekly email
+ * @param {object} t - Translations object
+ * @param {object} progression - Zone progression data from getZoneProgression()
+ * @param {object} recommendations - AI recommendations from getZoneRecommendations()
+ * @returns {string} Formatted email section
+ */
+function buildZoneProgressionSection(t, progression, recommendations) {
+  if (!progression || !progression.available) {
+    return '';
+  }
+
+  const trendSymbols = {
+    improving: '↑',
+    stable: '→',
+    declining: '↓'
+  };
+
+  let section = `-----------------------------------
+${t.zone_progression_title || 'Zone Progression Levels'}
+-----------------------------------
+`;
+
+  // Zone levels table
+  section += `${t.zone || 'Zone'}        ${t.level || 'Level'}  ${t.trend || 'Trend'}   ${t.last_trained || 'Last'}\n`;
+  section += `---------- -----  ------  --------\n`;
+
+  for (const [zone, data] of Object.entries(progression.progression)) {
+    const zoneName = zone.charAt(0).toUpperCase() + zone.slice(1);
+    const symbol = trendSymbols[data.trend] || '→';
+    const lastTrained = data.lastTrained ? data.lastTrained.substring(5) : 'N/A';
+
+    // Create level bar visualization (1-10 scale, simplified for email)
+    const levelStr = data.level.toFixed(1).padStart(4);
+    const trendStr = (data.trend + ' ' + symbol).padEnd(8);
+
+    section += `${zoneName.padEnd(10)} ${levelStr}  ${trendStr} ${lastTrained}\n`;
+  }
+
+  // Summary
+  section += `\n${t.strengths || 'Strengths'}: ${progression.strengths.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}\n`;
+  section += `${t.focus_areas || 'Focus Areas'}: ${progression.focusAreas.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}\n`;
+
+  // AI Recommendations
+  if (recommendations) {
+    section += `\n${t.ai_recommendation || 'AI Recommendation'}:\n`;
+
+    if (recommendations.summary) {
+      section += `${recommendations.summary}\n`;
+    }
+
+    if (recommendations.priorityZone) {
+      section += `\n${t.priority_this_week || 'Priority this week'}: ${recommendations.priorityZone.charAt(0).toUpperCase() + recommendations.priorityZone.slice(1)}\n`;
+      if (recommendations.priorityReason) {
+        section += `${recommendations.priorityReason}\n`;
+      }
+    }
+
+    if (recommendations.weeklyRecommendations && recommendations.weeklyRecommendations.length > 0) {
+      section += `\n${t.suggested_workouts || 'Suggested workouts'}:\n`;
+      for (const rec of recommendations.weeklyRecommendations) {
+        section += `• ${rec}\n`;
+      }
+    }
+  }
+
+  section += '\n';
+  return section;
+}
+
+// =========================================================
 // MONTHLY PROGRESS EMAIL
 // =========================================================
 
@@ -616,6 +690,18 @@ function sendMonthlyProgressEmail() {
 
   const aiInsight = generateMonthlyInsight(currentMonth, previousMonth, phaseInfo, goals);
 
+  // Fetch zone progression for monthly review
+  Logger.log("Fetching zone progression for monthly review...");
+  const zoneProgression = getZoneProgression(true); // Force recalculate for fresh data
+  let zoneRecommendations = null;
+
+  if (zoneProgression && zoneProgression.available) {
+    Logger.log("Zone progression available, generating recommendations...");
+    zoneRecommendations = getZoneRecommendations(zoneProgression, phaseInfo, goals);
+    // Add to history for trend tracking
+    addZoneProgressionToHistory(zoneProgression);
+  }
+
   const subject = t.monthly_subject + " (" + currentMonth.monthName + " " + currentMonth.monthYear + ")";
 
   let body = `${t.monthly_greeting}\n\n`;
@@ -715,6 +801,11 @@ ${t.monthly_consistency}
 -----------------------------------
 ${t.monthly_weeks_trained}: ${currentMonth.consistency.weeksWithTraining}/${currentMonth.weeks} (${currentMonth.consistency.consistencyPercent}%)
 `;
+
+  // Zone Progression (monthly review)
+  if (zoneProgression && zoneProgression.available) {
+    body += buildZoneProgressionSection(t, zoneProgression, zoneRecommendations);
+  }
 
   // Goal
   if (goals?.available && goals?.primaryGoal) {

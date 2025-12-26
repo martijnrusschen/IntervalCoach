@@ -1282,6 +1282,339 @@ Return JSON:
   }
 }
 
+// =========================================================
+// ZONE PROGRESSION LEVELS
+// =========================================================
+
+/**
+ * Analyze zone exposure for a single activity
+ * Extracts time in each power/pace zone and compares to workout intent
+ * @param {object} activity - Activity data from Intervals.icu
+ * @returns {object} Zone exposure analysis { zones: { z1, z2, z3, z4, z5, z6 }, totalTime, dominantZone, stimulus }
+ */
+function analyzeZoneExposure(activity) {
+  if (!activity) return null;
+
+  // Get zone times (in seconds) - works for both power zones and pace zones
+  const zoneTimes = activity.icu_zone_times || activity.gap_zone_times || [];
+
+  const getZoneSecs = function(zoneId) {
+    const zone = zoneTimes.find(function(z) { return z.id === zoneId; });
+    return zone ? zone.secs : 0;
+  };
+
+  const zones = {
+    z1: getZoneSecs("Z1"),
+    z2: getZoneSecs("Z2"),
+    z3: getZoneSecs("Z3"),
+    z4: getZoneSecs("Z4"),
+    z5: getZoneSecs("Z5"),
+    z6: getZoneSecs("Z6"),
+    z7: getZoneSecs("Z7"),
+    ss: getZoneSecs("SS")  // Sweet Spot zone if tracked separately
+  };
+
+  const totalTime = activity.moving_time || Object.values(zones).reduce((a, b) => a + b, 0);
+
+  if (totalTime < 600) return null; // Skip very short activities (<10 min)
+
+  // Determine dominant zone
+  let dominantZone = 'z2';
+  let maxTime = zones.z2;
+
+  for (const [zone, time] of Object.entries(zones)) {
+    if (time > maxTime) {
+      maxTime = time;
+      dominantZone = zone;
+    }
+  }
+
+  // Determine training stimulus based on zone distribution
+  let stimulus = 'endurance';
+  const highIntensity = zones.z5 + zones.z6 + zones.z7;
+  const threshold = zones.z4 + zones.ss;
+  const endurance = zones.z2 + zones.z3;
+
+  if (highIntensity > 300) {
+    stimulus = 'vo2max';
+  } else if (threshold > 600) {
+    stimulus = 'threshold';
+  } else if (zones.ss > 300) {
+    stimulus = 'sweetspot';
+  } else if (zones.z3 > zones.z2 * 0.5) {
+    stimulus = 'tempo';
+  } else if (endurance > totalTime * 0.5) {
+    stimulus = 'endurance';
+  } else if (zones.z1 > totalTime * 0.5) {
+    stimulus = 'recovery';
+  }
+
+  return {
+    activityId: activity.id,
+    date: activity.start_date_local?.substring(0, 10),
+    type: activity.type,
+    zones: zones,
+    totalTime: totalTime,
+    dominantZone: dominantZone,
+    stimulus: stimulus,
+    tss: activity.icu_training_load || 0,
+    // Calculate zone percentages
+    zonePercentages: {
+      z1: Math.round((zones.z1 / totalTime) * 100),
+      z2: Math.round((zones.z2 / totalTime) * 100),
+      z3: Math.round((zones.z3 / totalTime) * 100),
+      z4: Math.round((zones.z4 / totalTime) * 100),
+      z5: Math.round((zones.z5 / totalTime) * 100),
+      z6: Math.round((zones.z6 / totalTime) * 100)
+    }
+  };
+}
+
+/**
+ * Calculate zone progression levels from recent activities
+ * Tracks fitness per power zone similar to TrainerRoad's Progression Levels
+ * @param {number} daysBack - Number of days to analyze (default 42 = 6 weeks)
+ * @returns {object} Zone progression data
+ */
+function calculateZoneProgression(daysBack) {
+  daysBack = daysBack || 42;
+
+  const today = new Date();
+  const oldest = new Date(today);
+  oldest.setDate(today.getDate() - daysBack);
+
+  const oldestStr = formatDateISO(oldest);
+  const todayStr = formatDateISO(today);
+
+  // Fetch activities for the period
+  const result = fetchIcuApi("/athlete/0/activities?oldest=" + oldestStr + "&newest=" + todayStr);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    Logger.log("Error fetching activities for zone progression: " + (result.error || "No data"));
+    return { available: false };
+  }
+
+  // Initialize zone tracking
+  const zoneData = {
+    endurance: { totalTime: 0, sessions: 0, lastTrained: null, tssSum: 0, activities: [] },
+    tempo: { totalTime: 0, sessions: 0, lastTrained: null, tssSum: 0, activities: [] },
+    threshold: { totalTime: 0, sessions: 0, lastTrained: null, tssSum: 0, activities: [] },
+    vo2max: { totalTime: 0, sessions: 0, lastTrained: null, tssSum: 0, activities: [] },
+    anaerobic: { totalTime: 0, sessions: 0, lastTrained: null, tssSum: 0, activities: [] }
+  };
+
+  // Map zones to training categories
+  const zoneToCategory = {
+    z1: 'endurance',
+    z2: 'endurance',
+    z3: 'tempo',
+    z4: 'threshold',
+    ss: 'threshold',
+    z5: 'vo2max',
+    z6: 'anaerobic',
+    z7: 'anaerobic'
+  };
+
+  // Process each activity
+  const activities = result.data.filter(isSportActivity);
+  const exposures = [];
+
+  for (const activity of activities) {
+    const exposure = analyzeZoneExposure(activity);
+    if (!exposure) continue;
+
+    exposures.push(exposure);
+
+    // Accumulate time for each zone category
+    for (const [zone, seconds] of Object.entries(exposure.zones)) {
+      const category = zoneToCategory[zone];
+      if (category && seconds > 0) {
+        zoneData[category].totalTime += seconds;
+
+        // Track session if significant time in this zone
+        if (seconds > 300) { // > 5 minutes
+          if (!zoneData[category].activities.includes(activity.id)) {
+            zoneData[category].sessions++;
+            zoneData[category].activities.push(activity.id);
+            zoneData[category].tssSum += exposure.tss;
+
+            // Update last trained date
+            const activityDate = exposure.date;
+            if (!zoneData[category].lastTrained || activityDate > zoneData[category].lastTrained) {
+              zoneData[category].lastTrained = activityDate;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Calculate progression levels (1.0 - 10.0 scale)
+  // Based on: time in zone, session frequency, recency
+  const progression = {};
+  const baselineMinutes = {
+    endurance: 300,   // ~5 hours for level 5
+    tempo: 120,       // ~2 hours for level 5
+    threshold: 90,    // ~1.5 hours for level 5
+    vo2max: 45,       // ~45 min for level 5
+    anaerobic: 20     // ~20 min for level 5
+  };
+
+  for (const [category, data] of Object.entries(zoneData)) {
+    const minutes = data.totalTime / 60;
+    const baseline = baselineMinutes[category];
+
+    // Base level from accumulated time (0-7 points)
+    let level = Math.min(7, (minutes / baseline) * 5);
+
+    // Frequency bonus (0-2 points): more sessions = higher level
+    const frequencyBonus = Math.min(2, (data.sessions / (daysBack / 7)) * 0.5);
+    level += frequencyBonus;
+
+    // Recency factor (0-1 points): recent training maintains level
+    let recencyFactor = 0;
+    if (data.lastTrained) {
+      const daysSince = Math.floor((today - new Date(data.lastTrained)) / (1000 * 60 * 60 * 24));
+      if (daysSince <= 7) {
+        recencyFactor = 1.0;
+      } else if (daysSince <= 14) {
+        recencyFactor = 0.5;
+      } else if (daysSince <= 21) {
+        recencyFactor = 0.25;
+      }
+    }
+    level += recencyFactor;
+
+    // Clamp to 1.0-10.0
+    level = Math.max(1.0, Math.min(10.0, level));
+
+    // Determine trend based on recent vs older activity
+    let trend = 'stable';
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    const twoWeeksAgoStr = formatDateISO(twoWeeksAgo);
+
+    const recentSessions = exposures.filter(e =>
+      e.date >= twoWeeksAgoStr &&
+      (category === 'endurance' && (e.dominantZone === 'z1' || e.dominantZone === 'z2') ||
+       category === 'tempo' && e.dominantZone === 'z3' ||
+       category === 'threshold' && (e.dominantZone === 'z4' || e.dominantZone === 'ss') ||
+       category === 'vo2max' && e.dominantZone === 'z5' ||
+       category === 'anaerobic' && (e.dominantZone === 'z6' || e.dominantZone === 'z7'))
+    ).length;
+
+    if (recentSessions >= 2) {
+      trend = 'improving';
+    } else if (data.lastTrained && new Date(data.lastTrained) < twoWeeksAgo) {
+      trend = 'declining';
+    }
+
+    progression[category] = {
+      level: Math.round(level * 10) / 10,
+      trend: trend,
+      lastTrained: data.lastTrained,
+      sessions: data.sessions,
+      totalMinutes: Math.round(minutes),
+      avgTssPerSession: data.sessions > 0 ? Math.round(data.tssSum / data.sessions) : 0
+    };
+  }
+
+  // Identify focus areas (lowest levels that should be trained)
+  const sortedCategories = Object.entries(progression)
+    .sort((a, b) => a[1].level - b[1].level);
+
+  const focusAreas = sortedCategories
+    .slice(0, 2)
+    .map(([cat, data]) => cat);
+
+  // Identify strengths (highest levels)
+  const strengths = sortedCategories
+    .slice(-2)
+    .reverse()
+    .map(([cat, data]) => cat);
+
+  return {
+    available: true,
+    calculatedAt: todayStr,
+    periodDays: daysBack,
+    activitiesAnalyzed: exposures.length,
+    progression: progression,
+    focusAreas: focusAreas,
+    strengths: strengths
+  };
+}
+
+/**
+ * Generate AI-powered zone recommendations based on progression levels
+ * @param {object} progression - Zone progression from calculateZoneProgression()
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal events
+ * @returns {object} AI recommendations for zone training
+ */
+function getZoneRecommendations(progression, phaseInfo, goals) {
+  if (!progression || !progression.available) {
+    return null;
+  }
+
+  const langName = getPromptLanguage();
+
+  const prompt = `You are an expert cycling/running coach analyzing an athlete's zone-specific fitness levels.
+
+**ZONE PROGRESSION LEVELS (1.0-10.0 scale):**
+${Object.entries(progression.progression).map(([zone, data]) =>
+  `- ${zone.charAt(0).toUpperCase() + zone.slice(1)}: Level ${data.level} (${data.trend}, ${data.sessions} sessions, last trained: ${data.lastTrained || 'never'})`
+).join('\n')}
+
+**IDENTIFIED PATTERNS:**
+- Strengths: ${progression.strengths.join(', ')}
+- Focus Areas (underdeveloped): ${progression.focusAreas.join(', ')}
+
+**TRAINING CONTEXT:**
+- Phase: ${phaseInfo?.phaseName || 'Build'} (${phaseInfo?.weeksOut || '?'} weeks to goal)
+${goals?.primaryGoal ? `- Goal: ${goals.primaryGoal.name} (${goals.primaryGoal.date})` : ''}
+
+**YOUR TASK:**
+Provide personalized recommendations based on zone progression levels.
+
+Write all text output in ${langName}.
+
+**Output JSON only:**
+{
+  "summary": "1-2 sentence overview of current zone fitness",
+  "priorityZone": "zone that needs most attention this week",
+  "priorityReason": "why this zone should be prioritized",
+  "weeklyRecommendations": [
+    "Specific workout recommendation 1",
+    "Specific workout recommendation 2"
+  ],
+  "avoidanceNote": "any zones to avoid or reduce focus on",
+  "longTermTrend": "overall trajectory of zone fitness (improving/plateauing/declining)"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+  const recommendations = parseGeminiJsonResponse(response);
+
+  if (!recommendations) {
+    // Fallback recommendations
+    const weakestZone = progression.focusAreas[0];
+    return {
+      summary: `Your ${weakestZone} is the least developed zone. Consider adding targeted training.`,
+      priorityZone: weakestZone,
+      priorityReason: `Level ${progression.progression[weakestZone].level} is below other zones`,
+      weeklyRecommendations: [
+        `Add 1-2 ${weakestZone} focused sessions this week`,
+        `Maintain your ${progression.strengths[0]} strength with one quality session`
+      ],
+      avoidanceNote: null,
+      longTermTrend: 'stable',
+      aiEnhanced: false
+    };
+  }
+
+  recommendations.aiEnhanced = true;
+  return recommendations;
+}
+
 /**
  * Fallback narrative when AI is unavailable
  */

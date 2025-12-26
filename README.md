@@ -61,7 +61,7 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Performance Tracking:** Highlights strengths, concerns, and training adjustments needed
 - **Cost:** ~$0.05-0.10/month in Gemini API costs (only calls AI when workouts are completed)
 
-### Workout Impact Preview (NEW)
+### Workout Impact Preview
 - **2-Week Projection:** Shows how today's workout affects CTL/ATL/TSB over the next 14 days
 - **With/Without Comparison:** Compares fitness trajectory if you do vs skip the workout
 - **AI-Powered Insights:** AI generates summary, narrative, and key insights about the impact
@@ -70,6 +70,16 @@ It acts as your personal AI coach—analyzing your fitness data, recovery status
 - **Daily Email Integration:** Impact preview included in daily workout emails
 - **Recovery Timeline:** Shows days until positive TSB (fresh/recovered state)
 - **7-Day Table:** Visual projection of each day's TSS and resulting TSB
+
+### Zone Progression Levels (NEW)
+- **TrainerRoad-Style Progression:** Tracks fitness per power zone (Endurance, Tempo, Threshold, VO2max, Anaerobic)
+- **1-10 Scale:** Each zone has a progression level based on training volume, frequency, and recency
+- **Trend Detection:** Shows if each zone is improving, stable, or declining
+- **Focus Area Identification:** Automatically identifies underdeveloped zones that need attention
+- **AI-Powered Recommendations:** Monthly AI-generated suggestions for zone-specific training
+- **Workout Selection Integration:** AI considers zone levels when selecting daily workouts
+- **Monthly Report:** Zone progression included in monthly progress email for long-term tracking
+- **Historical Tracking:** Stores snapshots for trend analysis over time
 
 ## How It Works
 
@@ -361,6 +371,7 @@ clasp pull
 | `testAIPowerProfileAnalysis()` | AI-driven power profile analysis with goal context |
 | `testTrainingProposal()` | Weekly training proposal generation |
 | `testCoachingNote()` | Personalized coaching note generation |
+| `testZoneProgression()` | Zone progression levels and AI recommendations |
 | `debugPowerCurve()` | Raw power curve API response |
 | `debugPaceCurve()` | Raw pace curve API response |
 | `debugEvents()` | Raw calendar events API response |
@@ -396,6 +407,7 @@ A monthly report (set up via trigger, e.g., 1st of each month) compares the prev
 - eFTP progression over the month
 - Training volume patterns (weekly TSS breakdown)
 - Consistency tracking (weeks trained percentage)
+- **Zone progression levels** with AI recommendations for the coming month
 - Goal progress and training phase context
 
 ## Recovery Integration

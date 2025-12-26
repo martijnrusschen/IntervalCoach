@@ -1218,3 +1218,186 @@ function hasEventOnDate(daysOffset) {
 
   return { hasEvent: false, category: null };
 }
+
+// =========================================================
+// ZONE PROGRESSION STORAGE
+// =========================================================
+
+/**
+ * Store zone progression data to script properties
+ * @param {object} progression - Zone progression data from calculateZoneProgression()
+ * @returns {boolean} True if stored successfully
+ */
+function storeZoneProgression(progression) {
+  if (!progression || !progression.available) {
+    return false;
+  }
+
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const key = 'zoneProgression';
+
+  try {
+    scriptProperties.setProperty(key, JSON.stringify(progression));
+    Logger.log("Zone progression stored successfully");
+    return true;
+  } catch (e) {
+    Logger.log("Error storing zone progression: " + e.toString());
+    return false;
+  }
+}
+
+/**
+ * Retrieve zone progression data from storage
+ * Returns cached data if fresh (< 24 hours), otherwise recalculates
+ * @param {boolean} forceRecalculate - If true, always recalculate regardless of cache
+ * @returns {object} Zone progression data
+ */
+function getZoneProgression(forceRecalculate) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const key = 'zoneProgression';
+
+  // Try to get cached data
+  if (!forceRecalculate) {
+    try {
+      const cached = scriptProperties.getProperty(key);
+      if (cached) {
+        const progression = JSON.parse(cached);
+
+        // Check if cache is fresh (less than 24 hours old)
+        if (progression.calculatedAt) {
+          const calculatedDate = new Date(progression.calculatedAt);
+          const now = new Date();
+          const hoursSinceCalculation = (now - calculatedDate) / (1000 * 60 * 60);
+
+          if (hoursSinceCalculation < 24) {
+            Logger.log("Using cached zone progression (calculated " + Math.round(hoursSinceCalculation) + " hours ago)");
+            return progression;
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log("Error reading cached zone progression: " + e.toString());
+    }
+  }
+
+  // Calculate fresh data
+  Logger.log("Calculating fresh zone progression...");
+  const progression = calculateZoneProgression();
+
+  // Store for next time
+  if (progression.available) {
+    storeZoneProgression(progression);
+  }
+
+  return progression;
+}
+
+/**
+ * Get zone progression history (last N calculations)
+ * Useful for tracking progression over time
+ * @param {number} maxRecords - Maximum records to return (default 4 = ~1 month of weekly snapshots)
+ * @returns {Array} Array of historical progression snapshots
+ */
+function getZoneProgressionHistory(maxRecords) {
+  maxRecords = maxRecords || 4;
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const historyKey = 'zoneProgressionHistory';
+
+  try {
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (!historyJson) {
+      return [];
+    }
+
+    const history = JSON.parse(historyJson);
+    return history.slice(0, maxRecords);
+  } catch (e) {
+    Logger.log("Error reading zone progression history: " + e.toString());
+    return [];
+  }
+}
+
+/**
+ * Add current zone progression to history
+ * Called weekly to build up historical data
+ * @param {object} progression - Current zone progression data
+ */
+function addZoneProgressionToHistory(progression) {
+  if (!progression || !progression.available) {
+    return;
+  }
+
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const historyKey = 'zoneProgressionHistory';
+
+  try {
+    let history = [];
+    const historyJson = scriptProperties.getProperty(historyKey);
+    if (historyJson) {
+      history = JSON.parse(historyJson);
+    }
+
+    // Create a compact snapshot for history
+    const snapshot = {
+      date: progression.calculatedAt,
+      progression: {}
+    };
+
+    for (const [zone, data] of Object.entries(progression.progression)) {
+      snapshot.progression[zone] = {
+        level: data.level,
+        trend: data.trend
+      };
+    }
+
+    // Add to front of history
+    history.unshift(snapshot);
+
+    // Keep only last 12 records (~3 months of weekly snapshots)
+    if (history.length > 12) {
+      history = history.slice(0, 12);
+    }
+
+    scriptProperties.setProperty(historyKey, JSON.stringify(history));
+    Logger.log("Zone progression snapshot added to history");
+  } catch (e) {
+    Logger.log("Error adding zone progression to history: " + e.toString());
+  }
+}
+
+/**
+ * Format zone progression for display in emails/logs
+ * @param {object} progression - Zone progression data
+ * @returns {string} Formatted text representation
+ */
+function formatZoneProgressionText(progression) {
+  if (!progression || !progression.available) {
+    return "Zone progression data not available.";
+  }
+
+  const trendSymbols = {
+    improving: '↑',
+    stable: '→',
+    declining: '↓'
+  };
+
+  let text = '';
+
+  for (const [zone, data] of Object.entries(progression.progression)) {
+    const zoneName = zone.charAt(0).toUpperCase() + zone.slice(1);
+    const symbol = trendSymbols[data.trend] || '→';
+    const lastTrained = data.lastTrained ? data.lastTrained.substring(5) : 'N/A';
+
+    // Create level bar visualization (1-10 scale)
+    const filledBars = Math.round(data.level);
+    const emptyBars = 10 - filledBars;
+    const bar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
+
+    text += `${zoneName.padEnd(10)} ${data.level.toFixed(1)} ${bar} ${symbol} (${lastTrained})\n`;
+  }
+
+  text += `\nStrengths: ${progression.strengths.join(', ')}\n`;
+  text += `Focus: ${progression.focusAreas.join(', ')}\n`;
+
+  return text;
+}

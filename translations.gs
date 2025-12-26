@@ -93,7 +93,16 @@ const TRANSLATIONS = {
     weekly_impact_title: "Weekly Training Impact",
     weekly_summary: "Week Summary",
     peak_form_days: "Peak Form",
-    key_insights: "Key Insights"
+    key_insights: "Key Insights",
+    // Zone progression
+    zone_progression_title: "Zone Progression Levels",
+    zone: "Zone",
+    level: "Level",
+    trend: "Trend",
+    last_trained: "Last",
+    ai_recommendation: "AI Recommendation",
+    priority_this_week: "Priority this week",
+    suggested_workouts: "Suggested workouts"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -175,7 +184,16 @@ const TRANSLATIONS = {
     weekly_impact_title: "週間トレーニング効果",
     weekly_summary: "週間サマリー",
     peak_form_days: "ピークフォーム",
-    key_insights: "重要なポイント"
+    key_insights: "重要なポイント",
+    // Zone progression
+    zone_progression_title: "ゾーン進捗レベル",
+    zone: "ゾーン",
+    level: "レベル",
+    trend: "傾向",
+    last_trained: "最終",
+    ai_recommendation: "AI推奨",
+    priority_this_week: "今週の優先",
+    suggested_workouts: "推奨ワークアウト"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -257,7 +275,16 @@ const TRANSLATIONS = {
     weekly_impact_title: "Impacto Semanal del Entrenamiento",
     weekly_summary: "Resumen Semanal",
     peak_form_days: "Forma Óptima",
-    key_insights: "Puntos Clave"
+    key_insights: "Puntos Clave",
+    // Zone progression
+    zone_progression_title: "Niveles de Progresión por Zona",
+    zone: "Zona",
+    level: "Nivel",
+    trend: "Tendencia",
+    last_trained: "Último",
+    ai_recommendation: "Recomendación IA",
+    priority_this_week: "Prioridad esta semana",
+    suggested_workouts: "Entrenamientos sugeridos"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -345,7 +372,16 @@ const TRANSLATIONS = {
     weekly_impact_title: "Impact Hebdomadaire de l'Entraînement",
     weekly_summary: "Résumé de la Semaine",
     peak_form_days: "Forme Optimale",
-    key_insights: "Points Clés"
+    key_insights: "Points Clés",
+    // Zone progression
+    zone_progression_title: "Niveaux de Progression par Zone",
+    zone: "Zone",
+    level: "Niveau",
+    trend: "Tendance",
+    last_trained: "Dernier",
+    ai_recommendation: "Recommandation IA",
+    priority_this_week: "Priorité cette semaine",
+    suggested_workouts: "Entraînements suggérés"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -434,6 +470,15 @@ const TRANSLATIONS = {
     weekly_impact_title: "Wekelijkse Training Impact",
     weekly_summary: "Weeksamenvatting",
     peak_form_days: "Piekvorm",
-    key_insights: "Belangrijke Inzichten"
+    key_insights: "Belangrijke Inzichten",
+    // Zone progression
+    zone_progression_title: "Zone Progressie Niveaus",
+    zone: "Zone",
+    level: "Niveau",
+    trend: "Trend",
+    last_trained: "Laatste",
+    ai_recommendation: "AI Aanbeveling",
+    priority_this_week: "Prioriteit deze week",
+    suggested_workouts: "Aanbevolen workouts"
   }
 };
