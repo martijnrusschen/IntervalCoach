@@ -319,3 +319,96 @@ But DON'T recommend rest if:
   return assessment;
 }
 
+/**
+ * Generate AI intensity advice for group rides (C events)
+ * Considers recovery, fatigue, and upcoming schedule to advise on effort level
+ * @param {object} context - { wellness, tsb, ctl, atl, eventName, eventTomorrow, recentWorkouts }
+ * @returns {object} { intensity: 'easy'|'moderate'|'hard', advice, tips }
+ */
+function generateGroupRideAdvice(context) {
+  // Build subjective markers context
+  let subjectiveContext = '';
+  if (context.wellness?.today) {
+    const w = context.wellness.today;
+    const markers = [];
+    if (w.soreness) markers.push('Soreness: ' + w.soreness + '/5');
+    if (w.fatigue) markers.push('Fatigue: ' + w.fatigue + '/5');
+    if (w.stress) markers.push('Stress: ' + w.stress + '/5');
+    if (markers.length > 0) {
+      subjectiveContext = '\n- Subjective Markers: ' + markers.join(', ');
+    }
+  }
+
+  // Build upcoming events context
+  let upcomingContext = '';
+  if (context.eventTomorrow?.hasEvent) {
+    upcomingContext += '\n- EVENT TOMORROW: ' + context.eventTomorrow.category + ' priority';
+  }
+  if (context.eventIn2Days?.hasEvent) {
+    upcomingContext += '\n- Event in 2 days: ' + context.eventIn2Days.category + ' priority';
+  }
+
+  // Build recent training context
+  let trainingContext = '';
+  if (context.recentWorkouts) {
+    const rides = context.recentWorkouts.rides || [];
+    const runs = context.recentWorkouts.runs || [];
+    trainingContext = `
+- Recent Rides (7d): ${rides.length > 0 ? rides.join(', ') : 'None'}
+- Recent Runs (7d): ${runs.length > 0 ? runs.join(', ') : 'None'}
+- Days since last workout: ${context.daysSinceLastWorkout || 0}`;
+  }
+
+  const prompt = `You are an expert coach advising on how hard to push during today's GROUP RIDE.
+
+**TODAY'S EVENT:**
+${context.eventName || 'Group Ride'}
+
+**RECOVERY DATA:**
+- Recovery Status: ${context.wellness?.recoveryStatus || 'Unknown'}
+- Recovery Score: ${context.wellness?.today?.recovery ? context.wellness.today.recovery + '%' : 'N/A'}
+- Sleep: ${context.wellness?.today?.sleep ? context.wellness.today.sleep.toFixed(1) + 'h' : 'N/A'} (${context.wellness?.sleepStatus || 'Unknown'})
+- HRV: ${context.wellness?.today?.hrv ? context.wellness.today.hrv + 'ms' : 'N/A'}${subjectiveContext}
+
+**FITNESS & FATIGUE:**
+- TSB (Form): ${context.tsb != null ? context.tsb.toFixed(1) : 'N/A'} ${context.tsb < -25 ? '(VERY FATIGUED)' : context.tsb < -15 ? '(fatigued)' : context.tsb < -5 ? '(tired)' : context.tsb > 5 ? '(FRESH)' : '(okay)'}
+- CTL (Fitness): ${context.ctl ? context.ctl.toFixed(0) : 'N/A'}
+- ATL (Fatigue): ${context.atl ? context.atl.toFixed(0) : 'N/A'}
+${upcomingContext}
+
+**RECENT TRAINING:**${trainingContext}
+
+**TRAINING PHASE:** ${context.phase || 'Unknown'}
+
+**CONTEXT:**
+Group rides are unstructured. The athlete can't control intervals but CAN control:
+- Whether to stay with the front group or sit in
+- Whether to contest sprints/climbs or soft-pedal
+- Overall effort level and recovery from surges
+
+**DECISION CRITERIA:**
+- EASY: TSB < -20, Red/Yellow recovery, important event coming soon, or need recovery
+- MODERATE: Normal TSB (-20 to +5), Green/Yellow recovery, no critical events upcoming
+- HARD (go all out): TSB > 0 (fresh), Green recovery, no important events for 3+ days, recent training was light
+
+**Output JSON only:**
+{
+  "intensity": "easy|moderate|hard",
+  "advice": "1-2 sentence personalized advice for today's ride based on their specific metrics",
+  "tips": ["Specific actionable tip 1", "Specific actionable tip 2", "Specific actionable tip 3"]
+}`;
+
+  const response = callGeminiAPIText(prompt);
+  const advice = parseGeminiJsonResponse(response);
+  if (!advice) {
+    Logger.log("AI group ride advice: Failed to parse response");
+    // Return default moderate advice
+    return {
+      intensity: 'moderate',
+      advice: 'Enjoy the group ride. Listen to your body and adjust effort accordingly.',
+      tips: ['Stay with the group when you can', 'Don\'t chase every attack', 'Fuel and hydrate properly']
+    };
+  }
+  return advice;
+}
+

@@ -29,9 +29,9 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const availability = checkAvailability(wellness);
 
   if (!availability.shouldGenerate) {
-    Logger.log("No placeholder found: " + availability.reason);
+    Logger.log("No workout generation: " + availability.reason);
 
-    // Still send a daily status email with fitness overview and week schedule
+    // Fetch common data for status/group ride emails
     const fitnessMetrics = fetchFitnessMetrics();
     const goals = fetchUpcomingGoals();
     const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
@@ -42,16 +42,57 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     const weekProgress = checkWeekProgress();
     const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
 
-    // Send unified daily email (status type)
-    sendDailyEmail({
-      type: 'status',
-      summary: fitnessMetrics,
-      phaseInfo: phaseInfo,
-      wellness: wellness,
-      weekProgress: weekProgress,
-      upcomingDays: upcomingDays,
-      weeklyPlanContext: weeklyPlanContext
-    });
+    // Check if this is a C event (group ride) day
+    if (availability.isCEvent) {
+      Logger.log("C Event day: " + availability.cEventName);
+
+      // Get recent workout context for AI advice
+      const activities = fetchRecentActivities(7);
+      const recentTypes = analyzeRecentWorkoutTypes(activities);
+      const adaptiveContext = getAdaptiveTrainingContext();
+
+      // Get AI advice on how hard to push in the group ride
+      const groupRideAdvice = generateGroupRideAdvice({
+        wellness: wellness,
+        tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
+        ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
+        atl: fitnessMetrics.atl_7 || fitnessMetrics.atl,
+        eventName: availability.cEventName,
+        eventTomorrow: hasEventTomorrow(),
+        eventIn2Days: hasEventInDays(2),
+        recentWorkouts: {
+          rides: recentTypes.rides,
+          runs: recentTypes.runs
+        },
+        daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
+        phase: phaseInfo?.phaseName
+      });
+
+      Logger.log("Group ride intensity advice: " + groupRideAdvice?.intensity);
+
+      // Send group ride email with AI advice
+      sendDailyEmail({
+        type: 'group_ride',
+        summary: fitnessMetrics,
+        phaseInfo: phaseInfo,
+        wellness: wellness,
+        weekProgress: weekProgress,
+        upcomingDays: upcomingDays,
+        cEventName: availability.cEventName,
+        groupRideAdvice: groupRideAdvice
+      });
+    } else {
+      // Send regular status email (no placeholder)
+      sendDailyEmail({
+        type: 'status',
+        summary: fitnessMetrics,
+        phaseInfo: phaseInfo,
+        wellness: wellness,
+        weekProgress: weekProgress,
+        upcomingDays: upcomingDays,
+        weeklyPlanContext: weeklyPlanContext
+      });
+    }
 
     return;
   }

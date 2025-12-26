@@ -1210,6 +1210,32 @@ function testUnifiedDailyEmail(emailType) {
       alternatives: '• Light walk\n• Stretching\n• Foam rolling',
       confidence: 'high'
     };
+  } else if (type === 'group_ride') {
+    emailParams.cEventName = 'Zwift Crit City Race';
+
+    // Fetch real context for AI advice
+    const activities = fetchRecentActivities(7);
+    const recentTypes = analyzeRecentWorkoutTypes(activities);
+    const adaptiveContext = getAdaptiveTrainingContext();
+
+    // Get AI advice on how hard to push
+    const groupRideAdvice = generateGroupRideAdvice({
+      wellness: wellness,
+      tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
+      ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
+      atl: fitnessMetrics.atl_7 || fitnessMetrics.atl,
+      eventName: emailParams.cEventName,
+      eventTomorrow: hasEventTomorrow(),
+      eventIn2Days: hasEventInDays(2),
+      recentWorkouts: { rides: recentTypes.rides, runs: recentTypes.runs },
+      daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
+      phase: phaseInfo?.phaseName
+    });
+
+    Logger.log("Group ride intensity: " + (groupRideAdvice?.intensity || 'unknown'));
+    Logger.log("AI advice: " + (groupRideAdvice?.advice || 'none'));
+
+    emailParams.groupRideAdvice = groupRideAdvice;
   }
 
   Logger.log("\n--- Sending Unified Daily Email (" + type + ") ---");
@@ -1225,6 +1251,7 @@ function testUnifiedDailyEmail(emailType) {
 function testUnifiedEmail_Status() { testUnifiedDailyEmail('status'); }
 function testUnifiedEmail_Rest() { testUnifiedDailyEmail('rest'); }
 function testUnifiedEmail_Workout() { testUnifiedDailyEmail('workout'); }
+function testUnifiedEmail_GroupRide() { testUnifiedDailyEmail('group_ride'); }
 
 /**
  * Test weekly plan adaptation check

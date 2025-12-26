@@ -154,11 +154,37 @@ function parseDurationFromName(name, activityType) {
 /**
  * Determine if workout should be generated today
  * Checks for IntervalCoach placeholder in Intervals.icu calendar
+ * Also checks for C events (group rides) which are unstructured training
  * @param {object} wellness - Wellness summary
- * @returns {object} { shouldGenerate, reason, duration, placeholder, activityType }
+ * @returns {object} { shouldGenerate, reason, duration, placeholder, activityType, isCEvent, cEventName }
  */
 function checkAvailability(wellness) {
   const todayStr = formatDateISO(new Date());
+
+  // First check for C events on today - these are group rides where we can't control structure
+  const eventToday = hasEventOnDate(0);
+  if (eventToday.hasEvent && eventToday.category === "C") {
+    // C event = group ride, no structured workout needed
+    // Fetch the event name for context
+    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + todayStr + "&newest=" + todayStr);
+    let cEventName = null;
+    if (eventsResult.success && Array.isArray(eventsResult.data)) {
+      const cEvent = eventsResult.data.find(e => e.category === "RACE_C");
+      cEventName = cEvent?.name || "Group Ride";
+    }
+
+    return {
+      shouldGenerate: false,
+      reason: "C event today: " + (cEventName || "Group Ride") + " - unstructured training, no workout generation needed.",
+      duration: null,
+      placeholder: null,
+      activityType: null,
+      isExisting: false,
+      isCEvent: true,
+      cEventName: cEventName
+    };
+  }
+
   const result = findIntervalCoachPlaceholder(todayStr);
 
   if (!result.hasPlaceholder) {
@@ -168,7 +194,8 @@ function checkAvailability(wellness) {
       duration: null,
       placeholder: null,
       activityType: null,
-      isExisting: false
+      isExisting: false,
+      isCEvent: false
     };
   }
 

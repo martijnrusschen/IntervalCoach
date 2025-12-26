@@ -112,6 +112,9 @@ function sendDailyEmail(params) {
     subject = `${t.subject_prefix}${workout?.type || 'Workout'} (${dateStr})`;
   } else if (type === 'rest') {
     subject = `${t.rest_day_subject} (${dateStr})`;
+  } else if (type === 'group_ride') {
+    const eventName = params.cEventName || t.group_ride || 'Group Ride';
+    subject = `${t.subject_prefix}${eventName} (${dateStr})`;
   } else {
     subject = `[IntervalCoach] ${t.daily_status_subject || 'Daily Update'} - ${dayName} (${dateStr})`;
   }
@@ -161,6 +164,33 @@ ${workout.recommendationReason || workout.explanation || ''}
     if (workout.recommendationScore) {
       body += `\n${t.strategy_title}\n${workout.explanation || ''}\n`;
     }
+  } else if (type === 'group_ride') {
+    // C event day - group ride with unstructured training
+    const eventName = params.cEventName || t.group_ride || "Group Ride";
+    const advice = params.groupRideAdvice || {};
+
+    // Intensity labels
+    const intensityLabel = {
+      'easy': t.intensity_easy || 'TAKE IT EASY',
+      'moderate': t.intensity_moderate || 'MODERATE EFFORT',
+      'hard': t.intensity_hard || 'GO ALL OUT'
+    }[advice.intensity] || t.intensity_moderate || 'MODERATE EFFORT';
+
+    body += `
+===================================
+${t.group_ride_title || "GROUP RIDE DAY"}
+===================================
+${t.event_label || "Event"}: ${eventName}
+
+${t.recommended_intensity || "Recommended Intensity"}: ${intensityLabel}
+
+${advice.advice || t.group_ride_default_advice || "Enjoy the group ride. Listen to your body and adjust effort accordingly."}
+
+${t.tips_label || "Tips"}:
+${(advice.tips || []).map(tip => '• ' + tip).join('\n') || `• ${t.group_ride_tip1 || "Stay with the group, don't burn matches early"}
+• ${t.group_ride_tip2 || "Eat and drink regularly"}
+• ${t.group_ride_tip3 || "Use the group for draft when you can"}`}
+`;
   } else {
     // Rest day (either explicit rest or no placeholder)
     // Determine the reason for rest
