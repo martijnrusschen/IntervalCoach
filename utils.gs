@@ -1217,7 +1217,8 @@ function fetchEventsForDate(dateStr) {
     events: [],
     raceEvent: null,      // First A/B/C event found
     workoutEvents: [],    // WORKOUT category events
-    placeholders: []      // Simple placeholders (Ride/Run)
+    placeholders: [],     // Simple placeholders (Ride/Run)
+    notes: []             // NOTE category events (athlete feedback)
   };
 
   if (!result.success || !Array.isArray(result.data)) {
@@ -1252,6 +1253,15 @@ function fetchEventsForDate(dateStr) {
         id: e.id || null,
         filename: e.filename || null,
         moving_time: e.moving_time || null
+      });
+    }
+
+    // Check for note events (athlete feedback)
+    if (e.category === "NOTE") {
+      response.notes.push({
+        name: e.name || null,
+        description: e.description || null,
+        id: e.id || null
       });
     }
 
