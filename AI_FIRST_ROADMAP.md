@@ -21,6 +21,10 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **AI Training Gap Analysis** - Context-aware gap interpretation (planned rest vs illness vs life)
 - [x] **AI eFTP Trajectory Analysis** - Predicts if athlete is on track to hit target FTP
 - [x] **Workout Impact Preview** - Shows how today's workout affects CTL/ATL/TSB over next 2 weeks
+- [x] **Zone Progression Levels** - Track fitness per power zone (not just overall CTL/FTP)
+- [x] **Unified Daily Email** - Single email format for workout/rest/status/group ride days
+- [x] **Week Progress Tracking** - Day-by-day planned vs completed with auto-cleanup of missed workouts
+- [x] **C Event (Group Ride) Support** - AI intensity advice for unstructured group rides
 
 ---
 
@@ -34,7 +38,6 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 | 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
 | 🟡 **MEDIUM** | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | TrainerRoad AI |
-| 🟡 **MEDIUM** | **Zone Progression Levels** | Track fitness per power zone (not just overall CTL/FTP) | TrainerRoad |
 | 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
 | 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
 | 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
@@ -96,7 +99,7 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 | Feature | TrainerRoad | IntervalCoach | Gap |
 |---------|-------------|---------------|-----|
 | Adaptive Training (ML) | ✓ Adjusts workout difficulty | ✓ AI adapts weekly plan | Similar |
-| Progression Levels | ✓ Per-zone fitness tracking | ✗ Overall CTL/FTP only | **Add zone progression** |
+| Progression Levels | ✓ Per-zone fitness tracking | ✓ Zone Progression Levels | **Complete** |
 | AI FTP Detection | ✓ No ramp tests needed | ~ Uses Intervals.icu eFTP | Similar |
 | TrainNow (on-demand) | ✓ Quick workout picker | ✗ Requires full generation | **Add quick picker** |
 | Plan Builder | ✓ 2-year planning, A/B/C events | ✓ Weekly planning, A/B/C races | Similar |
