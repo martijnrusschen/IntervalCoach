@@ -29,7 +29,24 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const availability = checkAvailability(wellness);
 
   if (!availability.shouldGenerate) {
-    Logger.log("Skipping workout generation: " + availability.reason);
+    Logger.log("No placeholder found: " + availability.reason);
+
+    // Still send a daily status email with fitness overview and week schedule
+    const fitnessMetrics = fetchFitnessMetrics();
+    const goals = fetchUpcomingGoals();
+    const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+    const phaseInfo = calculateTrainingPhase(targetDate);
+
+    // Fetch upcoming week schedule
+    const upcomingDays = fetchUpcomingPlaceholders(7);
+
+    // Check if weekly plan needs adaptation based on current conditions
+    const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
+
+    // Send daily status email
+    sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext);
+
+    Logger.log("Daily status email sent (no placeholder day)");
     return;
   }
 
@@ -71,10 +88,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       Logger.log("Recovery Score: " + wellness.today.recovery + "%");
     }
 
-    // Delete the placeholder from Intervals.icu calendar
-    if (availability.placeholder) {
-      deleteIntervalEvent(availability.placeholder);
-    }
+    // Keep the placeholder for tomorrow (don't delete - user may want to train when recovered)
+    Logger.log("Keeping placeholder for potential rescheduling");
 
     // Send rest day email with advice
     sendRestDayEmail(wellness, phaseInfo);
@@ -240,6 +255,10 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Adaptive Training: " + (adaptiveContext.gap.daysSinceLastWorkout || 0) + " days since last workout, no feedback data");
   }
 
+  // Check week progress (planned vs completed so far)
+  const weekProgress = checkWeekProgress();
+  Logger.log("Week Progress: " + weekProgress.summary);
+
   // ===== REST DAY ASSESSMENT (with full context) =====
   // The early RED check (line 66) handles emergencies, this considers full context
   const restDayContext = {
@@ -271,10 +290,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       Logger.log("*** REST DAY RECOMMENDED ***");
       Logger.log("  Alternatives: " + restAssessment.alternatives);
 
-      // Delete the placeholder from Intervals.icu calendar
-      if (availability.placeholder) {
-        deleteIntervalEvent(availability.placeholder);
-      }
+      // Keep the placeholder for tomorrow (don't delete - user may want to train when recovered)
+      Logger.log("Keeping placeholder for potential rescheduling");
 
       // Send rest day email with reasoning
       sendRestDayEmail(wellness, phaseInfo, restAssessment);
@@ -313,6 +330,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Stimulus variety tracking (AI-first variety check)
     recentStimuli: twoWeekHistory.recentStimuli,
     stimulusCounts: twoWeekHistory.stimulusCounts,
+    // Week progress - adapt if behind/ahead of plan
+    weekProgress: weekProgress,
     enableAI: true
   });
 

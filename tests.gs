@@ -1160,6 +1160,135 @@ function testAIWeeklyPlan() {
   Logger.log("To send as email, run: sendWeeklyPlanningEmail()");
 }
 
+/**
+ * Test daily status email (no-placeholder day email)
+ */
+function testDailyStatusEmail() {
+  Logger.log("=== DAILY STATUS EMAIL TEST ===");
+  requireValidConfig();
+
+  // Fetch wellness
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("Wellness: " + (wellness.available ? wellness.recoveryStatus : "Not available"));
+
+  // Fetch fitness metrics
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("Fitness: CTL=" + fitnessMetrics.ctl?.toFixed(1) +
+             " ATL=" + fitnessMetrics.atl?.toFixed(1) +
+             " TSB=" + fitnessMetrics.tsb?.toFixed(1));
+
+  // Fetch goals and phase
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+
+  // Fetch upcoming week
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  Logger.log("\n--- Upcoming 7 Days ---");
+  for (const day of upcomingDays) {
+    let info = day.dayName + " (" + day.date + "): ";
+    if (day.hasEvent) {
+      info += "EVENT - " + day.eventCategory;
+    } else if (day.activityType) {
+      info += day.activityType + " (" + day.duration?.min + "-" + day.duration?.max + " min)";
+      if (day.placeholderName) {
+        info += " [" + day.placeholderName + "]";
+      }
+    } else {
+      info += "No placeholder";
+    }
+    Logger.log("  " + info);
+  }
+
+  // Check weekly plan adaptation
+  const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
+
+  Logger.log("\n--- Weekly Plan Adaptation Check ---");
+  if (weeklyPlanContext.needsAdaptation) {
+    Logger.log("⚠️ ADAPTATION SUGGESTED:");
+    Logger.log("  Reason: " + weeklyPlanContext.adaptationReason);
+    Logger.log("  Suggestion: " + weeklyPlanContext.suggestion);
+  } else {
+    Logger.log("✓ No adaptation needed - plan looks good for current conditions");
+  }
+
+  // Send the email
+  Logger.log("\n--- Sending Daily Status Email ---");
+  sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test weekly plan adaptation check
+ */
+function testWeeklyPlanAdaptation() {
+  Logger.log("=== WEEKLY PLAN ADAPTATION TEST ===");
+  requireValidConfig();
+
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+
+  Logger.log("Current Status:");
+  Logger.log("  Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("  TSB: " + (fitnessMetrics.tsb?.toFixed(1) || "N/A"));
+
+  Logger.log("\nUpcoming workouts:");
+  upcomingDays.filter(d => d.activityType || d.hasEvent).forEach(d => {
+    Logger.log("  " + d.dayName + ": " + (d.placeholderName || d.activityType || "Event"));
+  });
+
+  const result = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
+
+  Logger.log("\nAdaptation Check Result:");
+  Logger.log("  Needs Adaptation: " + result.needsAdaptation);
+  if (result.needsAdaptation) {
+    Logger.log("  Reason: " + result.adaptationReason);
+    Logger.log("  Suggestion: " + result.suggestion);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test week progress check (planned vs completed)
+ */
+function testWeekProgress() {
+  Logger.log("=== WEEK PROGRESS TEST ===");
+  requireValidConfig();
+
+  const progress = checkWeekProgress();
+
+  Logger.log("Week Progress Summary:");
+  Logger.log("  " + progress.summary);
+  Logger.log("");
+  Logger.log("Details:");
+  Logger.log("  Days Analyzed: " + progress.daysAnalyzed);
+  Logger.log("  Planned Sessions: " + progress.plannedSessions);
+  Logger.log("  Completed Sessions: " + progress.completedSessions);
+  Logger.log("  Missed Sessions: " + progress.missedSessions);
+  Logger.log("  Extra Sessions: " + progress.extraSessions);
+  Logger.log("  Adherence Rate: " + progress.adherenceRate + "%");
+  Logger.log("  TSS Planned: " + progress.tssPlanned);
+  Logger.log("  TSS Completed: " + progress.tssCompleted);
+
+  if (progress.completedTypes.length > 0) {
+    Logger.log("  Completed Types: " + progress.completedTypes.join(", "));
+  }
+
+  if (progress.missedTypes.length > 0) {
+    Logger.log("  Missed Types: " + progress.missedTypes.join(", "));
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
 // =========================================================
 // DEBUG FUNCTIONS
 // =========================================================

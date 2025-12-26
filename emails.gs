@@ -167,7 +167,7 @@ ${t.recovery_title}
 -----------------------------------
 ${t.recovery_status}: ${wellness.recoveryStatus}
 ${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
-${t.hrv}: ${w.hrv || 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
+${t.hrv}: ${w.hrv ? Math.round(w.hrv) : 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
 ${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
 ${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
 `;
@@ -996,6 +996,121 @@ ${t.keep_training || "Keep up the great work!"}
 
   GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
   Logger.log("Post-workout analysis email sent successfully.");
+}
+
+// =========================================================
+// DAILY STATUS EMAIL (No Placeholder Day)
+// =========================================================
+
+/**
+ * Send daily status email when no workout placeholder is scheduled
+ * Includes fitness status, recovery, and upcoming week overview
+ * @param {object} wellness - Wellness summary
+ * @param {object} phaseInfo - Current training phase
+ * @param {object} fitnessMetrics - CTL/ATL/TSB data
+ * @param {Array} upcomingDays - Next 7 days from fetchUpcomingPlaceholders
+ * @param {object} weeklyPlanContext - Optional context about weekly plan adaptation
+ */
+function sendDailyStatusEmail(wellness, phaseInfo, fitnessMetrics, upcomingDays, weeklyPlanContext) {
+  const t = getTranslations();
+  const today = new Date();
+  const dayName = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+
+  const subject = `📊 ${t.daily_status_subject || "Training Status"} - ${dayName} (${Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd")})`;
+
+  let body = `${t.daily_status_greeting || "Good morning!"}\n\n`;
+  body += `${t.no_workout_scheduled || "No workout scheduled for today."}\n\n`;
+
+  // Phase info
+  body += `===================================
+${t.phase_title}: ${phaseInfo.phaseName}
+(${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit})
+===================================\n`;
+
+  // Current Fitness
+  body += `
+-----------------------------------
+${t.current_fitness || "Current Fitness"}
+-----------------------------------
+CTL: ${fitnessMetrics.ctl ? fitnessMetrics.ctl.toFixed(1) : 'N/A'}
+ATL: ${fitnessMetrics.atl ? fitnessMetrics.atl.toFixed(1) : 'N/A'}
+TSB: ${fitnessMetrics.tsb ? fitnessMetrics.tsb.toFixed(1) : 'N/A'}
+${t.ramp_rate || "Ramp Rate"}: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(1) : 'N/A'} TSS/week
+`;
+
+  // Recovery section
+  if (wellness && wellness.available) {
+    const w = wellness.today || {};
+    body += `
+-----------------------------------
+${t.recovery_title}
+-----------------------------------
+${t.recovery_status}: ${wellness.recoveryStatus}
+${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})
+${t.hrv}: ${w.hrv ? Math.round(w.hrv) : 'N/A'} ms (avg: ${wellness.averages?.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'} ms)
+${t.resting_hr}: ${w.restingHR || 'N/A'} bpm
+${w.recovery != null ? `Whoop Recovery: ${w.recovery}%` : ''}
+`;
+  }
+
+  // Weekly Plan Adaptation Note
+  if (weeklyPlanContext && weeklyPlanContext.needsAdaptation) {
+    body += `
+===================================
+⚠️ ${t.plan_adaptation_title || "Plan Adaptation Suggested"}
+===================================
+${weeklyPlanContext.adaptationReason}
+${weeklyPlanContext.suggestion || ''}
+`;
+  }
+
+  // Upcoming Week
+  body += `
+===================================
+${t.upcoming_week_title || "This Week's Schedule"}
+===================================
+`;
+
+  if (upcomingDays && upcomingDays.length > 0) {
+    const scheduledDays = upcomingDays.filter(d => d.activityType || d.hasEvent);
+
+    if (scheduledDays.length > 0) {
+      for (const day of upcomingDays) {
+        let dayLine = `${day.dayName} (${day.date}): `;
+
+        if (day.hasEvent) {
+          dayLine += `[${day.eventCategory || 'Event'}]${day.placeholderName ? ' ' + day.placeholderName : ''}`;
+        } else if (day.activityType) {
+          const duration = day.duration ? ` (${day.duration.min}-${day.duration.max} min)` : '';
+          dayLine += `${day.activityType}${duration}`;
+          if (day.placeholderName && day.placeholderName !== day.activityType) {
+            dayLine += ` - ${day.placeholderName}`;
+          }
+        } else {
+          dayLine += `${t.rest_or_unscheduled || "Rest / Not scheduled"}`;
+        }
+
+        body += dayLine + '\n';
+      }
+    } else {
+      body += `${t.no_workouts_scheduled || "No workouts scheduled this week."}\n`;
+      body += `\n💡 ${t.add_placeholder_hint || "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation."}\n`;
+    }
+  } else {
+    body += `${t.no_workouts_scheduled || "No workouts scheduled this week."}\n`;
+    body += `\n💡 ${t.add_placeholder_hint || "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation."}\n`;
+  }
+
+  // Footer with suggestion
+  body += `
+-----------------------------------
+${t.daily_status_footer || "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu."}
+
+- IntervalCoach
+`;
+
+  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+  Logger.log("Daily status email sent successfully (no placeholder day).");
 }
 
 // =========================================================

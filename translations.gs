@@ -102,7 +102,18 @@ const TRANSLATIONS = {
     last_trained: "Last",
     ai_recommendation: "AI Recommendation",
     priority_this_week: "Priority this week",
-    suggested_workouts: "Suggested workouts"
+    suggested_workouts: "Suggested workouts",
+    // Daily status (no placeholder day)
+    daily_status_subject: "Training Status",
+    daily_status_greeting: "Good morning!",
+    current_fitness: "Current Fitness",
+    no_workout_scheduled: "No workout scheduled for today.",
+    upcoming_week_title: "This Week's Schedule",
+    rest_or_unscheduled: "Rest / Not scheduled",
+    no_workouts_scheduled: "No workouts scheduled this week.",
+    add_placeholder_hint: "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation.",
+    daily_status_footer: "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu.",
+    plan_adaptation_title: "Plan Adaptation Suggested"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -479,6 +490,17 @@ const TRANSLATIONS = {
     last_trained: "Laatste",
     ai_recommendation: "AI Aanbeveling",
     priority_this_week: "Prioriteit deze week",
-    suggested_workouts: "Aanbevolen workouts"
+    suggested_workouts: "Aanbevolen workouts",
+    // Daily status (no placeholder day)
+    daily_status_subject: "Training Status",
+    daily_status_greeting: "Goedemorgen!",
+    current_fitness: "Huidige Fitheid",
+    no_workout_scheduled: "Geen workout gepland voor vandaag.",
+    upcoming_week_title: "Schema Deze Week",
+    rest_or_unscheduled: "Rust / Niet gepland",
+    no_workouts_scheduled: "Geen workouts gepland deze week.",
+    add_placeholder_hint: "Voeg een 'Ride' of 'Run' placeholder toe aan je Intervals.icu kalender voor workout generatie.",
+    daily_status_footer: "Voor een gepersonaliseerde workout, voeg een 'Ride' of 'Run - 60min' placeholder toe aan je kalender in Intervals.icu.",
+    plan_adaptation_title: "Plan Aanpassing Voorgesteld"
   }
 };

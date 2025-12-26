@@ -553,6 +553,13 @@ ${context.suggestedType ? `
 The weekly plan suggests "${context.suggestedType}" for today.
 Consider this as a starting point, but adjust based on current conditions (especially recovery, TSB, and yesterday's intensity).
 If conditions have changed significantly, choose a more appropriate workout type.
+` : ''}${context.weekProgress ? `
+**THIS WEEK'S PROGRESS:**
+- ${context.weekProgress.summary}
+- Adherence: ${context.weekProgress.adherenceRate}%${context.weekProgress.missedSessions > 0 ? `
+- Missed sessions: ${context.weekProgress.missedTypes.join(', ')}
+  Consider: If key intensity was missed earlier, might be appropriate to include today if recovery allows.` : ''}${context.weekProgress.extraSessions > 0 ? `
+- Extra sessions completed: May need easier day to balance weekly load.` : ''}
 ` : ''}
 **AVAILABLE WORKOUT TYPES:**
 ${workoutOptions}
@@ -674,7 +681,9 @@ function selectWorkoutTypes(params) {
         recentStimuli: params.recentStimuli || {},
         stimulusCounts: params.stimulusCounts || {},
         // Zone progression levels
-        zoneProgression: params.zoneProgression || null
+        zoneProgression: params.zoneProgression || null,
+        // Week progress - planned vs completed this week
+        weekProgress: params.weekProgress || null
       };
 
       const aiDecision = generateAIWorkoutDecision(aiContext);

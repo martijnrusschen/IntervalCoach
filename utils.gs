@@ -1401,3 +1401,186 @@ function formatZoneProgressionText(progression) {
 
   return text;
 }
+
+// =========================================================
+// WEEKLY PLAN PROGRESS & ADAPTATION
+// =========================================================
+
+/**
+ * Check this week's progress: planned vs completed workouts
+ * Useful for daily trigger to adapt based on execution so far
+ * @returns {object} { plannedSessions, completedSessions, missedSessions, tssPlanned, tssCompleted, adherenceRate, summary }
+ */
+function checkWeekProgress() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)); // Monday
+  weekStart.setHours(0, 0, 0, 0);
+
+  const startStr = formatDateISO(weekStart);
+  const todayStr = formatDateISO(today);
+
+  const result = {
+    plannedSessions: 0,
+    completedSessions: 0,
+    missedSessions: 0,
+    extraSessions: 0,
+    tssPlanned: 0,
+    tssCompleted: 0,
+    adherenceRate: 100,
+    completedTypes: [],
+    missedTypes: [],
+    summary: '',
+    daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday
+  };
+
+  // Only analyze if we're past Monday
+  if (result.daysAnalyzed === 0) {
+    result.summary = "It's Monday - starting fresh week";
+    return result;
+  }
+
+  try {
+    // Fetch events (planned workouts) for this week up to yesterday
+    const yesterdayDate = new Date(today);
+    yesterdayDate.setDate(today.getDate() - 1);
+    const yesterdayStr = formatDateISO(yesterdayDate);
+
+    const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + yesterdayStr);
+
+    // Fetch activities (completed workouts) for same period
+    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + yesterdayStr);
+
+    if (!eventsResult.success || !activitiesResult.success) {
+      result.summary = "Unable to check week progress (API error)";
+      return result;
+    }
+
+    // Count planned sessions (Weekly Plan markers or workout events)
+    const plannedEvents = (eventsResult.data || []).filter(e =>
+      e.category === 'WORKOUT' &&
+      (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
+    );
+
+    result.plannedSessions = plannedEvents.length;
+    result.tssPlanned = plannedEvents.reduce((sum, e) => {
+      // Try to extract TSS from description
+      const tssMatch = e.description?.match(/TSS.*?(\d+)/);
+      return sum + (tssMatch ? parseInt(tssMatch[1]) : 60);
+    }, 0);
+
+    // Count completed sessions
+    const completedActivities = (activitiesResult.data || []).filter(a =>
+      a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300
+    );
+
+    result.completedSessions = completedActivities.length;
+    result.tssCompleted = completedActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0);
+    result.completedTypes = completedActivities.map(a => a.type).filter(Boolean);
+
+    // Calculate missed vs extra sessions
+    if (result.completedSessions < result.plannedSessions) {
+      result.missedSessions = result.plannedSessions - result.completedSessions;
+      // Try to identify which types were missed
+      result.missedTypes = plannedEvents
+        .slice(result.completedSessions)
+        .map(e => e.name?.split(' - ')[0] || e.type || 'Workout');
+    } else if (result.completedSessions > result.plannedSessions) {
+      result.extraSessions = result.completedSessions - result.plannedSessions;
+    }
+
+    // Calculate adherence
+    if (result.plannedSessions > 0) {
+      result.adherenceRate = Math.round((result.completedSessions / result.plannedSessions) * 100);
+    }
+
+    // Build summary
+    if (result.missedSessions > 0) {
+      result.summary = `Behind plan: ${result.completedSessions}/${result.plannedSessions} sessions completed (${result.missedSessions} missed). TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+    } else if (result.extraSessions > 0) {
+      result.summary = `Ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+    } else if (result.plannedSessions === 0) {
+      result.summary = `No workouts were planned. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
+    } else {
+      result.summary = `On track: ${result.completedSessions}/${result.plannedSessions} sessions. TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+    }
+
+  } catch (e) {
+    Logger.log("Error checking week progress: " + e.toString());
+    result.summary = "Unable to check week progress";
+  }
+
+  return result;
+}
+
+/**
+ * Check if the weekly plan needs adaptation based on current conditions
+ * Compares current wellness/fitness to planned workout intensity
+ * @param {object} wellness - Current wellness summary
+ * @param {object} fitnessMetrics - Current CTL/ATL/TSB
+ * @param {Array} upcomingDays - Upcoming placeholders from fetchUpcomingPlaceholders
+ * @returns {object} { needsAdaptation, adaptationReason, suggestion }
+ */
+function checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays) {
+  const result = {
+    needsAdaptation: false,
+    adaptationReason: '',
+    suggestion: ''
+  };
+
+  if (!wellness || !fitnessMetrics) {
+    return result;
+  }
+
+  // Check for significant wellness changes that warrant plan review
+  const recoveryStatus = wellness.recoveryStatus || 'Unknown';
+  const tsb = fitnessMetrics.tsb || 0;
+
+  // Find today's and tomorrow's planned workouts
+  const todayStr = formatDateISO(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowStr = formatDateISO(tomorrowDate);
+
+  const todayPlan = upcomingDays?.find(d => d.date === todayStr);
+  const tomorrowPlan = upcomingDays?.find(d => d.date === tomorrowStr);
+
+  // Check for mismatch between recovery and planned intensity
+  const isLowRecovery = recoveryStatus.includes('Red') || recoveryStatus.includes('Strained');
+  const isVeryFatigued = tsb < -20;
+  const isOverreaching = tsb < -30;
+
+  // Count upcoming high-intensity days
+  const upcomingIntenseDays = upcomingDays?.filter(d => {
+    const name = d.placeholderName || '';
+    return name.includes('VO2') || name.includes('Threshold') || name.includes('Intervals') ||
+           name.includes('Tempo') || name.includes('SweetSpot');
+  }).length || 0;
+
+  // Determine if adaptation is needed
+  if (isOverreaching && upcomingIntenseDays > 0) {
+    result.needsAdaptation = true;
+    result.adaptationReason = `Your TSB is very low (${tsb.toFixed(1)}) indicating significant fatigue. ` +
+      `You have ${upcomingIntenseDays} intensity day(s) planned this week.`;
+    result.suggestion = 'Consider converting some intensity days to endurance or recovery rides.';
+  } else if (isLowRecovery && tomorrowPlan?.placeholderName?.match(/VO2|Threshold|Intervals/)) {
+    result.needsAdaptation = true;
+    result.adaptationReason = `Recovery status is ${recoveryStatus} but tomorrow has a high-intensity workout planned.`;
+    result.suggestion = 'Consider swapping tomorrow\'s intensity for an easier day, or take today fully off.';
+  } else if (isVeryFatigued && upcomingIntenseDays >= 2) {
+    result.needsAdaptation = true;
+    result.adaptationReason = `You're carrying fatigue (TSB: ${tsb.toFixed(1)}) with ${upcomingIntenseDays} hard days ahead.`;
+    result.suggestion = 'Consider reducing volume or intensity on one of the upcoming days.';
+  }
+
+  // Check for positive adaptation opportunity (very fresh, could add intensity)
+  const isVeryFresh = tsb > 15 && !isLowRecovery;
+  if (isVeryFresh && upcomingIntenseDays === 0) {
+    result.needsAdaptation = true;
+    result.adaptationReason = `You're well-rested (TSB: ${tsb.toFixed(1)}) with no intensity planned this week.`;
+    result.suggestion = 'This could be a good opportunity to add a quality session if your goals support it.';
+  }
+
+  return result;
+}
