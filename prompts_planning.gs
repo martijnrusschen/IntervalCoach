@@ -1,0 +1,653 @@
+/**
+ * IntervalCoach - Planning & Coaching Prompts
+ *
+ * AI prompts for training phase assessment, load advice, email content, and insights.
+ * Related modules: prompts_workout.gs, prompts_analysis.gs, api.gs
+ */
+
+// =========================================================
+// AI EMAIL SUBJECT LINE
+// =========================================================
+
+/**
+ * Generate an engaging AI-powered email subject line
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} workout - Selected workout details
+ * @param {object} wellness - Wellness data
+ * @returns {string} AI-generated subject line
+ */
+function generateAIEmailSubject(phaseInfo, workout, wellness) {
+  const langName = getPromptLanguage();
+
+  // Build context for AI
+  let recoveryContext = 'Unknown';
+  if (wellness?.available) {
+    if (wellness.recoveryStatus.includes("Green") || wellness.recoveryStatus.includes("Primed")) {
+      recoveryContext = 'Excellent (green/primed)';
+    } else if (wellness.recoveryStatus.includes("Yellow") || wellness.recoveryStatus.includes("Normal")) {
+      recoveryContext = 'Moderate (yellow/normal)';
+    } else if (wellness.recoveryStatus.includes("Red") || wellness.recoveryStatus.includes("Fatigued")) {
+      recoveryContext = 'Low (red/fatigued)';
+    }
+  }
+
+  const prompt = `Generate a SHORT, engaging email subject line for a cycling/running workout email.
+
+Context:
+- Workout type: ${workout.type}
+- Training phase: ${phaseInfo.phaseName}
+- Recovery status: ${recoveryContext}
+- Goal: ${phaseInfo.goalDescription || 'General fitness'}
+
+Requirements:
+- Write in ${langName}
+- Maximum 50 characters (STRICT LIMIT)
+- Be motivating and specific to the workout
+- NO brackets, NO tags like [GREEN]
+- Examples: "Base building: Z2 duurrit", "Hersteldag: rustig aan", "Topvorm! VO2max intervals"
+
+Return ONLY the subject line, nothing else.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response && response.trim().length > 0 && response.trim().length <= 60) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("AI subject generation failed: " + e.toString());
+  }
+
+  // Fallback to simple format
+  return workout.type;
+}
+
+// =========================================================
+// COACHING NOTE GENERATION
+// =========================================================
+
+/**
+ * Generate a personalized AI coaching note for the workout email
+ * @param {object} summary - Athlete summary
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} workout - Selected workout details
+ * @param {object} wellness - Wellness data
+ * @param {object} powerProfile - Power profile (optional)
+ * @returns {string} AI-generated coaching note
+ */
+function generatePersonalizedCoachingNote(summary, phaseInfo, workout, wellness, powerProfile) {
+  const langName = getPromptLanguage();
+
+  const w = wellness?.today || {};
+  const avg = wellness?.averages || {};
+
+  let context = `You are an experienced cycling/running coach writing a brief, personalized note to your athlete about today's training.
+
+**Athlete Context:**
+- Training Phase: ${phaseInfo.phaseName} (${phaseInfo.weeksOut} weeks to goal)
+- Phase Focus: ${phaseInfo.focus}
+- Goal: ${phaseInfo.goalDescription || 'General fitness'}
+- Current Fitness: CTL=${summary.ctl_90.toFixed(0)}, TSB=${summary.tsb_current.toFixed(0)} (${summary.tsb_current > 5 ? 'fresh' : summary.tsb_current < -15 ? 'fatigued' : 'balanced'})
+`;
+
+  if (wellness?.available) {
+    context += `
+**Today's Recovery Status:**
+- Recovery: ${wellness.recoveryStatus}${w.recovery != null ? ` (${w.recovery}%)` : ''}
+- Sleep: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'})
+- HRV: ${w.hrv || 'N/A'} ms (avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms)
+- Resting HR: ${w.restingHR || 'N/A'} bpm
+`;
+  }
+
+  if (powerProfile?.available) {
+    context += `
+**Power Profile:**
+- eFTP: ${powerProfile.currentEftp || powerProfile.eFTP || 'N/A'}W
+- Strengths: ${powerProfile.strengths?.join(', ') || 'N/A'}
+- Areas to develop: ${powerProfile.weaknesses?.join(', ') || 'N/A'}
+`;
+  }
+
+  context += `
+**Today's Workout:**
+- Type: ${workout.type}
+- Why chosen: ${workout.recommendationReason || 'Based on training phase and recovery'}
+
+**Instructions:**
+Write a short, personalized coaching note (3-5 sentences) in ${langName} that:
+1. Acknowledges how they're feeling today (based on recovery/sleep data)
+2. Connects today's workout to their bigger goal and current phase
+3. Gives one specific thing to focus on during the workout
+4. Ends with brief encouragement
+
+Be warm but professional. Use "you" to address the athlete directly. Don't repeat data they'll see elsewhere in the email. Be concise and motivating.`;
+
+  return callGeminiAPIText(context);
+}
+
+// =========================================================
+// REST DAY ADVICE
+// =========================================================
+
+/**
+ * Generate AI-powered rest day advice based on wellness data
+ * @param {object} wellness - Wellness summary
+ * @returns {string} AI-generated rest day advice
+ */
+function generateRestDayAdvice(wellness) {
+  const langName = getPromptLanguage();
+
+  const w = wellness.today || {};
+  const avg = wellness.averages || {};
+
+  const prompt = `You are a professional cycling and running coach. The athlete has RED recovery status today, indicating they need rest.
+
+**Today's Wellness Data:**
+- Recovery Score: ${w.recovery != null ? w.recovery + '%' : 'N/A'} (RED = below 34%)
+- Sleep: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'})
+- HRV: ${w.hrv || 'N/A'} ms (7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms)
+- Resting HR: ${w.restingHR || 'N/A'} bpm (7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm)
+- Soreness: ${w.soreness ? w.soreness + '/5' : 'N/A'}
+- Fatigue: ${w.fatigue ? w.fatigue + '/5' : 'N/A'}
+- Stress: ${w.stress ? w.stress + '/5' : 'N/A'}
+
+**Instructions:**
+Write a brief, encouraging rest day message in ${langName}. Include:
+1. A short explanation of why rest is important today (2-3 sentences max)
+2. Two light alternatives if they want to move (keep it simple):
+   - Easy walk suggestion (duration, intensity)
+   - Light strength/mobility suggestion (duration, focus areas)
+3. A motivating closing line
+
+Keep the tone supportive, not preachy. Be concise (max 150 words total).`;
+
+  return callGeminiAPIText(prompt);
+}
+
+// =========================================================
+// WEEKLY INSIGHT
+// =========================================================
+
+/**
+ * Generate AI-powered weekly coaching narrative
+ * Enhanced to produce comprehensive coaching letter, not just brief insight
+ * @param {object} weekData - This week's activity data
+ * @param {object} prevWeekData - Previous week's activity data
+ * @param {object} fitnessMetrics - Current fitness metrics
+ * @param {object} prevFitnessMetrics - Previous week's fitness metrics
+ * @param {object} wellnessSummary - Wellness summary with averages
+ * @param {object} prevWellnessSummary - Previous week's wellness summary
+ * @param {number} currentEftp - Current eFTP
+ * @param {number} prevWeekEftp - Previous week's eFTP
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal information
+ * @param {object} loadAdvice - Training load advice (optional)
+ * @param {Array} upcomingPlaceholders - Upcoming week's planned workouts (optional)
+ */
+function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, currentEftp, prevWeekEftp, phaseInfo, goals, loadAdvice, upcomingPlaceholders) {
+  const langName = getPromptLanguage();
+
+  const ctlChange = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
+  const tsbChange = fitnessMetrics.tsb - (prevFitnessMetrics.tsb || 0);
+  const eftpChange = (currentEftp && prevWeekEftp) ? currentEftp - prevWeekEftp : null;
+  const tssChange = weekData.totalTss - (prevWeekData.totalTss || 0);
+
+  const prevAvg = prevWellnessSummary && prevWellnessSummary.available ? prevWellnessSummary.averages : {};
+  const currAvg = wellnessSummary && wellnessSummary.available ? wellnessSummary.averages : {};
+  const sleepChange = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
+  const hrvChange = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
+
+  // Build upcoming week context
+  let upcomingContext = '';
+  if (upcomingPlaceholders && upcomingPlaceholders.length > 0) {
+    const workoutList = upcomingPlaceholders.map(p => p.name || p.type || 'Workout').join(', ');
+    upcomingContext = `\nUPCOMING WEEK PLANNED:\n- ${upcomingPlaceholders.length} sessions: ${workoutList}`;
+  }
+
+  // Build load advice context
+  let loadContext = '';
+  if (loadAdvice) {
+    loadContext = `\nLOAD RECOMMENDATION:\n- Advice: ${loadAdvice.rampRateAdvice}\n- Weekly TSS Target: ${loadAdvice.tssRange?.min}-${loadAdvice.tssRange?.max}`;
+    if (loadAdvice.warning) {
+      loadContext += `\n- Warning: ${loadAdvice.warning}`;
+    }
+  }
+
+  const prompt = `You are a friendly, expert cycling and running coach writing a personalized weekly coaching letter to your athlete.
+
+THIS WEEK'S TRAINING:
+- Activities: ${weekData.totalActivities} (${weekData.rides} rides, ${weekData.runs} runs)
+- Total Time: ${Math.round(weekData.totalTime / 60)} minutes (${(weekData.totalTime / 3600).toFixed(1)} hours)
+- Total TSS: ${weekData.totalTss.toFixed(0)} (${tssChange >= 0 ? '+' : ''}${tssChange.toFixed(0)} vs last week)
+- Total Distance: ${(weekData.totalDistance / 1000).toFixed(1)} km
+
+PREVIOUS WEEK:
+- Activities: ${prevWeekData.totalActivities}
+- Total TSS: ${prevWeekData.totalTss.toFixed(0)}
+
+FITNESS PROGRESS:
+- CTL (Fitness): ${fitnessMetrics.ctl.toFixed(1)} (${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)} this week)
+- TSB (Form): ${fitnessMetrics.tsb.toFixed(1)} (${tsbChange >= 0 ? '+' : ''}${tsbChange.toFixed(1)})
+- eFTP: ${currentEftp || 'N/A'}W${eftpChange !== null ? ' (' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W)' : ''}
+- Ramp Rate: ${fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) + ' CTL/week' : 'N/A'}
+
+RECOVERY & WELLNESS (7-day averages):
+- Sleep: ${currAvg.sleep ? currAvg.sleep.toFixed(1) + 'h' : 'N/A'}${sleepChange !== null ? ' (' + (sleepChange >= 0 ? '+' : '') + sleepChange.toFixed(1) + 'h vs last week)' : ''}
+- HRV: ${currAvg.hrv ? currAvg.hrv.toFixed(0) + ' ms' : 'N/A'}${hrvChange !== null ? ' (' + (hrvChange >= 0 ? '+' : '') + hrvChange.toFixed(0) + ')' : ''}
+- Recovery Status: ${wellnessSummary?.recoveryStatus || 'Unknown'}
+
+TRAINING CONTEXT:
+- Phase: ${phaseInfo.phaseName}
+- Goal: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+- Weeks to Goal: ${phaseInfo.weeksOut}${loadContext}${upcomingContext}
+
+Write a personalized coaching letter (5-7 sentences) in ${langName}.
+
+Your letter should feel like it's from a personal coach who knows this athlete. Include:
+1. Open with acknowledgment of their week (effort, consistency, key sessions)
+2. Highlight the most significant metric change (fitness gains, recovery trends)
+3. Connect their progress to their goal (what this week means for Marmotte/their A race)
+4. Address any concerns (fatigue building up, recovery declining) with reassurance
+5. Preview next week with coaching intent (what to focus on, what to watch for)
+6. Close with motivating but genuine encouragement
+
+Write in a warm, conversational tone. Use "you" and "your" to make it personal. Do not use bullet points, headers, or emoji. Just write natural paragraphs.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      return response.trim();
+    }
+  } catch (e) {
+    Logger.log("Error generating weekly insight: " + e.toString());
+  }
+
+  return null;
+}
+
+// =========================================================
+// MONTHLY INSIGHT
+// =========================================================
+
+/**
+ * Generate AI-powered monthly insight based on training trends
+ */
+function generateMonthlyInsight(currentMonth, previousMonth, phaseInfo, goals) {
+  const langName = getPromptLanguage();
+
+  const activityChange = currentMonth.totals.activities - previousMonth.totals.activities;
+  const tssChange = currentMonth.totals.tss - previousMonth.totals.tss;
+  const ctlChange = currentMonth.fitness.ctlEnd - previousMonth.fitness.ctlEnd;
+  const eftpChange = (currentMonth.fitness.eftpEnd && previousMonth.fitness.eftpEnd)
+    ? currentMonth.fitness.eftpEnd - previousMonth.fitness.eftpEnd : null;
+
+  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's monthly training progress for ${currentMonth.monthName} ${currentMonth.monthYear}.
+
+THIS MONTH (${currentMonth.monthName}):
+- Total Activities: ${currentMonth.totals.activities}
+- Total TSS: ${currentMonth.totals.tss.toFixed(0)}
+- Average Weekly TSS: ${currentMonth.totals.avgWeeklyTss.toFixed(0)}
+- CTL at end of month: ${currentMonth.fitness.ctlEnd.toFixed(1)}
+- eFTP: ${currentMonth.fitness.eftpEnd || 'N/A'}W
+- Consistency: ${currentMonth.consistency.weeksWithTraining}/${currentMonth.weeks} weeks trained
+
+PREVIOUS MONTH (${previousMonth.monthName}) - FOR COMPARISON:
+- Total Activities: ${previousMonth.totals.activities}
+- Total TSS: ${previousMonth.totals.tss.toFixed(0)}
+- CTL at end of month: ${previousMonth.fitness.ctlEnd.toFixed(1)}
+- eFTP: ${previousMonth.fitness.eftpEnd || 'N/A'}W
+
+MONTH-OVER-MONTH CHANGES:
+- Activities: ${activityChange >= 0 ? '+' : ''}${activityChange}
+- TSS: ${tssChange >= 0 ? '+' : ''}${tssChange.toFixed(0)}
+- CTL: ${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)}
+${eftpChange != null ? '- eFTP: ' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W' : ''}
+
+WEEKLY BREAKDOWN THIS MONTH (TSS per week):
+${currentMonth.weeklyData.map((w, i) => `Week ${i + 1}: ${w.totalTss.toFixed(0)} TSS, CTL ${w.ctl.toFixed(0)}`).join('\n')}
+
+TRAINING PHASE: ${phaseInfo.phaseName}
+GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
+WEEKS TO GOAL: ${phaseInfo.weeksOut}
+
+Write a personalized monthly progress summary (3-4 sentences) in ${langName}.
+
+Include:
+1. Overall assessment of this month compared to last month
+2. Comment on fitness progression (CTL trend, eFTP changes)
+3. One key observation or recommendation
+4. Brief encouragement based on progress toward their goal
+
+Keep it conversational, insightful, and motivating. Do NOT wrap your response in quotes.`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response) {
+      let text = response.trim();
+      if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+        text = text.slice(1, -1);
+      }
+      return text;
+    }
+  } catch (e) {
+    Logger.log("Error generating monthly insight: " + e.toString());
+  }
+
+  return null;
+}
+
+// =========================================================
+// AI-DRIVEN PERIODIZATION
+// =========================================================
+
+/**
+ * Generate AI-driven training phase assessment
+ * Considers fitness trajectory, events, wellness trends, and workout patterns
+ * @param {object} context - Full athlete context
+ * @returns {object} { phaseName, focus, reasoning, adjustments, confidenceLevel, phaseOverride, upcomingEventNote }
+ */
+function generateAIPhaseAssessment(context) {
+  // Build events context string
+  let eventsContext = '';
+  if (context.goals && context.goals.available) {
+    const g = context.goals;
+    const primaryStr = g.primaryGoal
+      ? g.primaryGoal.name + ' (' + g.primaryGoal.date + ', ' + (g.primaryGoal.type || 'Unknown type') + ')'
+      : 'None set';
+    const bRacesStr = g.secondaryGoals && g.secondaryGoals.length > 0
+      ? g.secondaryGoals.map(function(r) { return r.name + ' (' + r.date + ')'; }).join(', ')
+      : '';
+    const cRacesStr = g.subGoals && g.subGoals.length > 0
+      ? g.subGoals.map(function(r) { return r.name + ' (' + r.date + ')'; }).join(', ')
+      : '';
+
+    eventsContext = `
+**Race Calendar & Events:**
+- **Primary Goal (A-Race):** ${primaryStr}
+${bRacesStr ? '- **B-Races:** ' + bRacesStr : ''}
+${cRacesStr ? '- **C-Races (Stepping Stones):** ' + cRacesStr : ''}
+- **Total Events Planned:** ${g.allGoals ? g.allGoals.length : 0}
+`;
+  }
+
+  // Build recent workouts pattern
+  let workoutPatternContext = '';
+  if (context.recentWorkouts) {
+    const rw = context.recentWorkouts;
+    const ridesStr = rw.rides && rw.rides.length > 0 ? rw.rides.join(', ') : 'None';
+    const runsStr = rw.runs && rw.runs.length > 0 ? rw.runs.join(', ') : 'None';
+    const daysAgo = rw.daysSinceLastWorkout != null ? rw.daysSinceLastWorkout : 'Unknown';
+    workoutPatternContext = `
+**Recent Workout Patterns (7 days):**
+- Rides: ${ridesStr}
+- Runs: ${runsStr}
+- Last Workout Intensity: ${rw.lastIntensity || 'Unknown'}/5 (${daysAgo} days ago)
+`;
+  }
+
+  const prompt = `You are an expert cycling coach analyzing an athlete's current training phase.
+
+**Date-Based Reference:**
+- Target Event: ${context.goalDescription || 'Not specified'}
+- Weeks to Event: ${context.weeksOut}
+- Traditional Phase (by date): ${context.traditionalPhase}
+${eventsContext}
+**Fitness Trajectory:**
+- Current CTL: ${context.ctl ? context.ctl.toFixed(1) : 'N/A'} | Weekly Ramp: ${context.rampRate ? context.rampRate.toFixed(2) : 'N/A'}/week
+- Current eFTP: ${context.currentEftp || 'N/A'}W | Target FTP: ${context.targetFtp || 'N/A'}W
+- eFTP Gap to Peak: ${context.eftpGap !== null && context.eftpGap !== undefined ? context.eftpGap + 'W' : 'N/A'}
+
+**Recovery Trends (7-day averages):**
+- HRV: ${context.hrvAvg ? context.hrvAvg.toFixed(0) + 'ms' : 'N/A'}
+- Sleep: ${context.sleepAvg ? context.sleepAvg.toFixed(1) + 'h' : 'N/A'}
+- Recovery Score: ${context.recoveryAvg ? context.recoveryAvg.toFixed(0) + '%' : 'N/A'}
+- Today's Status: ${context.recoveryStatus || 'Unknown'}
+
+**Recent Training Load:**
+- Recent Z5+ Time: ${context.z5Recent > 1500 ? 'High' : 'Normal'}
+- TSB: ${context.tsb ? context.tsb.toFixed(1) : 'N/A'}
+${workoutPatternContext}
+**Question:** Based on fitness trajectory AND the event calendar (not just weeks to A-race), what phase should this athlete be in?
+
+Consider:
+1. Is CTL building appropriately for the goal timeline?
+2. Is eFTP trending toward target or stalling?
+3. Are recovery metrics supporting the current load?
+4. Should we accelerate, maintain, or ease the progression?
+5. **Are there upcoming B/C races that require mini-tapers or intensity peaks?**
+6. **Is the athlete's current fitness on track for the A-race, or behind/ahead of schedule?**
+
+**Output JSON only (no markdown wrapping):**
+{
+  "phaseName": "Base|Build|Specialty|Taper|Race Week",
+  "focus": "1-sentence phase focus description",
+  "reasoning": "Brief explanation of why this phase (2-3 sentences)",
+  "adjustments": "Any modifications to standard phase approach (e.g., mini-taper for upcoming C-race)",
+  "confidenceLevel": "high|medium|low",
+  "phaseOverride": true or false,
+  "upcomingEventNote": "Note about any near-term B/C races affecting this week's approach (optional, null if none)"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+  const assessment = parseGeminiJsonResponse(response);
+  if (!assessment) {
+    Logger.log("AI phase assessment: Failed to parse response");
+  }
+  return assessment;
+}
+
+// =========================================================
+// AI TRAINING LOAD ADVISOR
+// =========================================================
+
+/**
+ * Generate AI-driven training load advice
+ * Replaces fixed ramp rate thresholds with personalized recommendations
+ * @param {object} fitnessMetrics - Current CTL, ATL, TSB, rampRate
+ * @param {object} phaseInfo - Training phase info (weeksOut, phaseName)
+ * @param {object} goals - Goal information
+ * @param {object} wellness - Wellness data with averages
+ * @returns {object} { recommendedRampRate, rampRateCategory, personalizedAdvice, warnings, confidence }
+ */
+function generateAITrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellness) {
+  const langName = getPromptLanguage();
+
+  const currentCTL = fitnessMetrics.ctl || 0;
+  const currentATL = fitnessMetrics.atl || 0;
+  const currentTSB = fitnessMetrics.tsb || 0;
+  const currentRampRate = fitnessMetrics.rampRate || 0;
+  const weeksOut = phaseInfo.weeksOut || 12;
+
+  // Build goal context
+  let goalContext = 'General fitness improvement';
+  if (goals && goals.available && goals.primaryGoal) {
+    goalContext = goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')';
+    if (goals.primaryGoal.type) {
+      goalContext += ' - ' + goals.primaryGoal.type;
+    }
+  }
+
+  // Build wellness context
+  let wellnessContext = 'No wellness data available';
+  if (wellness && wellness.available && wellness.averages) {
+    const avg = wellness.averages;
+    wellnessContext = `7-day averages:
+- Sleep: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${avg.hrv ? avg.hrv.toFixed(0) + ' ms' : 'N/A'}
+- Resting HR: ${avg.restingHR ? avg.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+- Recovery Score: ${avg.recovery ? avg.recovery.toFixed(0) + '%' : 'N/A'}`;
+
+    // Add trend indicators if today's data available
+    if (wellness.today) {
+      const t = wellness.today;
+      if (t.hrv && avg.hrv) {
+        const hrvDiff = t.hrv - avg.hrv;
+        wellnessContext += `\nToday vs avg: HRV ${hrvDiff >= 0 ? '+' : ''}${hrvDiff.toFixed(0)} ms`;
+      }
+      if (t.sleep && avg.sleep) {
+        const sleepDiff = t.sleep - avg.sleep;
+        wellnessContext += `, Sleep ${sleepDiff >= 0 ? '+' : ''}${sleepDiff.toFixed(1)}h`;
+      }
+    }
+  }
+
+  const prompt = `You are an expert cycling coach advising on training load progression.
+
+**Current Fitness State:**
+- CTL (Chronic Training Load): ${currentCTL.toFixed(1)}
+- ATL (Acute Training Load): ${currentATL.toFixed(1)}
+- TSB (Training Stress Balance): ${currentTSB.toFixed(1)} ${currentTSB > 5 ? '(Fresh)' : currentTSB < -15 ? '(Fatigued)' : '(Balanced)'}
+- Current Ramp Rate: ${currentRampRate.toFixed(1)} CTL/week
+
+**Training Context:**
+- Phase: ${phaseInfo.phaseName}
+- Weeks to Goal: ${weeksOut}
+- Goal: ${goalContext}
+
+**Wellness/Recovery Data:**
+${wellnessContext}
+
+**Standard Ramp Rate Guidelines (for reference):**
+- Maintain: 0-3 CTL/week (on track, minimal stress)
+- Build: 3-5 CTL/week (sustainable progression)
+- Aggressive: 5-7 CTL/week (monitor closely)
+- Caution: >7 CTL/week (risk of overtraining)
+
+**Your Task:**
+Based on the athlete's current state, wellness trends, and training context:
+1. Recommend an appropriate ramp rate for the coming week
+2. Consider wellness signals - poor sleep/HRV suggests conservative approach
+3. Factor in TSB - high fatigue may warrant recovery week
+4. Account for training phase - taper phases need reduction, not building
+
+**Output JSON only (no markdown wrapping):**
+Write the "personalizedAdvice" and "warnings" in ${langName}.
+{
+  "recommendedRampRate": <number between -5 and 8>,
+  "rampRateCategory": "Recovery|Maintain|Build|Aggressive|Reduce",
+  "personalizedAdvice": "1-2 sentence personalized recommendation in ${langName}",
+  "warnings": ["Array of specific warnings in ${langName}, empty array if none"],
+  "weeklyTSSMultiplier": <number 0.4-1.1 to adjust base weekly TSS>,
+  "confidence": "high|medium|low"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+  const advice = parseGeminiJsonResponse(response);
+  if (!advice) {
+    Logger.log("AI training load advice: Failed to parse response");
+  }
+  return advice;
+}
+
+// =========================================================
+// AI EVENT-SPECIFIC ANALYSIS
+// =========================================================
+
+/**
+ * AI-driven event-specific training analysis
+ * Analyzes race profile and returns custom training emphasis and peaking strategy
+ *
+ * @param {object} goal - Goal event (name, date, type, description, priority)
+ * @param {object} powerProfile - Athlete's power profile
+ * @param {object} fitnessMetrics - Current fitness (CTL, ATL, TSB)
+ * @param {number} weeksOut - Weeks until event
+ * @returns {object} Event-specific training recommendations
+ */
+function generateAIEventAnalysis(goal, powerProfile, fitnessMetrics, weeksOut) {
+  const langName = getPromptLanguage();
+
+  // Build event context
+  const eventContext = `
+EVENT DETAILS:
+- Name: ${goal.name}
+- Date: ${goal.date}
+- Priority: ${goal.priority || 'A'}-race
+- Type: ${goal.type || 'Unknown'}
+- Description: ${goal.description || 'No description provided'}
+- Weeks Until Event: ${weeksOut}
+`;
+
+  // Build athlete context
+  const athleteContext = `
+ATHLETE PROFILE:
+- Current eFTP: ${powerProfile?.eFTP || 'Unknown'}W
+- W': ${powerProfile?.wPrime || 'Unknown'}kJ
+- Current CTL: ${fitnessMetrics?.ctl?.toFixed(0) || 'Unknown'}
+- Current ATL: ${fitnessMetrics?.atl?.toFixed(0) || 'Unknown'}
+- Current TSB: ${fitnessMetrics?.tsb?.toFixed(0) || 'Unknown'}
+- Power Strengths: ${powerProfile?.strengths?.join(', ') || 'Unknown'}
+- Power Weaknesses: ${powerProfile?.focusAreas?.join(', ') || 'Unknown'}
+`;
+
+  const prompt = `You are an expert cycling coach analyzing an upcoming event to create a tailored training strategy.
+
+${eventContext}
+${athleteContext}
+
+Analyze this event and provide specific training recommendations. Consider:
+
+1. **Event Demands Analysis** - What physiological systems does this event stress?
+   - Climbing events → sustained power, threshold, weight-to-power
+   - Criteriums → repeated hard efforts, anaerobic capacity, acceleration
+   - Time trials → sustained threshold power, pacing
+   - Gran fondos → endurance, fueling, steady-state efficiency
+   - Hilly races → variable power, surges, recovery between efforts
+
+2. **Training Emphasis** - Based on event demands and athlete's current strengths/weaknesses:
+   - Which energy systems to prioritize?
+   - What workout types are most important?
+   - How should intensity distribution shift?
+
+3. **Peaking Strategy** - How to arrive fresh and fit:
+   - Recommended taper length and style
+   - When to do the last hard workout
+   - Volume reduction curve
+
+4. **Timeline Recommendations** - Given ${weeksOut} weeks out:
+   - What phase should training be in now?
+   - Key focuses for the remaining weeks
+   - Any benchmark workouts to gauge readiness
+
+**IMPORTANT: Respond with ONLY valid JSON. No introductory text, no explanations. Just the JSON object.**
+Use ${langName} for all string values within the JSON:
+{
+  "eventProfile": {
+    "category": "climbing|criterium|time_trial|gran_fondo|road_race|mixed",
+    "primaryDemands": ["list of 2-3 key physiological demands"],
+    "secondaryDemands": ["list of 1-2 secondary demands"],
+    "estimatedDuration": "expected race duration",
+    "keyChallenge": "single most important factor for success"
+  },
+  "trainingEmphasis": {
+    "priorityWorkouts": ["top 3 workout types to focus on"],
+    "secondaryWorkouts": ["2-3 supporting workout types"],
+    "avoidWorkouts": ["workout types that are less important now"],
+    "weeklyStructure": "recommended weekly structure description",
+    "intensityFocus": "threshold|vo2max|endurance|anaerobic|mixed"
+  },
+  "peakingStrategy": {
+    "taperLength": "recommended taper in weeks (1-3)",
+    "taperStyle": "linear|step|exponential",
+    "lastHardWorkout": "days before event for last intensity",
+    "volumeReduction": "percentage reduction per week during taper",
+    "openerWorkout": "recommended day-before-race workout"
+  },
+  "currentPhaseAdvice": {
+    "phase": "what phase athlete should be in now",
+    "weeklyFocus": "primary focus for this week",
+    "keyWorkout": "most important workout to nail",
+    "buildVsTaper": "building|maintaining|tapering"
+  },
+  "athleteSpecificNotes": "2-3 sentences on how this athlete's profile matches or mismatches the event demands, and what to prioritize",
+  "confidence": "high|medium|low"
+}`;
+
+  const response = callGeminiAPIText(prompt);
+  const result = parseGeminiJsonResponse(response);
+  if (!result) {
+    Logger.log("AI event analysis: Failed to parse response");
+    return null;
+  }
+  result.aiEnhanced = true;
+  return result;
+}

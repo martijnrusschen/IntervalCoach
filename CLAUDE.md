@@ -24,23 +24,77 @@ Google Drive (.zwo files) + Intervals.icu (workout upload) + Email
 
 ### File Structure
 
-The codebase is organized into modular files by domain:
+The codebase is organized into modular files by domain (Google Apps Script doesn't support folders, so domain prefixes are used):
+
+**Core Files**
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `main.gs` | Entry points & tests | `generateOptimalZwiftWorkoutsAutoByGemini()`, `fetchAndLogActivities()`, test functions |
+| `main.gs` | Entry points | `generateOptimalZwiftWorkoutsAutoByGemini()`, `fetchAndLogActivities()` |
 | `constants.gs` | Configuration constants | `SYSTEM_SETTINGS`, `TRAINING_CONSTANTS`, `WORKOUT_TYPES`, `HEADERS_FIXED` |
 | `translations.gs` | Localization (5 languages) | `TRANSLATIONS` (en, nl, ja, es, fr) |
 | `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
-| `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `fetchWellnessDataEnhanced()`, `createWellnessSummary()`, `isRestDayRecommended()` |
-| `whoop.gs` | Whoop API integration | `fetchWhoopWellnessData()`, `getWhoopCurrentRecovery()`, `authorizeWhoop()` |
-| `workouts.gs` | Workout selection logic | `checkAvailability()`, `selectWorkoutTypes()`, `uploadWorkoutToIntervals()` |
-| `power.gs` | Power/pace analysis | `fetchPowerCurve()`, `analyzePowerProfile()`, `fetchRunningData()`, `fetchFitnessMetrics()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()`, `calculateZoneProgression()`, `getZoneRecommendations()` |
-| `prompts.gs` | AI prompt construction | `createPrompt()`, `createRunPrompt()`, `generatePersonalizedCoachingNote()` |
-| `emails.gs` | Email sending | `sendSmartSummaryEmail()`, `sendRestDayEmail()`, `sendWeeklySummaryEmail()` |
-| `utils.gs` | Helper functions | `formatDateISO()`, `average()`, `sum()`, `getAdaptiveTrainingContext()`, `getZoneProgression()`, `storeZoneProgression()` |
 | `config.gs` | User config (gitignored) | API keys, user settings |
 | `config.sample.gs` | Config template | Copy to create config.gs |
+
+**Wellness Domain**
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `wellness.gs` | Wellness/recovery data | `fetchWellnessData()`, `fetchWellnessDataEnhanced()`, `createWellnessSummary()`, `isRestDayRecommended()` |
+| `whoop.gs` | Whoop API integration | `fetchWhoopWellnessData()`, `getWhoopCurrentRecovery()`, `authorizeWhoop()` |
+
+**Power & Fitness Domain**
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `power.gs` | Core power curve analysis | `fetchAthleteData()`, `fetchPowerCurve()`, `analyzePowerProfile()` |
+| `goals.gs` | Goal & phase management | `fetchUpcomingGoals()`, `buildGoalDescription()`, `calculateTrainingPhase()` |
+| `running.gs` | Running pace/CS analysis | `fetchRunningData()`, `fetchRunningPaceCurve()` |
+| `fitness.gs` | Fitness metrics & projections | `fetchFitnessMetrics()`, `fetchFitnessTrend()`, `projectFitnessMetrics()`, `generateWorkoutImpactPreview()` |
+| `zones.gs` | Zone progression & cross-sport | `calculateZoneProgression()`, `getZoneRecommendations()`, `calculateCrossSportEquivalency()` |
+
+**Training Utilities Domain**
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `utils.gs` | Core utilities | `formatDateISO()`, `formatDuration()`, `average()`, `sum()`, `parseGeminiJsonResponse()` |
+| `events.gs` | Calendar event management | `fetchEventsForDate()`, `hasEventOnDate()`, `hasEventTomorrow()`, `deleteIntervalEvent()` |
+| `tracking.gs` | Training tracking & storage | `getDaysSinceLastWorkout()`, `analyzeTrainingGap()`, `storeWorkoutAnalysis()`, `getZoneProgression()` |
+| `adaptation.gs` | Adaptive training | `getAdaptiveTrainingContext()`, `fetchRecentActivityFeedback()`, `checkWeekProgress()`, `calculateTrainingLoadAdvice()` |
+| `context.gs` | Centralized context builder | `gatherTrainingContext()`, `logTrainingContext()` |
+
+**Workout Domain**
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `workouts.gs` | Core workout selection | `checkAvailability()`, `selectWorkoutTypes()`, `classifyActivityType()` |
+| `workouts_planning.gs` | Weekly planning & adaptation | `fetchUpcomingPlaceholders()`, `generateAIWeeklyPlan()`, `analyzeWeeklyPlanExecution()` |
+| `workouts_upload.gs` | Calendar upload | `uploadWorkoutToIntervals()`, `uploadRunToIntervals()` |
+| `emails.gs` | Email sending | `sendSmartSummaryEmail()`, `sendRestDayEmail()`, `sendWeeklySummaryEmail()` |
+
+**Prompts Domain**
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `prompts_workout.gs` | Workout generation prompts | `createPrompt()`, `createRunPrompt()`, `buildZoneContext()` |
+| `prompts_analysis.gs` | Analysis prompts | `generateAIPowerProfileAnalysis()`, `generateAIRecoveryAssessment()`, `generatePostWorkoutAnalysis()` |
+| `prompts_planning.gs` | Planning & coaching prompts | `generatePersonalizedCoachingNote()`, `generateAIPhaseAssessment()`, `generateAITrainingLoadAdvice()` |
+
+**Test Files** (domain-prefixed for organization)
+
+| File | Purpose |
+|------|---------|
+| `test_api.gs` | API connection tests |
+| `test_training.gs` | Adaptive training & feedback tests |
+| `test_recovery.gs` | Recovery assessment tests |
+| `test_workout.gs` | Workout selection tests |
+| `test_planning.gs` | Training proposal & impact tests |
+| `test_power.gs` | Power profile analysis tests |
+| `test_zones.gs` | Zone progression tests |
+| `test_email.gs` | Email functionality tests |
+| `test_periodization.gs` | Training phase tests |
+| `test_misc.gs` | Miscellaneous utility tests |
 
 ### Key Functions
 
@@ -49,20 +103,18 @@ The codebase is organized into modular files by domain:
 - `fetchAndLogActivities()` - Activity sync to Google Sheets
 
 **Test Functions (run in Apps Script editor):**
-- `testApiUtilities()` - Verify API connections
-- `testAdaptiveTraining()` - Test RPE/Feel feedback analysis
-- `testTrainingLoadAdvisor()` - Test training load recommendations
-- `testAITrainingLoadAdvisor()` - Test AI training load with wellness context
-- `testAIRecoveryAssessment()` - Test AI recovery using personal baselines
-- `testWorkoutSelection()` - Test workout type selection logic
-- `testAIPowerProfileAnalysis()` - Test AI power profile analysis with goal context
-- `testCoachingNote()` - Test AI coaching note generation
-- `testRestDayEmail()` - Test rest day email functionality
-- `testTrainingProposal()` - Test weekly training proposal
-- `testWorkoutImpactPreview()` - Test workout impact preview with 2-week projections
-- `testZoneProgression()` - Test zone progression levels and AI recommendations
-- `testWhoopApi()` - Test direct Whoop API connection (in whoop.gs)
-- `testWhoopWellness()` - Test Whoop-enhanced wellness data fetching
+
+Tests are organized by domain in separate files (test_*.gs):
+- `test_api.gs`: `testApiUtilities()`, `testWhoopApi()`, `testWhoopWellness()`
+- `test_training.gs`: `testAdaptiveTraining()`, `testTrainingLoadAdvisor()`, `testAITrainingLoadAdvisor()`
+- `test_recovery.gs`: `testAIRecoveryAssessment()`
+- `test_workout.gs`: `testWorkoutSelection()`, `testCoachingNote()`
+- `test_planning.gs`: `testTrainingProposal()`, `testWorkoutImpactPreview()`
+- `test_power.gs`: `testAIPowerProfileAnalysis()`
+- `test_zones.gs`: `testZoneProgression()`
+- `test_email.gs`: `testRestDayEmail()`
+- `test_periodization.gs`: Training phase calculation tests
+- `test_misc.gs`: Utility function tests
 
 ### Core Data Structures
 
