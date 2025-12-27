@@ -553,14 +553,16 @@ ${workoutOptions}
 **YOUR TASK:**
 Recommend ONE specific workout type from the list above. Consider all factors holistically.
 
+**IMPORTANT: Write all text fields (reasoning, varietyNote, zoneNote) in ${getPromptLanguage()}.**
+
 **Output JSON only (no markdown):**
 {
   "shouldTrain": true,
   "workoutType": "exact_workout_name_from_list",
   "intensity": 1-5,
-  "reasoning": "2-3 sentence explanation of why this workout",
-  "varietyNote": "optional note about avoiding recently done types",
-  "zoneNote": "optional note about zone progression considerations (if zone data available)"
+  "reasoning": "2-3 sentence explanation of why this workout in ${getPromptLanguage()}",
+  "varietyNote": "optional note about variety in ${getPromptLanguage()}",
+  "zoneNote": "optional note about zone focus in ${getPromptLanguage()}"
 }`;
 
   const response = callGeminiAPIText(prompt);
@@ -662,10 +664,15 @@ function selectWorkoutTypes(params) {
         if (aiDecision.varietyNote) {
           Logger.log("  Variety: " + aiDecision.varietyNote);
         }
+        if (aiDecision.zoneNote) {
+          Logger.log("  Zone Focus: " + aiDecision.zoneNote);
+        }
 
         return {
           types: [aiDecision.workoutType],
           reason: aiDecision.reasoning,
+          varietyNote: aiDecision.varietyNote || null,
+          zoneNote: aiDecision.zoneNote || null,
           maxIntensity: aiDecision.intensity,
           isRestDay: !aiDecision.shouldTrain,
           aiEnhanced: true

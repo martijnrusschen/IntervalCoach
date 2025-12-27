@@ -6,20 +6,6 @@
  */
 
 // =========================================================
-// HELPER FUNCTIONS
-// =========================================================
-
-/**
- * Verify that config is properly set up before running tests
- * @throws {Error} if config is missing required values
- */
-function requireValidConfig() {
-  if (!USER_SETTINGS || !USER_SETTINGS.ATHLETE_ID) {
-    throw new Error("config.gs is not properly configured. Copy config.sample.gs to config.gs and fill in values.");
-  }
-}
-
-// =========================================================
 // ACTIVITY DISCOVERY TESTS
 // =========================================================
 
