@@ -36,15 +36,23 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 
 | Priority | Feature | Description | Source |
 |----------|---------|-------------|--------|
+| 🔴 **HIGH** | **Training Demand Modifier** | User-configurable intensity scaling (0.8-1.2x) applied to all workouts | TrainerRoad Training Approach |
+| 🔴 **HIGH** | **Zone Focus Selection** | Let users specify priority zones for AI to emphasize | TrainerRoad Training Approach |
+| 🔴 **HIGH** | **Surface AI Reasoning** | Show workout selection reasoning in daily emails (why this workout, recovery influence) | TrainerRoad Training Approach |
 | 🔴 **HIGH** | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | TrainerRoad |
 | 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
+| 🟡 **MEDIUM** | **Mid-Week Adaptation** | Analyze week progress, adjust remaining days (missed intensity → suggest boost) | TrainerRoad Training Approach |
+| 🟡 **MEDIUM** | **Interval-Level Intensity Tweaks** | Scale power targets within workouts based on recovery (Yellow → reduce Z4+ by 5-10%) | TrainerRoad Training Approach |
 | 🟡 **MEDIUM** | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | TrainerRoad AI |
 | 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
 | 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
 | 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
 | 🟡 **MEDIUM** | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 | 🟡 **MEDIUM** | **Whoop API Fallback** | Add Whoop API as alternative/supplementary data source | Infrastructure |
+| 🟢 **LOW** | **Cumulative Cross-Sport Load** | Track combined fatigue from cycling + running (unified fatigue model) | TrainerRoad Training Approach |
+| 🟢 **LOW** | **Recovery Debt Tracking** | Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates | TrainerRoad Training Approach |
+| 🟢 **LOW** | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | TrainerRoad Training Approach |
 | 🟢 **LOW** | **Training Outcome Simulation** | Simulate multiple workout options before deciding | TrainerRoad AI |
 | 🟢 **LOW** | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | TrainerRoad |
 | 🟢 **LOW** | **Multi-year Plan Builder** | Long-term periodization (2+ years) | TrainerRoad |
@@ -406,4 +414,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-26 (Added Personalized Zone Boundaries feature)*
+*Last updated: 2025-12-27 (Added TrainerRoad Training Approach features to backlog)*
