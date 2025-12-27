@@ -1,0 +1,324 @@
+/**
+ * IntervalCoach - Recovery & Wellness Tests
+ *
+ * Tests for recovery assessment, rest day recommendations, and wellness integration.
+ * Run these from the Apps Script editor to test recovery features.
+ */
+
+// =========================================================
+// REST DAY & RECOVERY TESTS
+// =========================================================
+
+/**
+ * Test rest day email functionality
+ */
+function testRestDayEmail() {
+  Logger.log("=== REST DAY EMAIL TEST ===");
+
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("--- Current Wellness Data ---");
+  Logger.log("Recovery Status: " + wellness.recoveryStatus);
+  Logger.log("Recovery Score: " + (wellness.today?.recovery != null ? wellness.today.recovery + "%" : "N/A"));
+  Logger.log("Is Rest Day Recommended: " + isRestDayRecommended(wellness));
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  Logger.log("\n--- Phase Info ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+
+  Logger.log("\n--- AI Rest Day Advice ---");
+  const aiAdvice = generateRestDayAdvice(wellness);
+  if (aiAdvice) {
+    Logger.log(aiAdvice);
+  } else {
+    Logger.log("(AI advice generation failed, would use fallback translations)");
+  }
+
+  Logger.log("\n--- Test Complete ---");
+  Logger.log("To send an actual test email, uncomment the line below:");
+  Logger.log("// sendRestDayEmail(wellness, phaseInfo);");
+}
+
+/**
+ * Test AI-enhanced recovery assessment with personal baselines
+ */
+function testAIRecoveryAssessment() {
+  Logger.log("=== AI RECOVERY ASSESSMENT TEST ===");
+
+  // Fetch wellness data
+  const wellnessRecords = fetchWellnessData(7);
+
+  if (!wellnessRecords || wellnessRecords.length === 0) {
+    Logger.log("ERROR: No wellness data available");
+    return;
+  }
+
+  // Get raw data before AI processing
+  const latestWithData = wellnessRecords.find(r => r.sleep > 0 || r.hrv || r.recovery) || wellnessRecords[0];
+  const last7Days = wellnessRecords.slice(0, 7);
+
+  Logger.log("\n--- Today's Raw Data ---");
+  Logger.log("Recovery Score: " + (latestWithData.recovery != null ? latestWithData.recovery + "%" : "N/A"));
+  Logger.log("HRV: " + (latestWithData.hrv || "N/A") + " ms");
+  Logger.log("Sleep: " + (latestWithData.sleep ? latestWithData.sleep.toFixed(1) + "h" : "N/A"));
+  Logger.log("Resting HR: " + (latestWithData.restingHR || "N/A") + " bpm");
+
+  // Calculate averages for comparison
+  const avgRecovery = average(last7Days.map(w => w.recovery).filter(v => v != null));
+  const avgHRV = average(last7Days.map(w => w.hrv).filter(v => v != null));
+  const avgSleep = average(last7Days.map(w => w.sleep).filter(v => v > 0));
+
+  Logger.log("\n--- Personal Baselines (7-day avg) ---");
+  Logger.log("Avg Recovery: " + (avgRecovery ? avgRecovery.toFixed(0) + "%" : "N/A"));
+  Logger.log("Avg HRV: " + (avgHRV ? avgHRV.toFixed(0) + " ms" : "N/A"));
+  Logger.log("Avg Sleep: " + (avgSleep ? avgSleep.toFixed(1) + "h" : "N/A"));
+
+  // Get AI-enhanced wellness summary
+  Logger.log("\n--- AI Recovery Assessment ---");
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("AI Enhanced: " + (wellness.aiEnhanced ? "YES" : "NO (fallback)"));
+  Logger.log("Recovery Status: " + wellness.recoveryStatus);
+  Logger.log("Intensity Modifier: " + (wellness.intensityModifier * 100).toFixed(0) + "%");
+  if (wellness.personalizedReason) {
+    Logger.log("Reason: " + wellness.personalizedReason);
+  }
+
+  // Show what fixed thresholds would have said
+  Logger.log("\n--- Fixed Threshold Comparison ---");
+  if (latestWithData.recovery != null) {
+    let fixedStatus;
+    if (latestWithData.recovery >= 66) {
+      fixedStatus = "Green (Primed)";
+    } else if (latestWithData.recovery >= 34) {
+      fixedStatus = "Yellow (Recovering)";
+    } else {
+      fixedStatus = "Red (Strained)";
+    }
+    Logger.log("Fixed threshold would say: " + fixedStatus);
+    Logger.log("AI says: " + wellness.recoveryStatus);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test AI-driven rest day assessment
+ */
+function testAIRestDayAssessment() {
+  Logger.log("=== AI REST DAY ASSESSMENT TEST ===");
+  requireValidConfig();
+
+  const summary = fetchFitnessMetrics();
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
+  const recentTypes = getRecentWorkoutTypes(7);
+  const eventTomorrow = hasEventTomorrow();
+  const eventIn2Days = hasEventInDays(2);
+
+  const ctl = summary.ctl_90 || summary.ctl || 0;
+  const tsb = summary.tsb_current || summary.tsb || 0;
+  const atl = summary.atl_7 || summary.atl || 0;
+
+  Logger.log("\n--- Current State ---");
+  Logger.log("CTL: " + ctl.toFixed(1) + " | ATL: " + atl.toFixed(1) + " | TSB: " + tsb.toFixed(1));
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  if (wellness.available && wellness.today) {
+    Logger.log("Recovery Score: " + (wellness.today.recovery || 'N/A') + "%");
+    Logger.log("Sleep: " + (wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'));
+  }
+
+  const restDayContext = {
+    wellness: wellness,
+    tsb: tsb,
+    ctl: ctl,
+    atl: atl,
+    phase: "Build",
+    eventTomorrow: eventTomorrow,
+    eventIn2Days: eventIn2Days,
+    recentWorkouts: { rides: recentTypes.rides, runs: recentTypes.runs },
+    lastIntensity: getLastWorkoutIntensity(recentTypes),
+    consecutiveDays: "Unknown"
+  };
+
+  Logger.log("\n--- AI Assessment ---");
+  const assessment = generateAIRestDayAssessment(restDayContext);
+
+  if (assessment) {
+    Logger.log("Decision: " + (assessment.isRestDay ? "REST DAY" : "TRAIN"));
+    Logger.log("Confidence: " + assessment.confidence);
+    Logger.log("Reasoning: " + assessment.reasoning);
+    Logger.log("Alternatives: " + assessment.alternatives);
+  } else {
+    Logger.log("AI assessment failed");
+  }
+
+  Logger.log("\n--- Rule-Based (comparison) ---");
+  const ruleBasedRest = isRestDayRecommended(wellness);
+  Logger.log("Decision: " + (ruleBasedRest ? "REST DAY" : "TRAIN"));
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
+// AI CUMULATIVE FATIGUE PREDICTION TEST
+// =========================================================
+
+/**
+ * Test AI-driven cumulative fatigue prediction
+ * Tests fatigue classification, warning signs, and recovery prediction
+ */
+function testAICumulativeFatiguePrediction() {
+  Logger.log("=== AI CUMULATIVE FATIGUE PREDICTION TEST ===\n");
+  requireValidConfig();
+
+  // Fetch all required data
+  Logger.log("--- Fetching Data ---");
+
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("Current Fitness: CTL=" + (fitnessMetrics.ctl?.toFixed(1) || 'N/A') +
+    ", ATL=" + (fitnessMetrics.atl?.toFixed(1) || 'N/A') +
+    ", TSB=" + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+
+  const fitnessTrend = fetchFitnessTrend(14);
+  Logger.log("Fitness trend: " + fitnessTrend.length + " days of data");
+
+  const wellnessRecords = fetchWellnessData();
+  const wellness = createWellnessSummary(wellnessRecords);
+  Logger.log("Wellness: Recovery=" + (wellness.today?.recovery || 'N/A') + "%, HRV=" + (wellness.today?.hrv || 'N/A') +
+    " | Status: " + (wellness.recoveryStatus || 'Unknown'));
+
+  const workoutFeedback = fetchRecentActivityFeedback(14);
+  Logger.log("Workout feedback: " + (workoutFeedback.summary?.totalWithFeedback || 0) + " activities with RPE/Feel");
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+
+  // Run AI analysis
+  Logger.log("\n--- AI Fatigue Analysis ---");
+  const analysis = generateAICumulativeFatigueAnalysis(
+    fitnessMetrics,
+    fitnessTrend,
+    wellness,
+    workoutFeedback,
+    phaseInfo
+  );
+
+  if (analysis) {
+    Logger.log("\n[Fatigue Classification]");
+    Logger.log("  Type: " + analysis.fatigueType);
+    Logger.log("  Severity: " + analysis.fatigueSeverity + "/10");
+    Logger.log("  Quality: " + analysis.fatigueQuality);
+    Logger.log("  TSB Trend: " + analysis.tsbTrend);
+    Logger.log("  Risk Level: " + analysis.riskLevel);
+
+    Logger.log("\n[Warning Signs]");
+    Logger.log("  Present: " + analysis.warningSignsPresent);
+    if (analysis.warningSigns && analysis.warningSigns.length > 0) {
+      analysis.warningSigns.forEach(w => Logger.log("  ! " + w));
+    } else {
+      Logger.log("  None detected");
+    }
+
+    Logger.log("\n[Recovery Prediction]");
+    Logger.log("  Days to neutral TSB: " + analysis.recoveryPrediction?.daysToNeutralTSB);
+    Logger.log("  Days to positive TSB: " + analysis.recoveryPrediction?.daysToPositiveTSB);
+    Logger.log("  Confidence: " + analysis.recoveryPrediction?.recoveryConfidence);
+
+    Logger.log("\n[Recommendation]");
+    Logger.log("  Advice: " + analysis.recommendation?.trainingAdvice);
+    Logger.log("  Duration: " + analysis.recommendation?.durationDays + " days");
+    if (analysis.recommendation?.specificActions) {
+      Logger.log("  Actions:");
+      analysis.recommendation.specificActions.forEach(a => Logger.log("    -> " + a));
+    }
+
+    Logger.log("\n[Physiological Insight]");
+    Logger.log("  " + analysis.physiologicalInsight);
+
+    Logger.log("\nConfidence: " + analysis.confidence);
+    Logger.log("AI Enhanced: " + analysis.aiEnhanced);
+  } else {
+    Logger.log("Analysis returned null - check data availability");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
+// WHOOP WELLNESS INTEGRATION TEST
+// =========================================================
+
+/**
+ * Test Whoop API wellness integration
+ * Tests both direct Whoop API and enhanced wellness fetching
+ */
+function testWhoopWellness() {
+  Logger.log("=== WHOOP WELLNESS INTEGRATION TEST ===\n");
+
+  // Check if Whoop is configured
+  Logger.log("--- Configuration ---");
+  const isConfigured = typeof isWhoopConfigured === 'function' && isWhoopConfigured();
+  Logger.log("Whoop configured: " + isConfigured);
+
+  if (!isConfigured) {
+    Logger.log("\nWhoop not configured. To set up:");
+    Logger.log("1. Add WHOOP_CONFIG to config.gs");
+    Logger.log("2. Run authorizeWhoop() to complete OAuth");
+    Logger.log("\nFalling back to Intervals.icu only...\n");
+  }
+
+  // Test enhanced wellness fetching
+  Logger.log("\n--- Enhanced Wellness Fetch ---");
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
+
+  if (wellnessRecords.length > 0) {
+    const today = wellnessRecords[0];
+    Logger.log("Today's data:");
+    Logger.log("  Source: " + (today.source || 'intervals_icu'));
+    Logger.log("  Date: " + today.date);
+    Logger.log("  Recovery: " + (today.recovery != null ? today.recovery + "%" : "N/A"));
+    Logger.log("  HRV: " + (today.hrv != null ? today.hrv + " ms" : "N/A"));
+    Logger.log("  RHR: " + (today.restingHR != null ? today.restingHR + " bpm" : "N/A"));
+    Logger.log("  Sleep: " + (today.sleep != null ? today.sleep.toFixed(1) + "h" : "N/A"));
+    Logger.log("  SpO2: " + (today.spO2 != null ? today.spO2 + "%" : "N/A"));
+
+    // Show if we got fresher data from Whoop
+    if (today.source === 'whoop_api') {
+      Logger.log("\nOK Using real-time Whoop API data (bypassing 8-hour sync delay)");
+    } else {
+      Logger.log("\n  Using Intervals.icu data (may be up to 8 hours old)");
+    }
+  } else {
+    Logger.log("No wellness records found");
+  }
+
+  // Test wellness summary creation
+  Logger.log("\n--- Wellness Summary ---");
+  const summary = createWellnessSummary(wellnessRecords);
+  if (summary.available) {
+    Logger.log("Recovery Status: " + summary.recoveryStatus);
+    Logger.log("Sleep Status: " + summary.sleepStatus);
+    Logger.log("Intensity Modifier: " + (summary.intensityModifier * 100).toFixed(0) + "%");
+    if (summary.aiEnhanced) {
+      Logger.log("AI Reason: " + summary.personalizedReason);
+    }
+  } else {
+    Logger.log("Wellness summary not available");
+  }
+
+  // If Whoop is configured, run full Whoop API test
+  if (isConfigured) {
+    Logger.log("\n--- Direct Whoop API Test ---");
+    testWhoopApi();
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
