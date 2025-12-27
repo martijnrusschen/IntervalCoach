@@ -38,13 +38,19 @@ function checkAndGenerateWorkout() {
   // Try Whoop API first
   if (typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
     try {
-      const whoopData = fetchWhoopWellnessData();
-      if (whoopData.available && whoopData.recovery != null) {
-        wellnessAvailable = true;
-        wellnessSource = 'whoop_api';
-        Logger.log('Whoop API: Recovery ' + whoopData.recovery + '% available');
+      const whoopRecovery = getWhoopCurrentRecovery();
+      if (whoopRecovery.available && whoopRecovery.recovery != null) {
+        // Check if recovery was created today (not yesterday's data)
+        const recoveryDate = whoopRecovery.createdAt ? whoopRecovery.createdAt.substring(0, 10) : null;
+        if (recoveryDate === today) {
+          wellnessAvailable = true;
+          wellnessSource = 'whoop_api';
+          Logger.log('Whoop API: Recovery ' + whoopRecovery.recovery + '% available (created: ' + whoopRecovery.createdAt + ')');
+        } else {
+          Logger.log('Whoop API: Recovery data is from ' + recoveryDate + ', waiting for today\'s data');
+        }
       } else {
-        Logger.log('Whoop API: No recovery data yet - ' + (whoopData.reason || 'unknown'));
+        Logger.log('Whoop API: No recovery data yet - ' + (whoopRecovery.reason || 'unknown'));
       }
     } catch (e) {
       Logger.log('Whoop API error: ' + e.toString());
@@ -54,13 +60,17 @@ function checkAndGenerateWorkout() {
   // Fallback to Intervals.icu if Whoop not available
   if (!wellnessAvailable) {
     try {
-      const icuRecords = fetchWellnessData(1, 0);
-      if (icuRecords.length > 0 && icuRecords[0].date === today && icuRecords[0].recovery != null) {
+      const icuRecords = fetchWellnessData(2, 0); // Fetch 2 days to check dates
+      const todayRecord = icuRecords.find(r => r.date === today);
+      if (todayRecord && todayRecord.recovery != null) {
         wellnessAvailable = true;
         wellnessSource = 'intervals_icu';
-        Logger.log('Intervals.icu: Recovery ' + icuRecords[0].recovery + '% available');
+        Logger.log('Intervals.icu: Recovery ' + todayRecord.recovery + '% available for ' + today);
       } else {
-        Logger.log('Intervals.icu: No recovery data for today yet');
+        Logger.log('Intervals.icu: No recovery data for today (' + today + ') yet');
+        if (icuRecords.length > 0) {
+          Logger.log('  Latest record is from: ' + icuRecords[0].date);
+        }
       }
     } catch (e) {
       Logger.log('Intervals.icu error: ' + e.toString());
