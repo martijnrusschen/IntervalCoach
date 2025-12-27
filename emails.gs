@@ -157,6 +157,32 @@ ${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatu
     if (w.recovery != null) {
       body += `\nWhoop: ${w.recovery}%`;
     }
+
+    // Show baseline deviation if available
+    const ba = wellness.baselineAnalysis;
+    if (ba?.available) {
+      let deviationLine = '\n' + (t.vs_baseline || 'vs Baseline') + ': ';
+      const parts = [];
+      if (ba.hrvDeviation?.available) {
+        const hrv = ba.hrvDeviation;
+        const sign = hrv.deviationPercent >= 0 ? '+' : '';
+        parts.push(`HRV ${sign}${hrv.deviationPercent.toFixed(0)}%`);
+      }
+      if (ba.rhrDeviation?.available) {
+        const rhr = ba.rhrDeviation;
+        const sign = rhr.deviationPercent >= 0 ? '+' : '';
+        parts.push(`RHR ${sign}${rhr.deviationPercent.toFixed(0)}%`);
+      }
+      if (parts.length > 0) {
+        deviationLine += parts.join(' | ');
+        if (ba.overallStatus === 'warning') {
+          deviationLine += ' ⚠️';
+        } else if (ba.overallStatus === 'good') {
+          deviationLine += ' ✓';
+        }
+        body += deviationLine;
+      }
+    }
   }
   body += '\n';
 

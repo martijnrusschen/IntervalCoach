@@ -52,6 +52,7 @@ const TRANSLATIONS = {
     avg_hrv: "Avg HRV",
     avg_rhr: "Avg Resting HR",
     avg_recovery: "Avg Recovery",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Keep up the great work!",
     // Training Load Advisor
@@ -194,6 +195,7 @@ const TRANSLATIONS = {
     avg_hrv: "平均HRV",
     avg_rhr: "平均安静時心拍",
     avg_recovery: "平均リカバリー",
+    vs_baseline: "30日ベースライン比",
     ramp_rate: "ランプレート",
     weekly_footer: "今週もお疲れ様でした！",
     // Training Load Advisor
@@ -286,6 +288,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Promedio",
     avg_rhr: "FC Reposo Promedio",
     avg_recovery: "Recuperación Promedio",
+    vs_baseline: "vs Línea Base 30d",
     ramp_rate: "Tasa de Rampa",
     weekly_footer: "¡Sigue así!",
     // Training Load Advisor
@@ -384,6 +387,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Moyenne",
     avg_rhr: "FC Repos Moyenne",
     avg_recovery: "Récupération Moyenne",
+    vs_baseline: "vs Référence 30j",
     ramp_rate: "Taux de Rampe",
     weekly_footer: "Continuez comme ça!",
     // Training Load Advisor
@@ -483,6 +487,7 @@ const TRANSLATIONS = {
     avg_hrv: "Gem. HRV",
     avg_rhr: "Gem. Rustpols",
     avg_recovery: "Gem. Herstel",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Goed bezig, ga zo door!",
     // Training Load Advisor

@@ -124,7 +124,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
 
   // Fetch Wellness Data first (needed for availability check)
   // Uses Whoop API for real-time data if configured, falls back to Intervals.icu
-  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  // Fetch 30 days for baseline tracking (HRV/RHR personal baselines)
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
 
   // Check for IntervalCoach placeholder in Intervals.icu calendar
@@ -855,7 +856,8 @@ function analyzeCompletedWorkout(activity) {
 
   // Fetch current wellness and fitness context
   // Uses Whoop API for real-time data if configured
-  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  // Fetch 30 days for baseline tracking (HRV/RHR personal baselines)
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
   const fitness = fetchFitnessMetrics();
 

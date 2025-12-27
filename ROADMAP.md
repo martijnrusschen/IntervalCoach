@@ -28,6 +28,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Cross-Sport Zone Equivalency** - AI calculates equivalent efforts between cycling and running
 - [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
 - [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
+- [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
 
 ---
 
@@ -54,6 +55,21 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 | 🟢 **LOW** | **Multi-year Plan Builder** | Long-term periodization (2+ years) | TrainerRoad |
 | 🟢 **LOW** | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
 | 🟢 **LOW** | **Remove Repetitive Code** | DRY refactoring, shared utilities | Infrastructure |
+
+### Coaching Quality Improvements
+
+Features identified from coaching analysis to improve recommendation quality:
+
+| Priority | Feature | Description | Gap |
+|----------|---------|-------------|-----|
+| ✅ | ~~**HRV/RHR Baseline Tracking**~~ | ~~Track 30-day rolling baselines and surface deviation % to AI and emails.~~ | **COMPLETE** |
+| 🟡 **MEDIUM** | **Planned Deload Weeks** | Auto-insert recovery weeks based on cumulative load (CTL > X for Y weeks), not just reactive to fatigue | Currently reactive only - no proactive deload scheduling |
+| 🟡 **MEDIUM** | **Zone Weakness Targeting** | Drive workout selection toward undertrained zones. Zone progression exists but doesn't influence daily workout choice | Zone data tracked but not used as selection criteria |
+| 🟡 **MEDIUM** | **Subjective Markers as Constraints** | Enforce soreness/fatigue/stress 4-5 as hard constraints that block high intensity, not just "consider" | Markers shown to AI but not enforced |
+| 🟡 **MEDIUM** | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns. If athlete consistently rates VO2max as RPE 9-10, reduce targets by 3-5% | RPE collected but not used to calibrate |
+| 🟡 **MEDIUM** | **Illness Detection Patterns** | Detect illness patterns: elevated RHR + suppressed HRV + poor sleep for 2+ days triggers illness protocol | Individual metrics checked but patterns not detected |
+| 🟢 **LOW** | **Training Load Rate Warnings** | Warn when CTL ramp rate exceeds safe thresholds (>7 CTL/week) for multiple weeks | Ramp rate shown but not enforced as constraint |
+| 🟢 **LOW** | **Progressive Overload Verification** | Verify that key workouts show progressive overload week-over-week (e.g., increasing interval duration or power) | Workouts generated fresh without referencing previous similar workouts |
 
 ---
 
@@ -423,6 +439,35 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Maximum 2 intensity days remaining in a week
 - If overreaching (TSB < -30), prioritize recovery over catching up
 
+### Feature: HRV/RHR Baseline Tracking ✅ COMPLETE
+
+**Implementation:**
+- Added baseline storage functions in `tracking.gs`:
+  - `storeWellnessBaseline()` - Calculates and stores 30-day rolling averages
+  - `getWellnessBaseline()` - Retrieves stored baseline
+  - `calculateBaselineDeviation()` - Calculates deviation with z-score interpretation
+  - `analyzeWellnessVsBaseline()` - Comprehensive deviation analysis
+  - `calculateStdDev()` - Standard deviation utility
+- Updated `createWellnessSummary()` in `wellness.gs` to include baseline analysis
+- Updated `generateAIRecoveryAssessment()` in `prompts_analysis.gs` to accept 30-day baseline context
+- Updated `main.gs` to fetch 30 days of wellness data (was 7)
+- Added baseline deviation display in daily emails
+- Added translations for all 5 languages
+- Added `testBaselineTracking()` in `test_recovery.gs`
+
+**Key features:**
+- Calculates 30-day rolling averages for HRV and RHR
+- Stores min/max ranges and standard deviation
+- Z-score based interpretation:
+  - |z| < 0.5 = normal
+  - 0.5-1.5 = notable
+  - > 1.5 = significant
+- HRV interpretation: higher = better (suppressed = concerning)
+- RHR interpretation: lower = better (elevated = concerning)
+- Overall status: good/normal/caution/warning
+- AI recovery assessment now considers 30-day baseline context
+- Email shows deviation % with warning indicators (⚠️ for concerns, ✓ for good)
+
 ---
 
 ## How to Use This Document
@@ -435,4 +480,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-27 (Added Mid-Week Adaptation feature)*
+*Last updated: 2025-12-27 (Added HRV/RHR Baseline Tracking feature)*
