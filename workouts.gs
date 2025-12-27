@@ -150,11 +150,31 @@ function parseDurationFromName(name, activityType) {
 function checkAvailability(wellness) {
   const todayStr = formatDateISO(new Date());
 
-  // First check for C events on today - these are group rides where we can't control structure
+  // First check for events on today
   const eventToday = hasEventOnDate(0);
+
+  // A/B events = races, no workout generation (athlete is racing)
+  if (eventToday.hasEvent && (eventToday.category === "A" || eventToday.category === "B")) {
+    const raceName = eventToday.eventName || "Race";
+    const raceDescription = eventToday.eventDescription || null;
+
+    return {
+      shouldGenerate: false,
+      reason: eventToday.category + " race today: " + raceName + " - race day, no workout generation.",
+      duration: null,
+      placeholder: null,
+      activityType: null,
+      isExisting: false,
+      isCEvent: false,
+      isRaceDay: true,
+      raceCategory: eventToday.category,
+      raceName: raceName,
+      raceDescription: raceDescription
+    };
+  }
+
+  // C events = group rides where we can't control structure
   if (eventToday.hasEvent && eventToday.category === "C") {
-    // C event = group ride, no structured workout needed
-    // Use event name and description from hasEventOnDate
     const cEventName = eventToday.eventName || "Group Ride";
     const cEventDescription = eventToday.eventDescription || null;
 

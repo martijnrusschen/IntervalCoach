@@ -106,7 +106,11 @@ function sendDailyEmail(params) {
     restAssessment,
     weekProgress,
     upcomingDays,
-    weeklyPlanContext
+    weeklyPlanContext,
+    raceDayAdvice,
+    raceName,
+    raceCategory,
+    raceDescription
   } = params;
 
   // Build subject based on type
@@ -118,6 +122,8 @@ function sendDailyEmail(params) {
   } else if (type === 'group_ride') {
     const eventName = params.cEventName || t.group_ride || 'Group Ride';
     subject = `${t.subject_prefix}${eventName} (${dateStr})`;
+  } else if (type === 'race_day') {
+    subject = `[IntervalCoach] ${t.race_day || 'RACE DAY'}: ${raceCategory} - ${raceName || 'Race'} (${dateStr})`;
   } else {
     subject = `[IntervalCoach] ${t.daily_status_subject || 'Daily Update'} - ${dayName} (${dateStr})`;
   }
@@ -167,6 +173,47 @@ ${workout.recommendationReason || workout.explanation || ''}
     if (workout.recommendationScore) {
       body += `\n${t.strategy_title}\n${workout.explanation || ''}\n`;
     }
+  } else if (type === 'race_day') {
+    // A/B race day - race strategy and advice
+    const advice = raceDayAdvice || {};
+
+    body += `
+===================================
+${t.race_day_title || "RACE DAY"}
+===================================
+${t.event_label || "Event"}: ${raceCategory} - ${raceName}${raceDescription ? '\n' + raceDescription : ''}
+
+${t.readiness || "Readiness"}: ${(advice.readiness || 'unknown').toUpperCase()}
+${advice.readinessNote || ''}
+
+${t.race_strategy || "Race Strategy"}:
+${advice.strategy || t.default_race_strategy || "Start conservatively, build into the race."}
+`;
+
+    if (advice.powerTargets) {
+      body += `
+${t.power_targets || "Power Targets"}:
+• ${t.conservative || "Conservative"}: ${advice.powerTargets.conservative || 'N/A'}
+• ${t.normal || "Normal"}: ${advice.powerTargets.normal || 'N/A'}
+• ${t.aggressive || "Aggressive"}: ${advice.powerTargets.aggressive || 'N/A'}
+`;
+    }
+
+    body += `
+${t.warmup || "Warmup"}:
+${advice.warmup || t.default_warmup || "15-20 min easy with 2-3 short efforts"}
+
+${t.nutrition || "Nutrition"}:
+${advice.nutrition || t.default_nutrition || "Eat familiar foods, hydrate well"}
+`;
+
+    if (advice.mentalTips && advice.mentalTips.length > 0) {
+      body += `
+${t.mental_tips || "Mental Tips"}:
+${advice.mentalTips.map(tip => '• ' + tip).join('\n')}
+`;
+    }
+
   } else if (type === 'group_ride') {
     // C event day - group ride with unstructured training
     const eventName = params.cEventName || t.group_ride || "Group Ride";
@@ -243,6 +290,73 @@ ${weeklyPlanContext.adaptationReason}
 ${weeklyPlanContext.suggestion || ''}`;
     }
     body += '\n';
+  }
+
+  // === SECTION 3.5: Race Advice (for race tomorrow or yesterday) ===
+  if (raceDayAdvice && type !== 'race_day') {
+    const advice = raceDayAdvice;
+
+    if (advice.scenario === 'race_tomorrow') {
+      body += `
+===================================
+${t.race_tomorrow_title || "RACE TOMORROW"}
+===================================
+${t.event_label || "Event"}: ${advice.category || ''} - ${advice.eventName || 'Race'}
+
+${t.today_activity || "Today's Activity"}: ${(advice.todayActivity || 'openers').toUpperCase()}
+${advice.activityDetails || ''}
+
+${t.sleep_tips || "Sleep Tips"}:
+${advice.sleepTips || t.default_sleep_tips || "Go to bed early, limit screen time"}
+
+${t.nutrition_today || "Nutrition Today"}:
+${advice.nutritionToday || t.default_nutrition_today || "Carb-rich meals, stay hydrated"}
+
+${t.race_morning || "Race Morning"}:
+${advice.nutritionTomorrow || t.default_race_morning || "Familiar breakfast 2-3h before start"}
+`;
+
+      if (advice.logisticsTips && advice.logisticsTips.length > 0) {
+        body += `
+${t.prep_checklist || "Prep Checklist"}:
+${advice.logisticsTips.map(tip => '• ' + tip).join('\n')}
+`;
+      }
+
+      if (advice.mentalTips && advice.mentalTips.length > 0) {
+        body += `
+${t.mental_prep || "Mental Preparation"}:
+${advice.mentalTips.map(tip => '• ' + tip).join('\n')}
+`;
+      }
+
+    } else if (advice.scenario === 'race_yesterday') {
+      body += `
+===================================
+${t.post_race_title || "POST-RACE RECOVERY"}
+===================================
+${t.event_label || "Event"}: ${advice.category || ''} - ${advice.eventName || 'Race'} (${t.yesterday || "yesterday"})
+
+${t.recovery_status || "Recovery Status"}: ${(advice.recoveryStatus || 'unknown').toUpperCase()}
+${advice.recoveryNote || ''}
+
+${t.today_activity || "Today's Activity"}: ${(advice.todayActivity || 'rest').toUpperCase()}
+${advice.activityDetails || ''}
+
+${t.nutrition || "Nutrition"}:
+${advice.nutrition || t.default_recovery_nutrition || "Focus on protein and carbs for recovery"}
+
+${t.resume_training || "Resume Training"}:
+${advice.resumeTraining || t.default_resume || "Light training in 2-3 days based on how you feel"}
+`;
+
+      if (advice.warningSignsToWatch && advice.warningSignsToWatch.length > 0) {
+        body += `
+${t.warning_signs || "Warning Signs to Watch"}:
+${advice.warningSignsToWatch.map(sign => '! ' + sign).join('\n')}
+`;
+      }
+    }
   }
 
   // === SECTION 4: This Week's Schedule (compact) ===

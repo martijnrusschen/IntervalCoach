@@ -469,6 +469,21 @@ function generateGroupRideAdvice(context) {
     }
   }
 
+  // Build Whoop-specific context (SpO2, skin temp, sleep details)
+  let whoopContext = '';
+  if (context.wellness?.today) {
+    const w = context.wellness.today;
+    const whoopMarkers = [];
+    if (w.spO2) whoopMarkers.push('SpO2: ' + w.spO2.toFixed(1) + '%');
+    if (w.skinTemp) whoopMarkers.push('Skin Temp: ' + w.skinTemp.toFixed(1) + '°C');
+    if (w.deepSleep) whoopMarkers.push('Deep Sleep: ' + w.deepSleep.toFixed(1) + 'h');
+    if (w.remSleep) whoopMarkers.push('REM Sleep: ' + w.remSleep.toFixed(1) + 'h');
+    if (w.sleepEfficiency) whoopMarkers.push('Sleep Efficiency: ' + w.sleepEfficiency.toFixed(0) + '%');
+    if (whoopMarkers.length > 0) {
+      whoopContext = '\n- Physiological: ' + whoopMarkers.join(', ');
+    }
+  }
+
   // Build upcoming events context
   let upcomingContext = '';
   if (context.eventTomorrow?.hasEvent) {
@@ -501,6 +516,32 @@ function generateGroupRideAdvice(context) {
 - Days since last workout: ${context.daysSinceLastWorkout || 0}`;
   }
 
+  // Build adaptive context (RPE/Feel from recent workouts)
+  let adaptiveContext = '';
+  if (context.adaptiveTraining?.available) {
+    const fb = context.adaptiveTraining.feedback;
+    const adapt = context.adaptiveTraining.adaptation;
+    const adaptMarkers = [];
+    if (fb.avgFeel) adaptMarkers.push('Avg Feel: ' + fb.avgFeel.toFixed(1) + '/5');
+    if (fb.avgRpe) adaptMarkers.push('Avg RPE: ' + fb.avgRpe.toFixed(1) + '/10');
+    if (adapt.recommendation) adaptMarkers.push('Trend: ' + adapt.recommendation);
+    if (adaptMarkers.length > 0) {
+      adaptiveContext = '\n- Recent Feedback: ' + adaptMarkers.join(', ');
+    }
+  }
+
+  // Build zone progression context
+  let zoneContext = '';
+  if (context.zoneProgression?.available) {
+    const prog = context.zoneProgression;
+    if (prog.focusAreas?.length > 0) {
+      zoneContext = '\n- Zone Focus Areas: ' + prog.focusAreas.join(', ');
+    }
+    if (prog.strengths?.length > 0) {
+      zoneContext += '\n- Zone Strengths: ' + prog.strengths.join(', ');
+    }
+  }
+
   // Get language for localized output
   const langName = getPromptLanguage();
 
@@ -513,7 +554,7 @@ ${context.eventName || 'Group Ride'}${context.eventDescription ? '\nDescription:
 - Recovery Status: ${context.wellness?.recoveryStatus || 'Unknown'}
 - Recovery Score: ${context.wellness?.today?.recovery ? context.wellness.today.recovery + '%' : 'N/A'}
 - Sleep: ${context.wellness?.today?.sleep ? context.wellness.today.sleep.toFixed(1) + 'h' : 'N/A'} (${context.wellness?.sleepStatus || 'Unknown'})
-- HRV: ${context.wellness?.today?.hrv ? context.wellness.today.hrv + 'ms' : 'N/A'}${subjectiveContext}
+- HRV: ${context.wellness?.today?.hrv ? context.wellness.today.hrv + 'ms' : 'N/A'}${subjectiveContext}${whoopContext}
 
 **FITNESS & FATIGUE:**
 - TSB (Form): ${context.tsb != null ? context.tsb.toFixed(1) : 'N/A'} ${context.tsb < -25 ? '(VERY FATIGUED)' : context.tsb < -15 ? '(fatigued)' : context.tsb < -5 ? '(tired)' : context.tsb > 5 ? '(FRESH)' : '(okay)'}
@@ -521,7 +562,7 @@ ${context.eventName || 'Group Ride'}${context.eventDescription ? '\nDescription:
 - ATL (Fatigue): ${context.atl ? context.atl.toFixed(0) : 'N/A'}
 ${upcomingContext}
 
-**RECENT TRAINING:**${trainingContext}
+**RECENT TRAINING:**${trainingContext}${adaptiveContext}${zoneContext}
 
 **TRAINING PHASE:** ${context.phase || 'Unknown'}
 
@@ -557,5 +598,233 @@ Group rides are unstructured. The athlete can't control intervals but CAN contro
     };
   }
   return advice;
+}
+
+/**
+ * Generate AI advice for A/B race events
+ * Handles three scenarios: race today, race tomorrow, race yesterday
+ * @param {object} context - Full training context
+ * @returns {object} { scenario, strategy, tips, warmup, nutrition, recovery }
+ */
+function generateRaceDayAdvice(context) {
+  // Determine which scenario we're in
+  let scenario = 'unknown';
+  let raceEvent = null;
+
+  if (context.raceToday?.hasEvent) {
+    scenario = 'race_today';
+    raceEvent = context.raceToday;
+  } else if (context.eventTomorrow?.hasEvent &&
+             (context.eventTomorrow.category === 'A' || context.eventTomorrow.category === 'B')) {
+    scenario = 'race_tomorrow';
+    raceEvent = context.eventTomorrow;
+  } else if (context.eventYesterday?.hadEvent &&
+             (context.eventYesterday.category === 'A' || context.eventYesterday.category === 'B')) {
+    scenario = 'race_yesterday';
+    raceEvent = context.eventYesterday;
+  }
+
+  if (scenario === 'unknown') {
+    return null;
+  }
+
+  // Build recovery context
+  let recoveryContext = '';
+  if (context.wellness?.today) {
+    const w = context.wellness.today;
+    const markers = [];
+    markers.push('Recovery: ' + (w.recovery ? w.recovery + '%' : 'N/A'));
+    markers.push('Sleep: ' + (w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'));
+    if (w.hrv) markers.push('HRV: ' + w.hrv + 'ms');
+    if (w.restingHR) markers.push('RHR: ' + w.restingHR + 'bpm');
+    if (w.spO2) markers.push('SpO2: ' + w.spO2.toFixed(1) + '%');
+    if (w.deepSleep) markers.push('Deep: ' + w.deepSleep.toFixed(1) + 'h');
+    recoveryContext = markers.join(', ');
+  }
+
+  // Build power/fitness context
+  let fitnessContext = '';
+  if (context.powerProfile?.available) {
+    const pp = context.powerProfile;
+    fitnessContext = `FTP: ${pp.currentEftp || pp.ftp}W`;
+    if (pp.peak5min) fitnessContext += ` | 5min: ${pp.peak5min}W`;
+    if (pp.peak1min) fitnessContext += ` | 1min: ${pp.peak1min}W`;
+    if (pp.wPrimeKj) fitnessContext += ` | W': ${pp.wPrimeKj}kJ`;
+  }
+
+  // Build recent training context
+  let trainingContext = '';
+  if (context.recentWorkouts) {
+    const rides = context.recentWorkouts.rides || [];
+    const runs = context.recentWorkouts.runs || [];
+    trainingContext = `Recent (7d): ${rides.length} rides, ${runs.length} runs`;
+    if (context.daysSinceLastWorkout > 0) {
+      trainingContext += ` | ${context.daysSinceLastWorkout} days rest`;
+    }
+  }
+
+  // Get language for localized output
+  const langName = getPromptLanguage();
+
+  // Build scenario-specific prompt
+  let scenarioPrompt = '';
+  let outputFormat = '';
+
+  if (scenario === 'race_today') {
+    scenarioPrompt = `The athlete has a ${raceEvent.category} priority RACE TODAY.
+Event: ${raceEvent.eventName || 'Race'}${raceEvent.eventDescription ? '\nDescription: ' + raceEvent.eventDescription : ''}
+
+Provide race-day advice including:
+1. Pre-race assessment based on recovery data
+2. Pacing strategy based on power profile
+3. Warmup recommendations
+4. Nutrition/hydration reminders
+5. Mental focus tips`;
+
+    outputFormat = `{
+  "scenario": "race_today",
+  "readiness": "excellent|good|fair|compromised",
+  "readinessNote": "Brief assessment of readiness based on recovery data",
+  "strategy": "1-2 sentence pacing/race strategy",
+  "warmup": "Warmup recommendation based on recovery status",
+  "nutrition": "Pre-race and during-race nutrition tips",
+  "mentalTips": ["Tip 1", "Tip 2"],
+  "powerTargets": {
+    "conservative": "Power targets if feeling compromised",
+    "normal": "Normal race power targets",
+    "aggressive": "Power targets if feeling excellent"
+  }
+}`;
+
+  } else if (scenario === 'race_tomorrow') {
+    scenarioPrompt = `The athlete has a ${raceEvent.category} priority RACE TOMORROW.
+Event: ${raceEvent.eventName || 'Race'}${raceEvent.eventDescription ? '\nDescription: ' + raceEvent.eventDescription : ''}
+
+Provide pre-race day advice including:
+1. Today's activity recommendation (rest vs openers)
+2. Sleep and recovery optimization
+3. Nutrition loading strategy
+4. Equipment/logistics reminders
+5. Mental preparation tips`;
+
+    outputFormat = `{
+  "scenario": "race_tomorrow",
+  "todayActivity": "rest|openers|light_spin",
+  "activityDetails": "What to do today (if openers, describe them)",
+  "sleepTips": "Sleep optimization advice",
+  "nutritionToday": "What to eat today",
+  "nutritionTomorrow": "Race morning nutrition plan",
+  "logisticsTips": ["Prep tip 1", "Prep tip 2"],
+  "mentalTips": ["Mental prep tip 1", "Mental prep tip 2"]
+}`;
+
+  } else if (scenario === 'race_yesterday') {
+    scenarioPrompt = `The athlete had a ${raceEvent.category} priority RACE YESTERDAY.
+Event: ${raceEvent.eventName || 'Race'}${raceEvent.eventDescription ? '\nDescription: ' + raceEvent.eventDescription : ''}
+
+Provide post-race recovery advice including:
+1. Recovery status assessment
+2. Today's activity recommendation
+3. Nutrition for recovery
+4. When to resume normal training
+5. Signs to watch for (overreaching, illness)`;
+
+    outputFormat = `{
+  "scenario": "race_yesterday",
+  "recoveryStatus": "good|moderate|poor",
+  "recoveryNote": "Assessment of current recovery state",
+  "todayActivity": "rest|active_recovery|easy_spin",
+  "activityDetails": "What to do today",
+  "nutrition": "Recovery nutrition advice",
+  "resumeTraining": "When to resume normal training",
+  "warningSignsToWatch": ["Sign 1", "Sign 2"]
+}`;
+  }
+
+  const prompt = `You are an expert cycling/running coach providing ${scenario.replace('_', ' ')} advice.
+
+**RECOVERY DATA:**
+${recoveryContext}
+
+**FITNESS:**
+${fitnessContext}
+- TSB (Form): ${context.tsb != null ? context.tsb.toFixed(1) : 'N/A'} ${context.tsb < -25 ? '(VERY FATIGUED)' : context.tsb < -15 ? '(fatigued)' : context.tsb < -5 ? '(tired)' : context.tsb > 5 ? '(FRESH)' : '(okay)'}
+- CTL (Fitness): ${context.ctl ? context.ctl.toFixed(0) : 'N/A'}
+
+**RECENT TRAINING:**
+${trainingContext}
+
+**TRAINING PHASE:** ${context.phase || 'Unknown'}
+
+**SCENARIO:**
+${scenarioPrompt}
+
+**IMPORTANT: Respond in ${langName}.**
+
+**Output JSON only:**
+${outputFormat}`;
+
+  const response = callGeminiAPIText(prompt);
+  const advice = parseGeminiJsonResponse(response);
+
+  if (!advice) {
+    Logger.log("AI race day advice: Failed to parse response");
+    // Return default advice based on scenario
+    return getDefaultRaceDayAdvice(scenario, raceEvent, langName);
+  }
+
+  // Add event info to response
+  advice.eventName = raceEvent.eventName;
+  advice.eventDescription = raceEvent.eventDescription;
+  advice.category = raceEvent.category;
+
+  return advice;
+}
+
+/**
+ * Get default race day advice when AI fails
+ */
+function getDefaultRaceDayAdvice(scenario, raceEvent, langName) {
+  const eventName = raceEvent?.eventName || 'Race';
+
+  if (scenario === 'race_today') {
+    return {
+      scenario: 'race_today',
+      readiness: 'unknown',
+      readinessNote: 'Unable to assess - trust your body',
+      strategy: 'Start conservatively, build into the race',
+      warmup: '15-20 min easy with 2-3 short efforts',
+      nutrition: 'Eat familiar foods, hydrate well',
+      mentalTips: ['Focus on your own race', 'Stay calm at the start'],
+      eventName: eventName,
+      category: raceEvent?.category
+    };
+  } else if (scenario === 'race_tomorrow') {
+    return {
+      scenario: 'race_tomorrow',
+      todayActivity: 'openers',
+      activityDetails: '30 min easy with 3x30s race pace efforts',
+      sleepTips: 'Go to bed early, limit screen time',
+      nutritionToday: 'Carb-rich meals, stay hydrated',
+      nutritionTomorrow: 'Familiar breakfast 2-3h before start',
+      logisticsTips: ['Check equipment tonight', 'Lay out race kit'],
+      mentalTips: ['Visualize the race', 'Review your race plan'],
+      eventName: eventName,
+      category: raceEvent?.category
+    };
+  } else {
+    return {
+      scenario: 'race_yesterday',
+      recoveryStatus: 'unknown',
+      recoveryNote: 'Listen to your body',
+      todayActivity: 'rest',
+      activityDetails: 'Complete rest or very easy spin if legs feel good',
+      nutrition: 'Focus on protein and carbs for recovery',
+      resumeTraining: 'Light training in 2-3 days based on how you feel',
+      warningSignsToWatch: ['Elevated resting HR', 'Poor sleep', 'Excessive fatigue'],
+      eventName: eventName,
+      category: raceEvent?.category
+    };
+  }
 }
 

@@ -144,30 +144,76 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     const weekProgress = checkWeekProgress();
     const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
 
-    // Check if this is a C event (group ride) day
-    if (availability.isCEvent) {
-      Logger.log("C Event day: " + availability.cEventName + (availability.cEventDescription ? " (" + availability.cEventDescription + ")" : ""));
+    // Use centralized context builder - ensures all context is included
+    const ctx = gatherTrainingContext({
+      wellness: wellness,
+      fitnessMetrics: fitnessMetrics,
+      goals: goals,
+      phaseInfo: phaseInfo
+    });
 
-      // Get recent workout context for AI advice
-      const recentTypes = getRecentWorkoutTypes(7);
-      const adaptiveContext = getAdaptiveTrainingContext();
+    // Check if this is a race day (A/B event)
+    if (availability.isRaceDay) {
+      Logger.log("*** RACE DAY: " + availability.raceCategory + " - " + availability.raceName + " ***");
+
+      // Get power profile for race strategy
+      let powerProfile = { available: false };
+      try {
+        const powerCurve = fetchPowerCurve();
+        powerProfile = analyzePowerProfile(powerCurve, goals);
+      } catch (e) {
+        Logger.log("Power profile not available for race advice: " + e.toString());
+      }
+
+      // Generate race day advice with full context
+      const raceDayAdvice = generateRaceDayAdvice({
+        ...ctx,
+        powerProfile: powerProfile,
+        raceToday: {
+          hasEvent: true,
+          category: availability.raceCategory,
+          eventName: availability.raceName,
+          eventDescription: availability.raceDescription
+        }
+      });
+
+      Logger.log("Race day readiness: " + (raceDayAdvice?.readiness || 'unknown'));
+
+      // Send race day email
+      sendDailyEmail({
+        type: 'race_day',
+        summary: fitnessMetrics,
+        phaseInfo: phaseInfo,
+        wellness: wellness,
+        weekProgress: weekProgress,
+        upcomingDays: upcomingDays,
+        raceName: availability.raceName,
+        raceCategory: availability.raceCategory,
+        raceDescription: availability.raceDescription,
+        raceDayAdvice: raceDayAdvice
+      });
+
+    // Check if this is a C event (group ride) day
+    } else if (availability.isCEvent) {
+      Logger.log("C Event day: " + availability.cEventName + (availability.cEventDescription ? " (" + availability.cEventDescription + ")" : ""));
 
       // Get AI advice on how hard to push in the group ride
       const groupRideAdvice = generateGroupRideAdvice({
-        wellness: wellness,
-        tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
-        ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
-        atl: fitnessMetrics.atl_7 || fitnessMetrics.atl,
+        // From centralized context
+        wellness: ctx.wellness,
+        tsb: ctx.tsb,
+        ctl: ctx.ctl,
+        atl: ctx.atl,
+        eventTomorrow: ctx.eventTomorrow,
+        eventIn2Days: ctx.eventIn2Days,
+        recentWorkouts: ctx.recentWorkouts,
+        daysSinceLastWorkout: ctx.daysSinceLastWorkout,
+        phase: ctx.phase,
+        adaptiveTraining: ctx.adaptiveTraining,
+        zoneProgression: ctx.zoneProgression,
+        // Event-specific
         eventName: availability.cEventName,
-        eventDescription: availability.cEventDescription,
-        eventTomorrow: hasEventTomorrow(),
-        eventIn2Days: hasEventInDays(2),
-        recentWorkouts: {
-          rides: recentTypes.rides,
-          runs: recentTypes.runs
-        },
-        daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
-        phase: phaseInfo?.phaseName
+        eventDescription: availability.cEventDescription
       });
 
       Logger.log("Group ride intensity advice: " + groupRideAdvice?.intensity);
@@ -184,8 +230,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         cEventDescription: availability.cEventDescription,
         groupRideAdvice: groupRideAdvice
       });
+
     } else {
-      // Send regular status email (no placeholder)
+      // Check for A/B race tomorrow or yesterday for advice
+      let raceDayAdvice = null;
+      const hasTomorrowRace = ctx.eventTomorrow?.hasEvent &&
+                              (ctx.eventTomorrow.category === 'A' || ctx.eventTomorrow.category === 'B');
+      const hasYesterdayRace = ctx.eventYesterday?.hadEvent &&
+                               (ctx.eventYesterday.category === 'A' || ctx.eventYesterday.category === 'B');
+
+      if (hasTomorrowRace || hasYesterdayRace) {
+        raceDayAdvice = generateRaceDayAdvice(ctx);
+        if (raceDayAdvice) {
+          Logger.log("Race advice scenario: " + raceDayAdvice.scenario);
+        }
+      }
+
+      // Send regular status email (no placeholder) with optional race advice
       sendDailyEmail({
         type: 'status',
         summary: fitnessMetrics,
@@ -193,7 +254,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         wellness: wellness,
         weekProgress: weekProgress,
         upcomingDays: upcomingDays,
-        weeklyPlanContext: weeklyPlanContext
+        weeklyPlanContext: weeklyPlanContext,
+        raceDayAdvice: raceDayAdvice
       });
     }
 
@@ -342,22 +404,26 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Wellness data: Not available");
   }
 
-  // Get recent workout types for variety tracking
-  const recentTypes = getRecentWorkoutTypes(7);
-  const recentDisplay = isRun
-    ? (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None")
-    : (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None");
-  Logger.log("Recent " + activityType + " types (7 days): " + recentDisplay);
-  Logger.log("All recent activities: Rides=" + recentTypes.rides.length + ", Runs=" + recentTypes.runs.length);
+  // ===== GATHER CENTRALIZED TRAINING CONTEXT =====
+  // All context is gathered in one place - when adding new data sources,
+  // update gatherTrainingContext() in utils.gs and it will be available everywhere
+  const ctx = gatherTrainingContext({
+    wellness: wellness,
+    fitnessMetrics: summary,  // Use summary which has ctl_90, tsb_current etc
+    goals: goals,
+    phaseInfo: phaseInfo
+  });
 
-  // Get 2-week stimulus history for AI variety check
-  const twoWeekHistory = getTwoWeekWorkoutHistory();
-  const sportStimuli = isRun ? twoWeekHistory.recentStimuli.run : twoWeekHistory.recentStimuli.ride;
-  if (sportStimuli && sportStimuli.length > 0) {
-    Logger.log("Recent stimuli (2 weeks): " + sportStimuli.join(", "));
-  }
+  // Aliases for backward compatibility
+  const recentTypes = ctx.recentTypes;
+  const twoWeekHistory = ctx.twoWeekHistory;
+  const eventTomorrow = ctx.eventTomorrow;
+  const eventYesterday = ctx.eventYesterday;
+  const adaptiveContext = ctx.adaptiveTraining;
+  const weekProgress = ctx.weekProgress;
+  const zoneProgression = ctx.zoneProgression;
 
-  // Recalculate phase with full context (now that we have all data)
+  // Recalculate phase with full context (now that we have power profile data)
   const phaseContext = {
     goalDescription: goalDescription,
     goals: goals,
@@ -369,17 +435,12 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     z5Recent: summary.z5_recent_total,
     wellnessAverages: wellness.available ? wellness.averages : null,
     recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
-    recentWorkouts: {
-      rides: recentTypes.rides,
-      runs: recentTypes.runs,
-      lastIntensity: getLastWorkoutIntensity(recentTypes)
-    },
+    recentWorkouts: ctx.recentWorkouts,
     enableAI: true
   };
 
   // Update phaseInfo with enhanced assessment
   const enhancedPhaseInfo = calculateTrainingPhase(targetDate, phaseContext);
-  // Preserve goalDescription and update phaseInfo properties
   phaseInfo.phaseName = enhancedPhaseInfo.phaseName;
   phaseInfo.focus = enhancedPhaseInfo.focus;
   phaseInfo.aiEnhanced = enhancedPhaseInfo.aiEnhanced;
@@ -398,39 +459,6 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     }
   }
 
-  // Check for events around today (affects workout intensity selection)
-  const eventTomorrow = hasEventTomorrow();
-  const eventYesterday = hasEventYesterday();
-  if (eventTomorrow.hasEvent) {
-    Logger.log("Event tomorrow: " + eventTomorrow.category + (eventTomorrow.eventName ? " - " + eventTomorrow.eventName : " priority"));
-  }
-  if (eventYesterday.hadEvent) {
-    Logger.log("Event yesterday: " + eventYesterday.category + (eventYesterday.eventName ? " - " + eventYesterday.eventName : " priority"));
-  }
-
-  // Get adaptive training context (RPE/Feel feedback + training gap analysis)
-  const adaptiveContext = getAdaptiveTrainingContext(wellness);
-  if (adaptiveContext.available) {
-    let adaptiveLog = "Adaptive Training: " + adaptiveContext.adaptation.recommendation.toUpperCase();
-    if (adaptiveContext.feedback.avgFeel) {
-      adaptiveLog += " | Feel: " + adaptiveContext.feedback.avgFeel.toFixed(1) + "/5";
-    }
-    if (adaptiveContext.feedback.avgRpe) {
-      adaptiveLog += " | RPE: " + adaptiveContext.feedback.avgRpe.toFixed(1) + "/10";
-    }
-    if (adaptiveContext.gap.hasSignificantGap) {
-      adaptiveLog += " | Gap: " + adaptiveContext.gap.daysSinceLastWorkout + " days (" + adaptiveContext.gap.interpretation + ")";
-    }
-    adaptiveLog += " | Adjustment: " + (adaptiveContext.adaptation.intensityAdjustment > 0 ? '+' : '') + adaptiveContext.adaptation.intensityAdjustment + "%";
-    Logger.log(adaptiveLog);
-  } else {
-    Logger.log("Adaptive Training: " + (adaptiveContext.gap.daysSinceLastWorkout || 0) + " days since last workout, no feedback data");
-  }
-
-  // Check week progress (planned vs completed so far)
-  const weekProgress = checkWeekProgress();
-  Logger.log("Week Progress: " + weekProgress.summary);
-
   // Clean up missed placeholders from past days
   if (weekProgress.missedSessions > 0) {
     const cleanup = cleanupMissedPlaceholders(weekProgress);
@@ -440,23 +468,20 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   }
 
   // ===== REST DAY ASSESSMENT (with full context) =====
-  // The early RED check (line 66) handles emergencies, this considers full context
+  // The early RED check handles emergencies, this considers full context
   const restDayContext = {
-    wellness: wellness,
-    tsb: summary.tsb_current,
-    ctl: summary.ctl_90,
-    atl: summary.atl_7,
+    wellness: ctx.wellness,
+    tsb: ctx.tsb,
+    ctl: ctx.ctl,
+    atl: ctx.atl,
     phase: phaseInfo.phaseName,
-    eventTomorrow: eventTomorrow,
-    eventIn2Days: hasEventInDays(2),
-    recentWorkouts: {
-      rides: recentTypes.rides,
-      runs: recentTypes.runs
-    },
-    lastIntensity: getLastWorkoutIntensity(recentTypes),
-    daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
-    consecutiveDays: adaptiveContext.gap?.daysSinceLastWorkout === 0 ?
-      (adaptiveContext.consecutiveTrainingDays || 'Unknown') : 0
+    eventTomorrow: ctx.eventTomorrow,
+    eventIn2Days: ctx.eventIn2Days,
+    recentWorkouts: ctx.recentWorkouts,
+    lastIntensity: ctx.recentWorkouts.lastIntensity,
+    daysSinceLastWorkout: ctx.daysSinceLastWorkout,
+    consecutiveDays: ctx.daysSinceLastWorkout === 0 ?
+      (ctx.adaptiveTraining?.consecutiveTrainingDays || 'Unknown') : 0
   };
 
   const restAssessment = generateAIRestDayAssessment(restDayContext);
@@ -496,31 +521,28 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   }
 
   // Select workout types based on phase, TSB, recovery, events, and variety
+  // Uses centralized context (ctx) for all training data
   const typeSelection = selectWorkoutTypes({
-    wellness: wellness,
-    recentWorkouts: {
-      types: recentTypes,
-      lastIntensity: getLastWorkoutIntensity(recentTypes)
-    },
+    // From centralized context
+    wellness: ctx.wellness,
+    recentWorkouts: ctx.recentWorkouts,
+    tsb: ctx.tsb,
+    ctl: ctx.ctl,
+    eventTomorrow: ctx.eventTomorrow,
+    eventYesterday: ctx.eventYesterday,
+    daysSinceLastWorkout: ctx.daysSinceLastWorkout,
+    recentStimuli: ctx.recentStimuli,
+    stimulusCounts: ctx.stimulusCounts,
+    weekProgress: ctx.weekProgress,
+    zoneProgression: ctx.zoneProgression,
+    // Workout-specific parameters
     activityType: activityType,
     phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
-    eventTomorrow: eventTomorrow,
-    eventYesterday: eventYesterday,
-    // Additional context for decision
-    ctl: summary.ctl_90,
     duration: availability.duration,
     goals: goals,
     powerProfile: powerProfile,
-    daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
-    // Weekly plan hint - AI may adjust based on current conditions
     suggestedType: availability.suggestedType,
     isWeeklyPlan: availability.isWeeklyPlan,
-    // Stimulus variety tracking (AI-first variety check)
-    recentStimuli: twoWeekHistory.recentStimuli,
-    stimulusCounts: twoWeekHistory.stimulusCounts,
-    // Week progress - adapt if behind/ahead of plan
-    weekProgress: weekProgress,
     enableAI: true
   });
 
