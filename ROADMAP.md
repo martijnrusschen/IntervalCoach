@@ -70,7 +70,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | Feature | Description | Type |
 |---------|-------------|------|
 | **Post-Workout → Next Day** | Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10% | Coaching |
-| **W' Guides Interval Design** | Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery | Coaching |
+| ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
 | **Z-Score Intensity Modifier** | Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green | Coaching |
 | **Volume Jump Detection** | Flag week-to-week volume increases >15% as injury risk, suggest spreading load | Coaching |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
@@ -88,6 +88,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | Feature | Description |
 |---------|-------------|
 | ~~HRV/RHR Baseline Tracking~~ | Track 30-day rolling baselines and surface deviation % to AI and emails |
+| ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
 
 ---
 
