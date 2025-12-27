@@ -102,6 +102,7 @@ function sendDailyEmail(params) {
     phaseInfo,
     wellness,
     workout,
+    workoutSelection,
     powerProfile,
     restAssessment,
     weekProgress,
@@ -167,11 +168,26 @@ ${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatu
 ${t.recommendation_title || "TODAY'S WORKOUT"}
 ===================================
 ${t.workout_details || 'Workout'}: ${workout.type}
-${t.why_title}
-${workout.recommendationReason || workout.explanation || ''}
 `;
-    if (workout.recommendationScore) {
-      body += `\n${t.strategy_title}\n${workout.explanation || ''}\n`;
+
+    // Show AI selection reasoning (why this workout type was chosen)
+    if (workoutSelection?.reason) {
+      body += `
+${t.why_this_workout || "Why This Workout"}:
+${workoutSelection.reason}`;
+      if (workoutSelection.varietyNote) {
+        body += `\n• ${workoutSelection.varietyNote}`;
+      }
+      if (workoutSelection.zoneNote) {
+        body += `\n• ${workoutSelection.zoneNote}`;
+      }
+      body += '\n';
+    } else {
+      // Fallback to old explanation if no AI reasoning available
+      body += `
+${t.strategy_title || "Workout Strategy"}:
+${workout.explanation || workout.recommendationReason || ''}
+`;
     }
   } else if (type === 'race_day') {
     // A/B race day - race strategy and advice
@@ -1082,8 +1098,7 @@ function sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, pow
 
   // Generate subject line
   const dateStr = Utilities.formatDate(new Date(activity.start_date_local), SYSTEM_SETTINGS.TIMEZONE, "MM/dd HH:mm");
-  const effectivenessEmoji = analysis.effectiveness >= 8 ? "🎯" : analysis.effectiveness >= 6 ? "✓" : "⚠";
-  const subject = `[IntervalCoach] ${effectivenessEmoji} Workout Analysis: ${activity.name} (${dateStr})`;
+  const subject = `[IntervalCoach] Workout Analysis: ${activity.name} (${dateStr})`;
 
   let body = `${t.greeting}\n\n`;
 
@@ -1190,7 +1205,7 @@ ${t.current_fitness || "Current Fitness"}
 CTL: ${fitness.ctl ? fitness.ctl.toFixed(1) : 'N/A'}
 ATL: ${fitness.atl ? fitness.atl.toFixed(1) : 'N/A'}
 TSB: ${fitness.tsb ? fitness.tsb.toFixed(1) : 'N/A'}
-${t.ramp_rate || "Ramp Rate"}: ${fitness.rampRate || 'N/A'} TSS/week
+${t.ramp_rate || "Ramp Rate"}: ${fitness.rampRate ? fitness.rampRate.toFixed(2) : 'N/A'} TSS/week
 `;
 
   // Power/Running Profile

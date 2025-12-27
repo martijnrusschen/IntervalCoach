@@ -652,6 +652,12 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     phaseInfo: phaseInfo,
     wellness: wellness,
     workout: workout,
+    workoutSelection: {
+      reason: typeSelection.reason,
+      varietyNote: typeSelection.varietyNote,
+      zoneNote: typeSelection.zoneNote,
+      aiEnhanced: typeSelection.aiEnhanced
+    },
     powerProfile: isRun ? null : powerProfile,
     weekProgress: weekProgress,
     upcomingDays: upcomingDays
