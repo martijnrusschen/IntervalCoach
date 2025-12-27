@@ -5,6 +5,237 @@
  */
 
 // =========================================================
+// HRV/RHR BASELINE TRACKING
+// =========================================================
+
+/**
+ * Store HRV/RHR baseline data from wellness records
+ * Calculates and stores 30-day rolling averages as personal baselines
+ * @param {Array} wellnessRecords - Array of wellness records (should include 30+ days)
+ * @returns {object} Stored baseline data
+ */
+function storeWellnessBaseline(wellnessRecords) {
+  if (!wellnessRecords || wellnessRecords.length < 7) {
+    Logger.log("Not enough wellness records to calculate baseline");
+    return null;
+  }
+
+  // Calculate baselines from available data (up to 30 days)
+  const records30d = wellnessRecords.slice(0, 30);
+  const records7d = wellnessRecords.slice(0, 7);
+
+  const hrvValues30d = records30d.map(w => w.hrv).filter(v => v != null && v > 0);
+  const rhrValues30d = records30d.map(w => w.restingHR).filter(v => v != null && v > 0);
+  const hrvValues7d = records7d.map(w => w.hrv).filter(v => v != null && v > 0);
+  const rhrValues7d = records7d.map(w => w.restingHR).filter(v => v != null && v > 0);
+
+  const baseline = {
+    calculatedAt: new Date().toISOString(),
+    recordCount: wellnessRecords.length,
+    hrv: {
+      baseline30d: hrvValues30d.length >= 7 ? average(hrvValues30d) : null,
+      baseline7d: hrvValues7d.length >= 3 ? average(hrvValues7d) : null,
+      stdDev30d: hrvValues30d.length >= 7 ? calculateStdDev(hrvValues30d) : null,
+      min30d: hrvValues30d.length > 0 ? Math.min(...hrvValues30d) : null,
+      max30d: hrvValues30d.length > 0 ? Math.max(...hrvValues30d) : null,
+      dataPoints: hrvValues30d.length
+    },
+    rhr: {
+      baseline30d: rhrValues30d.length >= 7 ? average(rhrValues30d) : null,
+      baseline7d: rhrValues7d.length >= 3 ? average(rhrValues7d) : null,
+      stdDev30d: rhrValues30d.length >= 7 ? calculateStdDev(rhrValues30d) : null,
+      min30d: rhrValues30d.length > 0 ? Math.min(...rhrValues30d) : null,
+      max30d: rhrValues30d.length > 0 ? Math.max(...rhrValues30d) : null,
+      dataPoints: rhrValues30d.length
+    }
+  };
+
+  // Store baseline
+  const scriptProperties = PropertiesService.getScriptProperties();
+  try {
+    scriptProperties.setProperty('wellnessBaseline', JSON.stringify(baseline));
+    Logger.log(`Wellness baseline stored: HRV ${baseline.hrv.baseline30d?.toFixed(0)}ms (n=${baseline.hrv.dataPoints}), RHR ${baseline.rhr.baseline30d?.toFixed(0)}bpm (n=${baseline.rhr.dataPoints})`);
+  } catch (e) {
+    Logger.log("Error storing wellness baseline: " + e.toString());
+  }
+
+  return baseline;
+}
+
+/**
+ * Calculate standard deviation of an array
+ * @param {Array<number>} values - Array of numbers
+ * @returns {number} Standard deviation
+ */
+function calculateStdDev(values) {
+  if (!values || values.length < 2) return null;
+  const avg = average(values);
+  const squareDiffs = values.map(v => Math.pow(v - avg, 2));
+  return Math.sqrt(average(squareDiffs));
+}
+
+/**
+ * Get stored wellness baseline
+ * @returns {object|null} Baseline data or null if not available
+ */
+function getWellnessBaseline() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  try {
+    const baselineJson = scriptProperties.getProperty('wellnessBaseline');
+    if (!baselineJson) return null;
+    return JSON.parse(baselineJson);
+  } catch (e) {
+    Logger.log("Error reading wellness baseline: " + e.toString());
+    return null;
+  }
+}
+
+/**
+ * Calculate deviation from personal baseline
+ * @param {number} currentValue - Today's value
+ * @param {object} baselineData - Baseline object with baseline30d, stdDev30d
+ * @param {string} metric - 'hrv' or 'rhr' (for interpretation direction)
+ * @returns {object} Deviation analysis
+ */
+function calculateBaselineDeviation(currentValue, baselineData, metric) {
+  if (currentValue == null || !baselineData?.baseline30d) {
+    return { available: false };
+  }
+
+  const baseline = baselineData.baseline30d;
+  const stdDev = baselineData.stdDev30d || (baseline * 0.1); // Default to 10% if no stdDev
+  const deviation = currentValue - baseline;
+  const deviationPercent = (deviation / baseline) * 100;
+  const zScore = stdDev > 0 ? deviation / stdDev : 0;
+
+  // Interpretation based on metric type
+  // HRV: Higher is generally better
+  // RHR: Lower is generally better
+  let status = 'normal';
+  let interpretation = '';
+
+  if (metric === 'hrv') {
+    if (zScore >= 1.5) {
+      status = 'elevated';
+      interpretation = 'Well above baseline - excellent recovery';
+    } else if (zScore >= 0.5) {
+      status = 'above_baseline';
+      interpretation = 'Above baseline - good recovery';
+    } else if (zScore <= -1.5) {
+      status = 'suppressed';
+      interpretation = 'Significantly below baseline - potential stress/fatigue';
+    } else if (zScore <= -0.5) {
+      status = 'below_baseline';
+      interpretation = 'Below baseline - monitor recovery';
+    } else {
+      status = 'normal';
+      interpretation = 'Within normal range';
+    }
+  } else if (metric === 'rhr') {
+    // RHR: Lower is better, so signs are reversed
+    if (zScore <= -1.5) {
+      status = 'excellent';
+      interpretation = 'Well below baseline - excellent recovery';
+    } else if (zScore <= -0.5) {
+      status = 'below_baseline';
+      interpretation = 'Below baseline - good recovery';
+    } else if (zScore >= 1.5) {
+      status = 'elevated';
+      interpretation = 'Significantly above baseline - potential stress/fatigue/illness';
+    } else if (zScore >= 0.5) {
+      status = 'above_baseline';
+      interpretation = 'Above baseline - monitor recovery';
+    } else {
+      status = 'normal';
+      interpretation = 'Within normal range';
+    }
+  }
+
+  return {
+    available: true,
+    current: currentValue,
+    baseline: baseline,
+    deviation: deviation,
+    deviationPercent: deviationPercent,
+    zScore: zScore,
+    stdDev: stdDev,
+    status: status,
+    interpretation: interpretation
+  };
+}
+
+/**
+ * Get comprehensive baseline analysis for today's wellness
+ * @param {object} todayWellness - Today's wellness data (hrv, restingHR)
+ * @returns {object} Analysis with deviations for both metrics
+ */
+function analyzeWellnessVsBaseline(todayWellness) {
+  const baseline = getWellnessBaseline();
+
+  const analysis = {
+    available: false,
+    hrvDeviation: null,
+    rhrDeviation: null,
+    overallStatus: 'unknown',
+    concerns: [],
+    baselineAge: null
+  };
+
+  if (!baseline) {
+    return analysis;
+  }
+
+  // Calculate baseline age in hours
+  if (baseline.calculatedAt) {
+    const baselineDate = new Date(baseline.calculatedAt);
+    analysis.baselineAge = Math.round((new Date() - baselineDate) / (1000 * 60 * 60));
+  }
+
+  // HRV deviation
+  if (todayWellness?.hrv != null) {
+    analysis.hrvDeviation = calculateBaselineDeviation(todayWellness.hrv, baseline.hrv, 'hrv');
+  }
+
+  // RHR deviation
+  if (todayWellness?.restingHR != null) {
+    analysis.rhrDeviation = calculateBaselineDeviation(todayWellness.restingHR, baseline.rhr, 'rhr');
+  }
+
+  analysis.available = analysis.hrvDeviation?.available || analysis.rhrDeviation?.available;
+
+  // Determine overall status and concerns
+  if (analysis.available) {
+    const hrvStatus = analysis.hrvDeviation?.status || 'unknown';
+    const rhrStatus = analysis.rhrDeviation?.status || 'unknown';
+
+    // Check for concerning combinations
+    if (hrvStatus === 'suppressed' || rhrStatus === 'elevated') {
+      analysis.overallStatus = 'warning';
+      if (hrvStatus === 'suppressed') {
+        analysis.concerns.push('HRV significantly below baseline');
+      }
+      if (rhrStatus === 'elevated') {
+        analysis.concerns.push('Resting HR significantly elevated');
+      }
+    } else if (hrvStatus === 'below_baseline' || rhrStatus === 'above_baseline') {
+      analysis.overallStatus = 'caution';
+      if (hrvStatus === 'below_baseline') {
+        analysis.concerns.push('HRV below baseline');
+      }
+      if (rhrStatus === 'above_baseline') {
+        analysis.concerns.push('Resting HR above baseline');
+      }
+    } else if (hrvStatus === 'elevated' || hrvStatus === 'above_baseline' || rhrStatus === 'excellent' || rhrStatus === 'below_baseline') {
+      analysis.overallStatus = 'good';
+    } else {
+      analysis.overallStatus = 'normal';
+    }
+  }
+
+  return analysis;
+}
+
+// =========================================================
 // TRAINING GAP DETECTION
 // =========================================================
 

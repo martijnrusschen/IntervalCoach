@@ -27,37 +27,68 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **C Event (Group Ride) Support** - AI intensity advice for unstructured group rides
 - [x] **Cross-Sport Zone Equivalency** - AI calculates equivalent efforts between cycling and running
 - [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
+- [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
+- [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
 
 ---
 
 ## Backlog
 
-All pending features, ordered by impact. Pick from the top for maximum value.
+All pending features, unified and ordered by priority. Pick from the top for maximum value.
 
-| Priority | Feature | Description | Source |
-|----------|---------|-------------|--------|
-| 🔴 **HIGH** | **Training Demand Modifier** | User-configurable intensity scaling (0.8-1.2x) applied to all workouts | TrainerRoad Training Approach |
-| 🔴 **HIGH** | **Zone Focus Selection** | Let users specify priority zones for AI to emphasize | TrainerRoad Training Approach |
-| 🔴 **HIGH** | **Surface AI Reasoning** | Show workout selection reasoning in daily emails (why this workout, recovery influence) | TrainerRoad Training Approach |
-| 🔴 **HIGH** | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | TrainerRoad |
-| 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
-| 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
-| 🟡 **MEDIUM** | **Mid-Week Adaptation** | Analyze week progress, adjust remaining days (missed intensity → suggest boost) | TrainerRoad Training Approach |
-| 🟡 **MEDIUM** | **Interval-Level Intensity Tweaks** | Scale power targets within workouts based on recovery (Yellow → reduce Z4+ by 5-10%) | TrainerRoad Training Approach |
-| 🟡 **MEDIUM** | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | TrainerRoad AI |
-| 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
-| 🟡 **MEDIUM** | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Both |
-| 🟡 **MEDIUM** | **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | JOIN |
-| 🟡 **MEDIUM** | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
-| 🟡 **MEDIUM** | **Whoop API Fallback** | Add Whoop API as alternative/supplementary data source | Infrastructure |
-| 🟢 **LOW** | **Cumulative Cross-Sport Load** | Track combined fatigue from cycling + running (unified fatigue model) | TrainerRoad Training Approach |
-| 🟢 **LOW** | **Recovery Debt Tracking** | Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates | TrainerRoad Training Approach |
-| 🟢 **LOW** | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | TrainerRoad Training Approach |
-| 🟢 **LOW** | **Training Outcome Simulation** | Simulate multiple workout options before deciding | TrainerRoad AI |
-| 🟢 **LOW** | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | TrainerRoad |
-| 🟢 **LOW** | **Multi-year Plan Builder** | Long-term periodization (2+ years) | TrainerRoad |
-| 🟢 **LOW** | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
-| 🟢 **LOW** | **Remove Repetitive Code** | DRY refactoring, shared utilities | Infrastructure |
+### 🔴 HIGH Priority
+
+| Feature | Description | Type |
+|---------|-------------|------|
+| **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
+| **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
+| **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
+| **Data-Driven Taper Timing** | Model ATL decay to calculate optimal taper start date for target TSB on race day | Coaching |
+| **Adaptive Phase Transitions** | Shift Base→Build based on fitness trajectory, not just calendar date | Coaching |
+
+### 🟡 MEDIUM Priority
+
+| Feature | Description | Type |
+|---------|-------------|------|
+| **Subjective Markers as Constraints** | Enforce soreness/fatigue/stress 4-5 as hard constraints that block high intensity | Coaching |
+| **Zone Weakness Targeting** | Drive workout selection toward undertrained zones (plateau detection → stimulus rotation) | Coaching |
+| **Cross-Sport Load Balance** | Prevent high-intensity in both cycling AND running same week. Track cumulative Z5+ time | Coaching |
+| **Event-Specific Weekly Emphasis** | Climbing goal → 5-20min power focus; TT → threshold focus; Criterium → anaerobic focus | Coaching |
+| **Planned Deload Weeks** | Auto-insert recovery weeks based on 4-week rolling TSS accumulation | Coaching |
+| **Sleep Quality Scoring** | Create quality score from deep sleep %, REM %, efficiency. Weight quality > quantity | Coaching |
+| **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
+| **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
+| **Illness Detection Patterns** | Detect illness: elevated RHR + suppressed HRV + poor sleep for 2+ days | Coaching |
+| **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
+| **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
+| **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
+| **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | Platform |
+| **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
+
+### 🟢 LOW Priority (Quick Wins)
+
+| Feature | Description | Type |
+|---------|-------------|------|
+| **Post-Workout → Next Day** | Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10% | Coaching |
+| ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
+| **Z-Score Intensity Modifier** | Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green | Coaching |
+| **Volume Jump Detection** | Flag week-to-week volume increases >15% as injury risk, suggest spreading load | Coaching |
+| **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
+| **Training Load Rate Warnings** | Warn when CTL ramp rate exceeds safe thresholds for multiple weeks | Coaching |
+| **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
+| **Recovery Debt Tracking** | Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates | Coaching |
+| **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
+| **Training Outcome Simulation** | Simulate multiple workout options before deciding | AI-First |
+| **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
+| **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
+| **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
+
+### ✅ Completed
+
+| Feature | Description |
+|---------|-------------|
+| ~~HRV/RHR Baseline Tracking~~ | Track 30-day rolling baselines and surface deviation % to AI and emails |
+| ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
 
 ---
 
@@ -402,6 +433,60 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - AI uses personalized zones for interval power targets
 - Profile type and capacity insights guide workout intensity selection
 
+### Feature: Mid-Week Adaptation ✅ COMPLETE
+
+**Implementation:**
+- Added `checkMidWeekAdaptationNeeded()` in `workouts_planning.gs` - Unified check for both execution-based and fatigue-based adaptation triggers
+- Added `buildMidWeekAdaptationPrompt()` in `prompts_planning.gs` - AI prompt for adaptation decisions
+- Added `generateMidWeekAdaptation()` in `workouts_planning.gs` - Orchestrates adaptation and updates calendar
+- Added `applyMidWeekAdaptation()` in `workouts_planning.gs` - Updates Intervals.icu placeholders
+- Integrated into `main.gs` daily flow after placeholder cleanup
+- Added email section to show adaptation changes
+- Added `testMidWeekAdaptation()` in `test_planning.gs`
+
+**Key features:**
+- **Execution-based triggers**: Missed intensity sessions (VO2max, Threshold, SweetSpot), TSS deficit > 100, adherence < 70%
+- **Fatigue-based triggers**: Low recovery + intensity planned, high fatigue (TSB < -20) + multiple intensity days
+- AI analyzes situation and recommends adapted schedule for remaining week
+- Reschedules missed intensity to appropriate remaining days
+- Reduces/swaps intensity when recovery is low
+- Placeholders updated in Intervals.icu calendar with [Adapted] tag
+- Changes summarized in daily email under "Plan Adapted" section
+
+**Constraints enforced:**
+- No hard workouts the day before events
+- Maximum 2 intensity days remaining in a week
+- If overreaching (TSB < -30), prioritize recovery over catching up
+
+### Feature: HRV/RHR Baseline Tracking ✅ COMPLETE
+
+**Implementation:**
+- Added baseline storage functions in `tracking.gs`:
+  - `storeWellnessBaseline()` - Calculates and stores 30-day rolling averages
+  - `getWellnessBaseline()` - Retrieves stored baseline
+  - `calculateBaselineDeviation()` - Calculates deviation with z-score interpretation
+  - `analyzeWellnessVsBaseline()` - Comprehensive deviation analysis
+  - `calculateStdDev()` - Standard deviation utility
+- Updated `createWellnessSummary()` in `wellness.gs` to include baseline analysis
+- Updated `generateAIRecoveryAssessment()` in `prompts_analysis.gs` to accept 30-day baseline context
+- Updated `main.gs` to fetch 30 days of wellness data (was 7)
+- Added baseline deviation display in daily emails
+- Added translations for all 5 languages
+- Added `testBaselineTracking()` in `test_recovery.gs`
+
+**Key features:**
+- Calculates 30-day rolling averages for HRV and RHR
+- Stores min/max ranges and standard deviation
+- Z-score based interpretation:
+  - |z| < 0.5 = normal
+  - 0.5-1.5 = notable
+  - > 1.5 = significant
+- HRV interpretation: higher = better (suppressed = concerning)
+- RHR interpretation: lower = better (elevated = concerning)
+- Overall status: good/normal/caution/warning
+- AI recovery assessment now considers 30-day baseline context
+- Email shows deviation % with warning indicators (⚠️ for concerns, ✓ for good)
+
 ---
 
 ## How to Use This Document
@@ -414,4 +499,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-27 (Added TrainerRoad Training Approach features to backlog)*
+*Last updated: 2025-12-27 (Added HRV/RHR Baseline Tracking feature)*

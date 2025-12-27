@@ -205,6 +205,14 @@ function createWellnessSummary(wellnessRecords) {
   const avgRestingHR = average(last7Days.map(w => w.restingHR).filter(v => v != null));
   const avgRecovery = average(last7Days.map(w => w.recovery).filter(v => v != null));
 
+  // Store/update baseline if we have enough records
+  if (wellnessRecords.length >= 7) {
+    storeWellnessBaseline(wellnessRecords);
+  }
+
+  // Analyze vs personal baseline
+  const baselineAnalysis = analyzeWellnessVsBaseline(latestWithData);
+
   // Determine recovery status - AI-enhanced with personal baselines
   let recoveryStatus = "Unknown";
   let intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
@@ -230,9 +238,9 @@ function createWellnessSummary(wellnessRecords) {
     restingHR: avgRestingHR
   };
 
-  // Try AI-driven assessment first
+  // Try AI-driven assessment first (pass baseline analysis for 30-day context)
   try {
-    const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData);
+    const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData, baselineAnalysis);
 
     if (aiAssessment && aiAssessment.recoveryStatus) {
       Logger.log("AI Recovery Assessment: " + JSON.stringify(aiAssessment));
@@ -319,7 +327,9 @@ function createWellnessSummary(wellnessRecords) {
     sleepStatus: sleepStatus,
     intensityModifier: intensityModifier,
     aiEnhanced: aiEnhanced,
-    personalizedReason: personalizedReason
+    personalizedReason: personalizedReason,
+    // Baseline deviation analysis
+    baselineAnalysis: baselineAnalysis
   };
 }
 

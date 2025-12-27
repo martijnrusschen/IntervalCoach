@@ -322,3 +322,102 @@ function testWhoopWellness() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+// =========================================================
+// BASELINE TRACKING TESTS
+// =========================================================
+
+/**
+ * Test HRV/RHR baseline tracking and deviation analysis
+ */
+function testBaselineTracking() {
+  Logger.log("=== BASELINE TRACKING TEST ===");
+
+  // Fetch 30 days of wellness data for baseline calculation
+  Logger.log("\n--- Fetching 30 Days of Wellness Data ---");
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
+  Logger.log("Records fetched: " + wellnessRecords.length);
+
+  if (wellnessRecords.length < 7) {
+    Logger.log("ERROR: Not enough data for baseline calculation (need at least 7 days)");
+    return;
+  }
+
+  // Store/calculate baseline
+  Logger.log("\n--- Calculating Baseline ---");
+  const baseline = storeWellnessBaseline(wellnessRecords);
+
+  if (!baseline) {
+    Logger.log("ERROR: Failed to calculate baseline");
+    return;
+  }
+
+  Logger.log("HRV Baseline (30d): " + (baseline.hrv.baseline30d ? baseline.hrv.baseline30d.toFixed(0) + " ms" : "N/A"));
+  Logger.log("HRV StdDev: " + (baseline.hrv.stdDev30d ? baseline.hrv.stdDev30d.toFixed(1) + " ms" : "N/A"));
+  Logger.log("HRV Range: " + (baseline.hrv.min30d || "N/A") + " - " + (baseline.hrv.max30d || "N/A") + " ms");
+  Logger.log("HRV Data Points: " + baseline.hrv.dataPoints);
+
+  Logger.log("\nRHR Baseline (30d): " + (baseline.rhr.baseline30d ? baseline.rhr.baseline30d.toFixed(0) + " bpm" : "N/A"));
+  Logger.log("RHR StdDev: " + (baseline.rhr.stdDev30d ? baseline.rhr.stdDev30d.toFixed(1) + " bpm" : "N/A"));
+  Logger.log("RHR Range: " + (baseline.rhr.min30d || "N/A") + " - " + (baseline.rhr.max30d || "N/A") + " bpm");
+  Logger.log("RHR Data Points: " + baseline.rhr.dataPoints);
+
+  // Analyze today vs baseline
+  Logger.log("\n--- Today vs Baseline Analysis ---");
+  const today = wellnessRecords[0];
+  Logger.log("Today's HRV: " + (today.hrv || "N/A") + " ms");
+  Logger.log("Today's RHR: " + (today.restingHR || "N/A") + " bpm");
+
+  const analysis = analyzeWellnessVsBaseline(today);
+
+  if (!analysis.available) {
+    Logger.log("No deviation analysis available");
+    return;
+  }
+
+  if (analysis.hrvDeviation?.available) {
+    const hrv = analysis.hrvDeviation;
+    Logger.log("\nHRV Deviation:");
+    Logger.log("  Current: " + hrv.current + " ms");
+    Logger.log("  Baseline: " + hrv.baseline.toFixed(0) + " ms");
+    Logger.log("  Deviation: " + (hrv.deviationPercent >= 0 ? "+" : "") + hrv.deviationPercent.toFixed(1) + "%");
+    Logger.log("  Z-Score: " + hrv.zScore.toFixed(2));
+    Logger.log("  Status: " + hrv.status);
+    Logger.log("  Interpretation: " + hrv.interpretation);
+  }
+
+  if (analysis.rhrDeviation?.available) {
+    const rhr = analysis.rhrDeviation;
+    Logger.log("\nRHR Deviation:");
+    Logger.log("  Current: " + rhr.current + " bpm");
+    Logger.log("  Baseline: " + rhr.baseline.toFixed(0) + " bpm");
+    Logger.log("  Deviation: " + (rhr.deviationPercent >= 0 ? "+" : "") + rhr.deviationPercent.toFixed(1) + "%");
+    Logger.log("  Z-Score: " + rhr.zScore.toFixed(2));
+    Logger.log("  Status: " + rhr.status);
+    Logger.log("  Interpretation: " + rhr.interpretation);
+  }
+
+  Logger.log("\nOverall Status: " + analysis.overallStatus);
+  if (analysis.concerns?.length > 0) {
+    Logger.log("Concerns: " + analysis.concerns.join(", "));
+  }
+
+  // Test full wellness summary with baseline analysis
+  Logger.log("\n--- Full Wellness Summary ---");
+  const summary = createWellnessSummary(wellnessRecords);
+
+  if (summary.baselineAnalysis?.available) {
+    Logger.log("Baseline Analysis included in summary: YES");
+    Logger.log("Overall baseline status: " + summary.baselineAnalysis.overallStatus);
+  } else {
+    Logger.log("Baseline Analysis included in summary: NO");
+  }
+
+  Logger.log("Recovery Status: " + summary.recoveryStatus);
+  Logger.log("AI Enhanced: " + summary.aiEnhanced);
+  if (summary.personalizedReason) {
+    Logger.log("Personalized Reason: " + summary.personalizedReason);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

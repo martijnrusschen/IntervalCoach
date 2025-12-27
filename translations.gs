@@ -52,6 +52,7 @@ const TRANSLATIONS = {
     avg_hrv: "Avg HRV",
     avg_rhr: "Avg Resting HR",
     avg_recovery: "Avg Recovery",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Keep up the great work!",
     // Training Load Advisor
@@ -137,6 +138,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation.",
     daily_status_footer: "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu.",
     plan_adaptation_title: "Plan Adaptation Suggested",
+    plan_adapted_title: "Plan Adapted",
+    changes_made: "Changes made",
     // Smart rest day reasons
     rest_after_training: "Recovery day after recent training. Your body adapts during rest.",
     rest_before_intensity: "Rest day before tomorrow's intensity. Arrive fresh for quality work.",
@@ -192,6 +195,7 @@ const TRANSLATIONS = {
     avg_hrv: "平均HRV",
     avg_rhr: "平均安静時心拍",
     avg_recovery: "平均リカバリー",
+    vs_baseline: "30日ベースライン比",
     ramp_rate: "ランプレート",
     weekly_footer: "今週もお疲れ様でした！",
     // Training Load Advisor
@@ -284,6 +288,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Promedio",
     avg_rhr: "FC Reposo Promedio",
     avg_recovery: "Recuperación Promedio",
+    vs_baseline: "vs Línea Base 30d",
     ramp_rate: "Tasa de Rampa",
     weekly_footer: "¡Sigue así!",
     // Training Load Advisor
@@ -382,6 +387,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Moyenne",
     avg_rhr: "FC Repos Moyenne",
     avg_recovery: "Récupération Moyenne",
+    vs_baseline: "vs Référence 30j",
     ramp_rate: "Taux de Rampe",
     weekly_footer: "Continuez comme ça!",
     // Training Load Advisor
@@ -481,6 +487,7 @@ const TRANSLATIONS = {
     avg_hrv: "Gem. HRV",
     avg_rhr: "Gem. Rustpols",
     avg_recovery: "Gem. Herstel",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Goed bezig, ga zo door!",
     // Training Load Advisor
@@ -566,6 +573,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Voeg een 'Ride' of 'Run' placeholder toe aan je Intervals.icu kalender voor workout generatie.",
     daily_status_footer: "Voor een gepersonaliseerde workout, voeg een 'Ride' of 'Run - 60min' placeholder toe aan je kalender in Intervals.icu.",
     plan_adaptation_title: "Plan Aanpassing Voorgesteld",
+    plan_adapted_title: "Plan Aangepast",
+    changes_made: "Wijzigingen",
     // Smart rest day reasons
     rest_after_training: "Hersteldag na recente training. Je lichaam past zich aan tijdens rust.",
     rest_before_intensity: "Rustdag voor morgen's intensiteit. Kom fris aan de start.",

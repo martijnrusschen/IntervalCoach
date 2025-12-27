@@ -27,7 +27,14 @@ function testUnifiedDailyEmail(emailType) {
   const phaseInfo = calculateTrainingPhase(targetDate);
   const upcomingDays = fetchUpcomingPlaceholders(7);
   const weekProgress = checkWeekProgress();
-  const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
+
+  // Check for mid-week adaptation (unified approach)
+  let midWeekAdaptation = null;
+  const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitnessMetrics);
+  if (adaptationCheck.needed) {
+    Logger.log("Adaptation needed: " + adaptationCheck.reason);
+    // Note: In test mode, we don't apply changes, just show what would happen
+  }
 
   Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
   Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
@@ -41,7 +48,7 @@ function testUnifiedDailyEmail(emailType) {
     wellness: wellness,
     weekProgress: weekProgress,
     upcomingDays: upcomingDays,
-    weeklyPlanContext: weeklyPlanContext
+    midWeekAdaptation: midWeekAdaptation
   };
 
   // Add type-specific params
