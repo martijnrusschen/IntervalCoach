@@ -137,6 +137,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation.",
     daily_status_footer: "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu.",
     plan_adaptation_title: "Plan Adaptation Suggested",
+    plan_adapted_title: "Plan Adapted",
+    changes_made: "Changes made",
     // Smart rest day reasons
     rest_after_training: "Recovery day after recent training. Your body adapts during rest.",
     rest_before_intensity: "Rest day before tomorrow's intensity. Arrive fresh for quality work.",
@@ -566,6 +568,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Voeg een 'Ride' of 'Run' placeholder toe aan je Intervals.icu kalender voor workout generatie.",
     daily_status_footer: "Voor een gepersonaliseerde workout, voeg een 'Ride' of 'Run - 60min' placeholder toe aan je kalender in Intervals.icu.",
     plan_adaptation_title: "Plan Aanpassing Voorgesteld",
+    plan_adapted_title: "Plan Aangepast",
+    changes_made: "Wijzigingen",
     // Smart rest day reasons
     rest_after_training: "Hersteldag na recente training. Je lichaam past zich aan tijdens rust.",
     rest_before_intensity: "Rustdag voor morgen's intensiteit. Kom fris aan de start.",

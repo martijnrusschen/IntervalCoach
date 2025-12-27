@@ -27,6 +27,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **C Event (Group Ride) Support** - AI intensity advice for unstructured group rides
 - [x] **Cross-Sport Zone Equivalency** - AI calculates equivalent efforts between cycling and running
 - [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
+- [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
 
 ---
 
@@ -39,7 +40,6 @@ All pending features, ordered by impact. Pick from the top for maximum value.
 | 🔴 **HIGH** | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | TrainerRoad |
 | 🔴 **HIGH** | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | 🔴 **HIGH** | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
-| 🟡 **MEDIUM** | **Mid-Week Adaptation** | Analyze week progress, adjust remaining days (missed intensity → suggest boost) | TrainerRoad Training Approach |
 | 🟡 **MEDIUM** | **Interval-Level Intensity Tweaks** | Scale power targets within workouts based on recovery (Yellow → reduce Z4+ by 5-10%) | TrainerRoad Training Approach |
 | 🟡 **MEDIUM** | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | TrainerRoad AI |
 | 🟡 **MEDIUM** | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | TrainerRoad AI |
@@ -398,6 +398,31 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - AI uses personalized zones for interval power targets
 - Profile type and capacity insights guide workout intensity selection
 
+### Feature: Mid-Week Adaptation ✅ COMPLETE
+
+**Implementation:**
+- Added `checkMidWeekAdaptationNeeded()` in `workouts_planning.gs` - Unified check for both execution-based and fatigue-based adaptation triggers
+- Added `buildMidWeekAdaptationPrompt()` in `prompts_planning.gs` - AI prompt for adaptation decisions
+- Added `generateMidWeekAdaptation()` in `workouts_planning.gs` - Orchestrates adaptation and updates calendar
+- Added `applyMidWeekAdaptation()` in `workouts_planning.gs` - Updates Intervals.icu placeholders
+- Integrated into `main.gs` daily flow after placeholder cleanup
+- Added email section to show adaptation changes
+- Added `testMidWeekAdaptation()` in `test_planning.gs`
+
+**Key features:**
+- **Execution-based triggers**: Missed intensity sessions (VO2max, Threshold, SweetSpot), TSS deficit > 100, adherence < 70%
+- **Fatigue-based triggers**: Low recovery + intensity planned, high fatigue (TSB < -20) + multiple intensity days
+- AI analyzes situation and recommends adapted schedule for remaining week
+- Reschedules missed intensity to appropriate remaining days
+- Reduces/swaps intensity when recovery is low
+- Placeholders updated in Intervals.icu calendar with [Adapted] tag
+- Changes summarized in daily email under "Plan Adapted" section
+
+**Constraints enforced:**
+- No hard workouts the day before events
+- Maximum 2 intensity days remaining in a week
+- If overreaching (TSB < -30), prioritize recovery over catching up
+
 ---
 
 ## How to Use This Document
@@ -410,4 +435,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-27 (Added TrainerRoad Training Approach features to backlog)*
+*Last updated: 2025-12-27 (Added Mid-Week Adaptation feature)*

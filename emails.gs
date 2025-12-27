@@ -20,7 +20,7 @@
  * @param {object} params.restAssessment - AI rest assessment (for type='rest')
  * @param {object} params.weekProgress - Week progress data
  * @param {Array} params.upcomingDays - Upcoming 7 days schedule
- * @param {object} params.weeklyPlanContext - Plan adaptation context
+ * @param {object} params.midWeekAdaptation - Mid-week adaptation results (if any)
  */
 /**
  * Determine the reason for a rest day based on context
@@ -107,11 +107,11 @@ function sendDailyEmail(params) {
     restAssessment,
     weekProgress,
     upcomingDays,
-    weeklyPlanContext,
     raceDayAdvice,
     raceName,
     raceCategory,
-    raceDescription
+    raceDescription,
+    midWeekAdaptation
   } = params;
 
   // Build subject based on type
@@ -298,12 +298,17 @@ ${t.weekly_overview || "Week Progress"}
     }
     body += ` | TSS: ${wp.tssCompleted}${wp.tssPlanned > 0 ? '/' + wp.tssPlanned : ''}`;
 
-    if (weeklyPlanContext?.needsAdaptation) {
+    // Mid-week adaptation section (when plan was modified)
+    if (midWeekAdaptation?.success && midWeekAdaptation?.changes?.length > 0) {
       body += `
 
-[!] ${t.plan_adaptation_title || "Adaptation Suggested"}:
-${weeklyPlanContext.adaptationReason}
-${weeklyPlanContext.suggestion || ''}`;
+[+] ${t.plan_adapted_title || "Plan Adapted"}:
+${midWeekAdaptation.summary || 'Your remaining week has been adjusted.'}
+
+${t.changes_made || "Changes"}:`;
+      for (const change of midWeekAdaptation.changes) {
+        body += `\n• ${change}`;
+      }
     }
     body += '\n';
   }
