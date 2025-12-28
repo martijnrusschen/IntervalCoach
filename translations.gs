@@ -167,7 +167,19 @@ const TRANSLATIONS = {
     week: "Week",
     activities: "activities",
     reason: "Reason",
-    recommendation: "Recommendation"
+    recommendation: "Recommendation",
+    // Taper timing
+    taper_timing_title: "Taper Timing",
+    race: "Race",
+    days: "days",
+    taper_start: "Taper start",
+    taper_type: "Type",
+    taper_length: "Length",
+    taper_plan: "Plan",
+    race_day_projection: "Race Day Projection",
+    key_workouts: "Key Workouts",
+    notes: "Notes",
+    in: "in"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -273,7 +285,19 @@ const TRANSLATIONS = {
     week: "週",
     activities: "アクティビティ",
     reason: "理由",
-    recommendation: "推奨"
+    recommendation: "推奨",
+    // Taper timing
+    taper_timing_title: "テーパリング計画",
+    race: "レース",
+    days: "日",
+    taper_start: "テーパー開始",
+    taper_type: "タイプ",
+    taper_length: "期間",
+    taper_plan: "計画",
+    race_day_projection: "レース当日予測",
+    key_workouts: "重要ワークアウト",
+    notes: "注意事項",
+    in: "あと"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -379,7 +403,19 @@ const TRANSLATIONS = {
     week: "Semana",
     activities: "actividades",
     reason: "Razón",
-    recommendation: "Recomendación"
+    recommendation: "Recomendación",
+    // Taper timing
+    taper_timing_title: "Planificación del Taper",
+    race: "Carrera",
+    days: "días",
+    taper_start: "Inicio del taper",
+    taper_type: "Tipo",
+    taper_length: "Duración",
+    taper_plan: "Plan",
+    race_day_projection: "Proyección Día de Carrera",
+    key_workouts: "Entrenamientos Clave",
+    notes: "Notas",
+    in: "en"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -491,7 +527,19 @@ const TRANSLATIONS = {
     week: "Semaine",
     activities: "activités",
     reason: "Raison",
-    recommendation: "Recommandation"
+    recommendation: "Recommandation",
+    // Taper timing
+    taper_timing_title: "Planification de l'Affûtage",
+    race: "Course",
+    days: "jours",
+    taper_start: "Début de l'affûtage",
+    taper_type: "Type",
+    taper_length: "Durée",
+    taper_plan: "Plan",
+    race_day_projection: "Projection Jour de Course",
+    key_workouts: "Entraînements Clés",
+    notes: "Notes",
+    in: "dans"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -654,6 +702,18 @@ const TRANSLATIONS = {
     week: "Week",
     activities: "activiteiten",
     reason: "Reden",
-    recommendation: "Aanbeveling"
+    recommendation: "Aanbeveling",
+    // Taper timing
+    taper_timing_title: "Taper Planning",
+    race: "Wedstrijd",
+    days: "dagen",
+    taper_start: "Taper start",
+    taper_type: "Type",
+    taper_length: "Duur",
+    taper_plan: "Plan",
+    race_day_projection: "Wedstrijddag Projectie",
+    key_workouts: "Belangrijke Workouts",
+    notes: "Notities",
+    in: "over"
   }
 };

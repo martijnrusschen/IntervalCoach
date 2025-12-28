@@ -311,6 +311,30 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
 `;
   }
 
+  // Build taper context if within race window
+  let taperContext = '';
+  if (context.taperRecommendation?.available) {
+    const taper = context.taperRecommendation;
+    const rec = taper.analysis?.recommended;
+    const ai = taper.aiRecommendation;
+
+    taperContext = `
+**TAPER TIMING (CRITICAL - follow this guidance):**
+- Race: ${taper.analysis.raceDate} (${taper.analysis.daysToRace} days away)
+- Recommended: ${rec.taperType} (${rec.taperDescription})
+- Taper Start: ${rec.taperStartDate}${rec.daysUntilTaperStart <= 0 ? ' (STARTED)' : rec.daysUntilTaperStart <= 7 ? ' (STARTING THIS WEEK)' : ''}
+- Days Until Taper: ${rec.daysUntilTaperStart}
+- Target Race Day TSB: ${taper.analysis.targetTSB}
+- Projected Race Day CTL: ${rec.raceDayCTL}
+${ai?.weekByWeekPlan ? '- Plan: ' + ai.weekByWeekPlan.join(' | ') : ''}
+
+**TAPER RULES TO APPLY:**
+${rec.daysUntilTaperStart <= 0 ? '- IN TAPER: Reduce volume to ' + Math.round(rec.taperIntensity * 100) + '%. Keep sessions short and sharp. No long endurance rides.' : ''}
+${rec.daysUntilTaperStart > 0 && rec.daysUntilTaperStart <= 7 ? '- TAPER STARTS THIS WEEK: Begin reducing volume from ' + rec.taperStartDate + '. Last hard workout 3-4 days before race.' : ''}
+${taper.analysis.daysToRace <= 7 ? '- RACE WEEK: Focus on freshness. Easy spinning with opener 1-2 days before.' : ''}
+`;
+  }
+
   // Get user's language for localized output
   const lang = USER_SETTINGS.LANGUAGE || 'en';
   const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
@@ -331,7 +355,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
 - eFTP: ${context.eftp || 'N/A'}W
 - CTL Trend: ${context.ctlTrend || 'stable'}
-${goalsContext}
+${goalsContext}${taperContext}
 **RECOVERY STATUS:**
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
@@ -360,6 +384,8 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
 11. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
 12. ZONE PROGRESSION: If zone levels are provided, include at least one workout targeting underdeveloped zones (focus areas)
+13. TAPER: If in taper period, reduce volume significantly. Keep intensity short and sharp. Last hard workout 3-4 days before race.
+14. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
@@ -769,14 +795,16 @@ Write all text in ${langName}.
 /**
  * Check if mid-week adaptation is needed based on missed sessions AND wellness/recovery
  * Combines execution-based (missed workouts) and fatigue-based (wellness) adaptation triggers
+ * Also considers taper timing to ensure race readiness
  *
  * @param {object} weekProgress - Result from checkWeekProgress()
  * @param {object} upcomingDays - Remaining week placeholders
  * @param {object} wellness - Wellness summary (optional)
  * @param {object} fitness - Fitness metrics with TSB (optional)
+ * @param {object} taperRecommendation - Taper recommendation from generateTaperRecommendation() (optional)
  * @returns {object} { needed: boolean, reason: string, priority: string, triggers: object }
  */
-function checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitness) {
+function checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitness, taperRecommendation) {
   const result = {
     needed: false,
     reason: '',
@@ -787,7 +815,8 @@ function checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitn
       lowAdherence: false,
       lowRecovery: false,
       highFatigue: false,
-      recoveryMismatch: false
+      recoveryMismatch: false,
+      taperMismatch: false
     }
   };
 
@@ -879,6 +908,54 @@ function checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitn
       if (result.priority !== 'high') result.priority = 'medium';
       result.triggers.highFatigue = true;
       reasons.push(`Fatigued (TSB: ${tsb.toFixed(1)}) with ${upcomingIntenseDays.length} hard days ahead`);
+    }
+  }
+
+  // ===== TAPER-BASED TRIGGERS (race preparation) =====
+  if (taperRecommendation?.available && upcomingDays) {
+    const taper = taperRecommendation.analysis;
+    const rec = taper.recommended;
+
+    // Check if we're in taper window
+    const inTaper = rec.daysUntilTaperStart <= 0;
+    const taperStartsThisWeek = rec.daysUntilTaperStart <= 7 && rec.daysUntilTaperStart > 0;
+    const raceWeek = taper.daysToRace <= 7;
+
+    // Find high intensity planned in remaining week
+    const today = formatDateISO(new Date());
+    const upcomingIntense = upcomingDays.filter(d => {
+      if (d.date <= today) return false;
+      const name = d.placeholderName || '';
+      return name.match(/VO2|Threshold|Intervals|SweetSpot/i);
+    });
+
+    // In taper but still have hard workouts planned (except opener)
+    if (inTaper && upcomingIntense.length > 1) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.taperMismatch = true;
+      reasons.push(`In taper (race in ${taper.daysToRace} days) but ${upcomingIntense.length} intensity sessions still planned`);
+    }
+
+    // Race week with too much intensity
+    if (raceWeek && upcomingIntense.length > 1) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.taperMismatch = true;
+      reasons.push(`Race week - too many intensity sessions (${upcomingIntense.length}) planned`);
+    }
+
+    // Taper starting this week but no volume reduction yet
+    if (taperStartsThisWeek) {
+      // Find days after taper start that still have high intensity
+      const taperStartDate = rec.taperStartDate;
+      const postTaperIntense = upcomingIntense.filter(d => d.date >= taperStartDate);
+      if (postTaperIntense.length > 1) {
+        result.needed = true;
+        if (result.priority !== 'high') result.priority = 'medium';
+        result.triggers.taperMismatch = true;
+        reasons.push(`Taper starts ${rec.taperStartDate} but ${postTaperIntense.length} hard workouts still planned after`);
+      }
     }
   }
 

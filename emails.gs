@@ -112,7 +112,8 @@ function sendDailyEmail(params) {
     raceCategory,
     raceDescription,
     midWeekAdaptation,
-    deloadCheck
+    deloadCheck,
+    taperRecommendation
   } = params;
 
   // Build subject based on type
@@ -383,6 +384,11 @@ ${urgencyEmoji} ${urgencyLabel}
     body += `
 ${t.deload_reminder || "Deload reminder"}: ${deloadCheck.weeksWithoutDeload} ${t.weeks_training || "weeks of training"}. ${deloadCheck.recommendation || ""}
 `;
+  }
+
+  // === SECTION 3.4: Taper Timing (within 6 weeks of A race) ===
+  if (taperRecommendation?.available) {
+    body += formatTaperEmailSection(taperRecommendation);
   }
 
   // === SECTION 3.5: Race Advice (for race tomorrow or yesterday) ===

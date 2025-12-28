@@ -30,6 +30,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
 - [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
 - [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on 4-week TSS patterns
+- [x] **Data-Driven Taper Timing** - Models ATL decay to calculate optimal taper start date for target TSB on race day
 
 ---
 
@@ -44,7 +45,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
 | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
-| **Data-Driven Taper Timing** | Model ATL decay to calculate optimal taper start date for target TSB on race day | Coaching |
 | **Adaptive Phase Transitions** | Shift Base→Build based on fitness trajectory, not just calendar date | Coaching |
 
 ### 🟡 MEDIUM Priority
@@ -90,6 +90,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~HRV/RHR Baseline Tracking~~ | Track 30-day rolling baselines and surface deviation % to AI and emails |
 | ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
 | ~~Planned Deload Weeks~~ | Auto-detect when recovery week is needed based on 4-week TSS patterns |
+| ~~Data-Driven Taper Timing~~ | Model ATL decay to calculate optimal taper start date for target TSB on race day |
 
 ---
 
@@ -523,6 +524,42 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Provides suggested deload TSS target (50-70% of average)
 - Soft reminder when approaching 3+ weeks without recovery
 
+### Feature: Data-Driven Taper Timing ✅ COMPLETE
+
+**Implementation:**
+- Added `simulateTaper()` in `fitness.gs` - Models CTL/ATL/TSB decay during reduced training
+- Added `calculateOptimalTaperStart()` in `fitness.gs` - Tests different taper scenarios to find optimal start
+- Added `generateTaperRecommendation()` in `fitness.gs` - Creates AI-enhanced taper plan
+- Added `formatTaperEmailSection()` in `fitness.gs` - Formats taper for email display
+- Integrated into `main.gs` daily flow after deload check
+- Added taper section to `sendDailyEmail()` in `emails.gs`
+- Added taper context to `generateAIWeeklyPlan()` in `workouts_planning.gs`
+- Added taper triggers to `checkMidWeekAdaptationNeeded()` for race prep adaptation
+- Added translations for all 5 languages
+- Added `testTaperTiming()` in `test_planning.gs`
+
+**Key features:**
+- Models exponential decay: CTL (42-day constant), ATL (7-day constant)
+- Tests taper lengths from 7-21 days with 3 intensity options (30%, 50%, 70% volume)
+- Calculates optimal start date to reach target TSB (default: +10) on race day
+- Only activates within 6 weeks of A race
+
+**Taper types:**
+- Light taper (70% volume): Minimal fitness loss, less freshness gain
+- Moderate taper (50% volume): Balanced approach (default)
+- Aggressive taper (30% volume): Maximum freshness, more CTL loss
+
+**AI-enhanced recommendations:**
+- Week-by-week taper plan
+- Key workouts (last hard session, opener workout)
+- Personalized warnings and advice
+- Confidence level and expected race day form
+
+**Mid-week adaptation integration:**
+- Detects taper mismatch: too many hard workouts planned during taper window
+- Race week protection: blocks high intensity except opener
+- Auto-adapts if taper plan is violated
+
 ---
 
 ## How to Use This Document
@@ -535,4 +572,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-28 (Added Planned Deload Weeks feature)*
+*Last updated: 2025-12-28 (Added Data-Driven Taper Timing feature)*

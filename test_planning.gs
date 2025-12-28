@@ -478,3 +478,99 @@ function testDeloadDetection() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Test taper timing calculation
+ * Analyzes optimal taper start date for upcoming A race
+ */
+function testTaperTiming() {
+  Logger.log("=== TAPER TIMING TEST ===\n");
+  requireValidConfig();
+
+  // Fetch goals and fitness
+  const goals = fetchUpcomingGoals();
+  const fitness = fetchFitnessMetrics();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  Logger.log("=== CURRENT FITNESS ===");
+  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
+  Logger.log("ATL: " + (fitness.atl?.toFixed(1) || "N/A"));
+  Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
+
+  Logger.log("\n=== GOALS ===");
+  if (goals?.available && goals?.primaryGoal) {
+    Logger.log("Primary: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+  } else {
+    Logger.log("No primary goal found (using TARGET_DATE: " + USER_SETTINGS.TARGET_DATE + ")");
+  }
+
+  // Generate taper recommendation
+  const primaryGoal = goals?.primaryGoal || { date: USER_SETTINGS.TARGET_DATE, name: "Target Event" };
+  const taperRec = generateTaperRecommendation(fitness, primaryGoal, phaseInfo);
+
+  Logger.log("\n=== TAPER ANALYSIS ===");
+
+  if (!taperRec.available) {
+    Logger.log("Taper recommendation not available: " + taperRec.reason);
+    if (taperRec.daysToRace) {
+      Logger.log("Days to race: " + taperRec.daysToRace);
+    }
+    Logger.log("\n=== TEST COMPLETE ===");
+    return;
+  }
+
+  const analysis = taperRec.analysis;
+  const rec = analysis.recommended;
+
+  Logger.log("Race Date: " + analysis.raceDate);
+  Logger.log("Days to Race: " + analysis.daysToRace);
+  Logger.log("Current TSB: " + analysis.currentTSB);
+  Logger.log("Target Race Day TSB: " + analysis.targetTSB);
+
+  Logger.log("\n=== RECOMMENDED TAPER ===");
+  Logger.log("Type: " + rec.taperType + " (" + rec.taperDescription + ")");
+  Logger.log("Length: " + rec.taperLengthDays + " days");
+  Logger.log("Start Date: " + rec.taperStartDate);
+  Logger.log("Days Until Taper: " + rec.daysUntilTaperStart);
+
+  Logger.log("\n=== RACE DAY PROJECTION ===");
+  Logger.log("CTL: " + analysis.currentCTL + " → " + rec.raceDayCTL + " (loss: " + rec.ctlLoss + ")");
+  Logger.log("TSB: " + analysis.currentTSB + " → " + rec.raceDayTSB);
+
+  // Show AI recommendation if available
+  const ai = taperRec.aiRecommendation;
+  if (ai?.success) {
+    Logger.log("\n=== AI RECOMMENDATION ===");
+    Logger.log("Summary: " + ai.summary);
+
+    if (ai.weekByWeekPlan && ai.weekByWeekPlan.length > 0) {
+      Logger.log("\nWeek-by-Week Plan:");
+      ai.weekByWeekPlan.forEach(w => Logger.log("  • " + w));
+    }
+
+    if (ai.keyWorkouts && ai.keyWorkouts.length > 0) {
+      Logger.log("\nKey Workouts:");
+      ai.keyWorkouts.forEach(w => Logger.log("  • " + w));
+    }
+
+    if (ai.warnings && ai.warnings.length > 0) {
+      Logger.log("\nWarnings:");
+      ai.warnings.forEach(w => Logger.log("  ⚠️ " + w));
+    }
+
+    Logger.log("\nExpected Performance: " + ai.expectedPerformance);
+    Logger.log("Confidence: " + ai.confidenceLevel);
+  }
+
+  // Show alternatives
+  if (analysis.alternatives && analysis.alternatives.length > 0) {
+    Logger.log("\n=== ALTERNATIVE SCENARIOS ===");
+    analysis.alternatives.forEach(alt => {
+      Logger.log(alt.taperType + ": Start " + alt.taperStartDate +
+                " (" + alt.taperLengthDays + " days) → TSB " + alt.raceDayTSB);
+    });
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

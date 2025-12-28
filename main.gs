@@ -445,6 +445,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log(`Deload check failed (non-critical): ${e.toString()}`);
   }
 
+  // ===== TAPER TIMING =====
+  // Calculate optimal taper timing for upcoming A races (within 6 weeks)
+  let taperRecommendation = null;
+  try {
+    const primaryGoal = goals?.available && goals?.primaryGoal ? goals.primaryGoal : null;
+    if (primaryGoal && primaryGoal.date) {
+      taperRecommendation = generateTaperRecommendation(summary, primaryGoal, phaseInfo);
+      if (taperRecommendation.available) {
+        const rec = taperRecommendation.analysis.recommended;
+        Logger.log(`Taper timing: ${rec.taperType} starting ${rec.taperStartDate} for ${primaryGoal.name}`);
+        Logger.log(`  Race day projection: CTL ${rec.raceDayCTL}, TSB ${rec.raceDayTSB}`);
+      }
+    }
+  } catch (e) {
+    Logger.log(`Taper timing calculation failed (non-critical): ${e.toString()}`);
+  }
+
   // Aliases for backward compatibility
   const recentTypes = ctx.recentTypes;
   const twoWeekHistory = ctx.twoWeekHistory;
@@ -507,7 +524,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     weekProgress,
     upcomingDaysForAdaptation,
     wellness,
-    summary  // fitness metrics
+    summary,  // fitness metrics
+    taperRecommendation  // taper timing for race prep
   );
 
   if (adaptationCheck.needed) {
@@ -732,7 +750,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     weekProgress: weekProgress,
     upcomingDays: upcomingDays,
     midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
-    deloadCheck: deloadCheck  // Include deload recommendation if needed
+    deloadCheck: deloadCheck,  // Include deload recommendation if needed
+    taperRecommendation: taperRecommendation  // Include taper timing if within 6 weeks of race
   });
 }
 
