@@ -701,9 +701,16 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   // Generate workout with appropriate prompt
   Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
 
+  // Build warnings object to pass to prompt (so AI factors these into decisions)
+  const warnings = {
+    volumeJump: volumeJump,
+    rampRateWarning: rampRateWarning,
+    deloadCheck: deloadCheck
+  };
+
   const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis);
+    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings)
+    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings);
 
   // Build context for regeneration feedback loop
   const regenerationContext = {

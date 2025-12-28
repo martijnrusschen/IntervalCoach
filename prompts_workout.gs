@@ -67,8 +67,11 @@ ${insights ? `- **Note:** ${insights}` : ''}
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis) {
+function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings) {
   const analysisLang = getPromptLanguage();
+
+  // Initialize warnings object if not provided
+  warnings = warnings || {};
 
   // Zwift Display Name (Clean, short name without "IntervalCoach_" prefix)
   const safeType = type.replace(/[^a-zA-Z0-9]/g,"");
@@ -283,6 +286,46 @@ ${lw.ftpCalibration === 'increase_5w' ? `- FTP may be set too low. Athlete can h
     }
   }
 
+  // Build training load warnings context
+  let warningsContext = "";
+  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed;
+
+  if (hasWarnings) {
+    let warningItems = [];
+
+    // Volume Jump Warning
+    if (warnings.volumeJump?.detected) {
+      const vj = warnings.volumeJump;
+      const riskText = vj.risk === 'high' ? 'HIGH INJURY RISK' : vj.risk === 'medium' ? 'MEDIUM RISK' : 'ELEVATED';
+      warningItems.push(`- **VOLUME JUMP (${riskText}):** Week-over-week TSS increased ${vj.percentChange}% (${vj.lastWeekTSS} → ${vj.thisWeekTSS}). ${vj.risk === 'high' ? 'Reduce intensity significantly today.' : 'Monitor fatigue closely.'}`);
+    }
+
+    // Ramp Rate Warning
+    if (warnings.rampRateWarning?.warning) {
+      const rr = warnings.rampRateWarning;
+      const levelText = rr.level === 'critical' ? 'CRITICAL' : rr.level === 'warning' ? 'WARNING' : 'CAUTION';
+      warningItems.push(`- **RAMP RATE ${levelText}:** Sustained high CTL ramp rate (${rr.avgRate} CTL/week avg) for ${rr.consecutiveWeeks} weeks. ${rr.level === 'critical' ? 'Recovery day strongly recommended.' : 'Consider reducing intensity.'}`);
+    }
+
+    // Deload Check
+    if (warnings.deloadCheck?.needed) {
+      const dl = warnings.deloadCheck;
+      const urgencyText = dl.urgency === 'high' ? 'URGENT' : dl.urgency === 'medium' ? 'RECOMMENDED' : 'SUGGESTED';
+      warningItems.push(`- **DELOAD ${urgencyText}:** ${dl.weeksWithoutDeload} weeks without recovery week. ${dl.urgency === 'high' ? 'Today should be easy/recovery only.' : 'Plan recovery week soon.'}`);
+    }
+
+    warningsContext = `
+**1h. TRAINING LOAD WARNINGS (Critical - Must Factor Into Decision):**
+${warningItems.join('\n')}
+
+**WARNING RESPONSE RULES (Must Follow):**
+- If ANY warning is HIGH/CRITICAL/URGENT: Score VO2max/Threshold workouts 1-3 only. Favor Recovery/Endurance.
+- If multiple warnings present: Compound effect - be MORE conservative than any single warning suggests.
+- Volume Jump + High Ramp Rate = Overreaching risk. Today must be easy regardless of recovery metrics.
+- If Deload is URGENT: Override normal workout selection. Return Recovery or easy Endurance only.
+`;
+  }
+
   return `
 You are an expert cycling coach using the logic of Coggan, Friel, and Seiler.
 Generate a Zwift workout (.zwo) and evaluate its suitability.
@@ -294,7 +337,7 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB:** ${summary.tsb_current.toFixed(1)}
 - **Recent Load (Z5+):** ${summary.z5_recent_total > 1500 ? "High" : "Normal"}
-${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}
+${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}${warningsContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
 - **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
@@ -342,8 +385,11 @@ ${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}$
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis) {
+function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings) {
   const analysisLang = getPromptLanguage();
+
+  // Initialize warnings object if not provided
+  warnings = warnings || {};
 
   const safeType = type.replace(/[^a-zA-Z0-9]/g, "");
   const workoutName = "IntervalCoach_" + safeType + "_" + dateStr;
@@ -508,6 +554,43 @@ ${lw.difficultyMatch === 'as_expected' ? `- Last workout difficulty matched expe
     }
   }
 
+  // Build training load warnings context (same as cycling)
+  let warningsContext = "";
+  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed;
+
+  if (hasWarnings) {
+    let warningItems = [];
+
+    if (warnings.volumeJump?.detected) {
+      const vj = warnings.volumeJump;
+      const riskText = vj.risk === 'high' ? 'HIGH INJURY RISK' : vj.risk === 'medium' ? 'MEDIUM RISK' : 'ELEVATED';
+      warningItems.push(`- **VOLUME JUMP (${riskText}):** Week-over-week TSS increased ${vj.percentChange}%. ${vj.risk === 'high' ? 'Reduce intensity significantly - running has high injury risk!' : 'Monitor fatigue closely.'}`);
+    }
+
+    if (warnings.rampRateWarning?.warning) {
+      const rr = warnings.rampRateWarning;
+      const levelText = rr.level === 'critical' ? 'CRITICAL' : rr.level === 'warning' ? 'WARNING' : 'CAUTION';
+      warningItems.push(`- **RAMP RATE ${levelText}:** Sustained high CTL ramp rate for ${rr.consecutiveWeeks} weeks. ${rr.level === 'critical' ? 'Easy run only today!' : 'Consider reducing intensity.'}`);
+    }
+
+    if (warnings.deloadCheck?.needed) {
+      const dl = warnings.deloadCheck;
+      const urgencyText = dl.urgency === 'high' ? 'URGENT' : dl.urgency === 'medium' ? 'RECOMMENDED' : 'SUGGESTED';
+      warningItems.push(`- **DELOAD ${urgencyText}:** ${dl.weeksWithoutDeload} weeks without recovery. ${dl.urgency === 'high' ? 'Recovery run only!' : 'Plan easy week soon.'}`);
+    }
+
+    warningsContext = `
+**1g. TRAINING LOAD WARNINGS (Critical - Running has HIGH injury risk):**
+${warningItems.join('\n')}
+
+**WARNING RESPONSE RULES FOR RUNNING:**
+- Running has HIGHER injury risk than cycling. Be MORE conservative with any warning.
+- If ANY warning is HIGH/CRITICAL: Only Recovery or Easy runs. No intervals.
+- Volume Jump + Running = High risk. Favor cycling over running when warnings are present.
+- If Deload is URGENT: Recovery run only, or consider rest day instead of running.
+`;
+  }
+
   return `
 You are an expert running coach using principles from Daniels, Pfitzinger, and modern training science.
 Generate a running workout and evaluate its suitability.
@@ -519,7 +602,7 @@ Generate a running workout and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB (Training Stress Balance):** ${summary.tsb_current.toFixed(1)}
 - **Note:** This is a RUNNING workout to complement cycling training.
-${wellnessContext}${runContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}
+${wellnessContext}${runContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}${warningsContext}
 **2. Assignment: Design a "${type}" Running Workout**
 - **Duration:** ${durationStr}. Total workout time including warm-up and cool-down.
 - **Type Guidance:**
