@@ -535,6 +535,10 @@ function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, 
     activity.icu_zone_times.map(z => `${z.id}: ${Math.round(z.secs / 60)}min`).join(", ") :
     "Not available";
 
+  // Build activity-specific analysis instructions (initialize early)
+  let analysisInstructions = "";
+  let stimulusOptions = "recovery|endurance|tempo|threshold|vo2max|anaerobic|mixed";
+
   // Build sport-specific context based on category
   let sportContext = "";
   let coachType = "fitness";
@@ -546,14 +550,34 @@ function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, 
 - Critical Speed: ${runningData.criticalSpeed || 'N/A'}/km
 - D': ${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}
 - Threshold Pace: ${runningData.thresholdPace || 'N/A'}/km`;
-  } else if (activityCategory === 'cycling' && powerProfile?.available) {
+  } else if (activityCategory === 'cycling') {
     coachType = "cycling";
-    sportContext = `
+    // Check for missing power data (e.g. MTB ride without power meter)
+    const hasPower = activity.icu_average_watts && activity.icu_average_watts > 0;
+    
+    if (hasPower && powerProfile?.available) {
+      sportContext = `
 **Power Profile:**
 - eFTP: ${powerProfile.currentEftp || powerProfile.eFTP || 'N/A'}W
 - W': ${powerProfile.wPrimeKj || 'N/A'}kJ
 - VO2max: ${powerProfile.vo2max ? powerProfile.vo2max.toFixed(1) : 'N/A'}
 - Peak Powers: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W`;
+    } else {
+      // HR-based context for rides without power
+      sportContext = `
+**Cycling Context (No Power Data - MTB/Commute):**
+- Analysis Mode: Heart Rate & RPE based
+- LTHR: ${fitness.lthr || 'N/A'} bpm
+- Max HR: ${fitness.maxHr || 'N/A'} bpm
+- Resting HR: ${wellness?.today?.restingHR || 'N/A'} bpm`;
+      
+      analysisInstructions += `
+**Missing Power Data Note:**
+- This ride has no power data (likely MTB or commute).
+- Base your analysis STRICTLY on Heart Rate, RPE, and Duration.
+- Do NOT mention power or watts in the feedback.
+- Focus on cardiac drift, time in HR zones, and perceived exertion.`;
+    }
   } else if (activityCategory === 'strength') {
     coachType = "strength and conditioning";
     sportContext = `
@@ -590,10 +614,6 @@ function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, 
 - HRV: ${wellness.today.hrv || 'N/A'} ms (avg: ${wellness.averages.hrv ? wellness.averages.hrv.toFixed(0) : 'N/A'})
 - Resting HR: ${wellness.today.restingHR || 'N/A'} bpm`;
   }
-
-  // Build activity-specific analysis instructions
-  let analysisInstructions = "";
-  let stimulusOptions = "recovery|endurance|tempo|threshold|vo2max|anaerobic|mixed";
 
   if (activityCategory === 'strength') {
     stimulusOptions = "recovery|strength_maintenance|hypertrophy|power|endurance_strength|mixed";

@@ -248,8 +248,16 @@ function classifyActivityType(activity) {
   // Determine sport type
   const sport = (activity.type === "Run" || activity.type === "VirtualRun") ? "Run" : "Ride";
 
-  // Get zone times (in seconds) - works for both power zones and pace zones
-  const zones = activity.icu_zone_times || activity.gap_zone_times || [];
+  // Get zone times (in seconds) - works for both power zones, pace zones, AND HR zones (fallback)
+  // For cycling: icu_zone_times = power, icu_hr_zone_times = HR
+  // For running: gap_zone_times = pace, icu_hr_zone_times = HR
+  let zones = activity.icu_zone_times || activity.gap_zone_times || [];
+  
+  // If power/pace zones are empty, try HR zones
+  if (zones.length === 0 && activity.icu_hr_zone_times) {
+    zones = activity.icu_hr_zone_times;
+  }
+
   const getZoneSecs = function(zoneId) {
     const zone = zones.find(function(z) { return z.id === zoneId; });
     return zone ? zone.secs : 0;
@@ -264,12 +272,37 @@ function classifyActivityType(activity) {
   const z7 = getZoneSecs("Z7");
   const ss = getZoneSecs("SS");
 
-  const totalTime = activity.moving_time || (z1 + z2 + z3 + z4 + z5 + z6 + z7);
+  let totalTime = activity.moving_time || (z1 + z2 + z3 + z4 + z5 + z6 + z7);
+  
+  // Double check: if zone sum is zero but moving time is big, try HR zones explicitly
+  if ((z1+z2+z3+z4+z5+z6+z7) === 0 && activity.icu_hr_zone_times && activity.icu_hr_zone_times.length > 0) {
+     zones = activity.icu_hr_zone_times;
+     // Re-calculate zone secs
+     // (We have to redefine them or just re-run the getZoneSecs logic. 
+     //  For simplicity, we'll just recurse or copy logic. Let's just update variables.)
+     //  Actually, simpler to just use HR zones if the primary zones failed.
+  }
+
+  // Refetch if we switched to HR zones
+  const rZ1 = getZoneSecs("Z1");
+  const rZ2 = getZoneSecs("Z2");
+  const rZ3 = getZoneSecs("Z3");
+  const rZ4 = getZoneSecs("Z4");
+  const rZ5 = getZoneSecs("Z5");
+  const rZ6 = getZoneSecs("Z6");
+  const rZ7 = getZoneSecs("Z7");
+  const rSS = getZoneSecs("SS");
+  
+  // Update total time based on zones if moving_time is missing
+  if (!activity.moving_time) {
+     totalTime = rZ1 + rZ2 + rZ3 + rZ4 + rZ5 + rZ6 + rZ7;
+  }
+
   if (totalTime < 600) return null; // Skip very short activities (<10 min)
 
-  const highIntensity = z5 + z6 + z7;
-  const threshold = z4 + ss;
-  const endurance = z2 + z3;
+  const highIntensity = rZ5 + rZ6 + rZ7;
+  const threshold = rZ4 + rSS;
+  const endurance = rZ2 + rZ3;
 
   // Classify based on time in zones
   let type;
@@ -279,7 +312,7 @@ function classifyActivityType(activity) {
     type = sport === "Run" ? "Run_Tempo" : "FTPThreshold";
   } else if (endurance > totalTime * 0.5) {
     type = sport === "Run" ? "Run_Easy" : "EnduranceTempo";
-  } else if (z1 > totalTime * 0.5) {
+  } else if (rZ1 > totalTime * 0.5) {
     type = sport === "Run" ? "Run_Recovery" : "RecoveryEasy";
   } else {
     type = sport === "Run" ? "Run_Easy" : "EnduranceTempo";
