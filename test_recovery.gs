@@ -530,3 +530,88 @@ function testZScoreIntensityModifier() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Test Illness Pattern Detection
+ * Tests detection of illness markers from wellness data
+ */
+function testIllnessPatternDetection() {
+  Logger.log("=== ILLNESS PATTERN DETECTION TEST ===\n");
+  requireValidConfig();
+
+  // Fetch wellness data
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
+
+  if (!wellnessRecords || wellnessRecords.length < 2) {
+    Logger.log("ERROR: Not enough wellness data (need at least 2 days)");
+    return;
+  }
+
+  Logger.log("=== RECENT WELLNESS DATA ===");
+  for (let i = 0; i < Math.min(3, wellnessRecords.length); i++) {
+    const day = wellnessRecords[i];
+    Logger.log("\nDay " + (i + 1) + " (" + day.date + "):");
+    Logger.log("  HRV: " + (day.hrv || "N/A") + " ms");
+    Logger.log("  RHR: " + (day.restingHR || "N/A") + " bpm");
+    Logger.log("  Sleep: " + (day.sleep ? day.sleep.toFixed(1) + "h" : "N/A"));
+    Logger.log("  Skin Temp: " + (day.skinTemp ? day.skinTemp.toFixed(1) + "°C" : "N/A"));
+    Logger.log("  Recovery: " + (day.recovery || "N/A") + "%");
+  }
+
+  // Get baseline for context
+  const baseline = getWellnessBaseline();
+  if (baseline) {
+    Logger.log("\n=== BASELINE VALUES ===");
+    Logger.log("HRV Baseline: " + (baseline.hrv?.baseline30d?.toFixed(0) || "N/A") + " ms (±" + (baseline.hrv?.stdDev30d?.toFixed(1) || "?") + ")");
+    Logger.log("RHR Baseline: " + (baseline.rhr?.baseline30d?.toFixed(0) || "N/A") + " bpm (±" + (baseline.rhr?.stdDev30d?.toFixed(1) || "?") + ")");
+  } else {
+    Logger.log("\n(No baseline available - need 30 days of data)");
+  }
+
+  // Run illness pattern check
+  Logger.log("\n=== ILLNESS PATTERN ANALYSIS ===");
+  const result = checkIllnessPattern();
+
+  Logger.log("Detected: " + (result.detected ? "YES" : "NO"));
+  Logger.log("Probability: " + result.probability);
+  Logger.log("Consecutive Days: " + result.consecutiveDays);
+
+  if (result.symptoms.length > 0) {
+    Logger.log("\nSymptoms Identified:");
+    result.symptoms.forEach(s => Logger.log("  • " + s));
+  }
+
+  if (result.dailyAnalysis.length > 0) {
+    Logger.log("\n=== DAILY ANALYSIS ===");
+    result.dailyAnalysis.forEach((day, i) => {
+      Logger.log("\nDay " + (i + 1) + " (" + day.date + "):");
+      Logger.log("  Score: " + day.score + " (>= 3 is concerning)");
+      if (day.markers.length > 0) {
+        Logger.log("  Markers: " + day.markers.join(", "));
+      }
+      if (day.details.rhr) {
+        Logger.log("  RHR: " + day.details.rhr.value + " bpm (z=" + day.details.rhr.zScore.toFixed(2) + ")");
+      }
+      if (day.details.hrv) {
+        Logger.log("  HRV: " + day.details.hrv.value + " ms (z=" + day.details.hrv.zScore.toFixed(2) + ")");
+      }
+      if (day.details.sleep) {
+        Logger.log("  Sleep: " + day.details.sleep.value.toFixed(1) + "h");
+      }
+      if (day.details.skinTemp) {
+        Logger.log("  Skin Temp: " + day.details.skinTemp.value.toFixed(1) + "°C (z=" + day.details.skinTemp.zScore.toFixed(2) + ")");
+      }
+    });
+  }
+
+  if (result.detected) {
+    Logger.log("\n=== RECOMMENDATION ===");
+    Logger.log(result.recommendation);
+    Logger.log("\n=== TRAINING GUIDANCE ===");
+    Logger.log(result.trainingGuidance);
+  } else {
+    Logger.log("\nNo illness pattern detected - training can proceed normally");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

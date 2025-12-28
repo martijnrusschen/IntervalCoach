@@ -288,10 +288,18 @@ ${lw.ftpCalibration === 'increase_5w' ? `- FTP may be set too low. Athlete can h
 
   // Build training load warnings context
   let warningsContext = "";
-  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed;
+  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed || warnings.illnessPattern?.detected;
 
   if (hasWarnings) {
     let warningItems = [];
+
+    // Illness Pattern Warning (HIGHEST PRIORITY)
+    if (warnings.illnessPattern?.detected) {
+      const ip = warnings.illnessPattern;
+      const probText = ip.probability === 'high' ? 'HIGH PROBABILITY' : ip.probability === 'likely' ? 'LIKELY' : 'POSSIBLE';
+      const symptoms = ip.symptoms.slice(0, 3).join(', ');
+      warningItems.push(`- **ILLNESS DETECTED (${probText}):** ${ip.consecutiveDays} day(s) of concerning markers: ${symptoms}. ${ip.probability === 'high' ? 'COMPLETE REST REQUIRED.' : ip.probability === 'likely' ? 'No intensity - recovery only.' : 'Reduce intensity significantly.'}`);
+    }
 
     // Volume Jump Warning
     if (warnings.volumeJump?.detected) {
@@ -319,6 +327,7 @@ ${lw.ftpCalibration === 'increase_5w' ? `- FTP may be set too low. Athlete can h
 ${warningItems.join('\n')}
 
 **WARNING RESPONSE RULES (Must Follow):**
+- **ILLNESS OVERRIDES ALL:** If illness detected (any level), prioritize rest. High/Likely = REST DAY. Possible = easy only.
 - If ANY warning is HIGH/CRITICAL/URGENT: Score VO2max/Threshold workouts 1-3 only. Favor Recovery/Endurance.
 - If multiple warnings present: Compound effect - be MORE conservative than any single warning suggests.
 - Volume Jump + High Ramp Rate = Overreaching risk. Today must be easy regardless of recovery metrics.
@@ -556,10 +565,18 @@ ${lw.difficultyMatch === 'as_expected' ? `- Last workout difficulty matched expe
 
   // Build training load warnings context (same as cycling)
   let warningsContext = "";
-  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed;
+  const hasWarnings = warnings.volumeJump?.detected || warnings.rampRateWarning?.warning || warnings.deloadCheck?.needed || warnings.illnessPattern?.detected;
 
   if (hasWarnings) {
     let warningItems = [];
+
+    // Illness Pattern Warning (HIGHEST PRIORITY - especially critical for running)
+    if (warnings.illnessPattern?.detected) {
+      const ip = warnings.illnessPattern;
+      const probText = ip.probability === 'high' ? 'HIGH PROBABILITY' : ip.probability === 'likely' ? 'LIKELY' : 'POSSIBLE';
+      const symptoms = ip.symptoms.slice(0, 3).join(', ');
+      warningItems.push(`- **ILLNESS DETECTED (${probText}):** ${ip.consecutiveDays} day(s) of concerning markers: ${symptoms}. ${ip.probability === 'high' ? 'NO RUNNING - complete rest!' : ip.probability === 'likely' ? 'Rest recommended - if must run, walk only.' : 'Easy run only, stop if feeling unwell.'}`);
+    }
 
     if (warnings.volumeJump?.detected) {
       const vj = warnings.volumeJump;
@@ -584,6 +601,7 @@ ${lw.difficultyMatch === 'as_expected' ? `- Last workout difficulty matched expe
 ${warningItems.join('\n')}
 
 **WARNING RESPONSE RULES FOR RUNNING:**
+- **ILLNESS OVERRIDES ALL:** Running while sick risks heart damage. High/Likely illness = NO RUNNING. Possible = walk only.
 - Running has HIGHER injury risk than cycling. Be MORE conservative with any warning.
 - If ANY warning is HIGH/CRITICAL: Only Recovery or Easy runs. No intervals.
 - Volume Jump + Running = High risk. Favor cycling over running when warnings are present.

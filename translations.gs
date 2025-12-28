@@ -180,6 +180,12 @@ const TRANSLATIONS = {
     activities: "activities",
     reason: "Reason",
     recommendation: "Recommendation",
+    // Illness pattern detection
+    illness_high: "ILLNESS DETECTED - Rest Required",
+    illness_likely: "Likely Illness - Avoid Training",
+    illness_possible: "Possible Illness Signs",
+    consecutive_days: "Pattern duration",
+    symptoms: "Symptoms",
     // Taper timing
     taper_timing_title: "Taper Timing",
     race: "Race",
@@ -321,7 +327,13 @@ const TRANSLATIONS = {
     ramp_rate_warning: "高負荷継続中",
     ramp_rate_caution: "負荷上昇中",
     consecutive_weeks: "連続週数",
-    avg_rate: "平均"
+    avg_rate: "平均",
+    // Illness pattern detection
+    illness_high: "体調不良検出 - 休養が必要",
+    illness_likely: "体調不良の可能性 - トレーニング中止",
+    illness_possible: "体調不良の兆候あり",
+    consecutive_days: "パターン期間",
+    symptoms: "症状"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -451,7 +463,13 @@ const TRANSLATIONS = {
     ramp_rate_warning: "Carga Alta Sostenida",
     ramp_rate_caution: "Carga de Entrenamiento Elevada",
     consecutive_weeks: "Semanas consecutivas",
-    avg_rate: "Promedio"
+    avg_rate: "Promedio",
+    // Illness pattern detection
+    illness_high: "ENFERMEDAD DETECTADA - Descanso Requerido",
+    illness_likely: "Probable Enfermedad - Evitar Entrenamiento",
+    illness_possible: "Posibles Signos de Enfermedad",
+    consecutive_days: "Duración del patrón",
+    symptoms: "Síntomas"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -587,7 +605,13 @@ const TRANSLATIONS = {
     ramp_rate_warning: "Charge Élevée Soutenue",
     ramp_rate_caution: "Charge d'Entraînement Élevée",
     consecutive_weeks: "Semaines consécutives",
-    avg_rate: "Moyenne"
+    avg_rate: "Moyenne",
+    // Illness pattern detection
+    illness_high: "MALADIE DÉTECTÉE - Repos Requis",
+    illness_likely: "Maladie Probable - Éviter l'Entraînement",
+    illness_possible: "Signes Possibles de Maladie",
+    consecutive_days: "Durée du pattern",
+    symptoms: "Symptômes"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -774,6 +798,12 @@ const TRANSLATIONS = {
     ramp_rate_warning: "Aanhoudend Hoge Belasting",
     ramp_rate_caution: "Verhoogde Trainingsbelasting",
     consecutive_weeks: "Opeenvolgende weken",
-    avg_rate: "Gemiddelde"
+    avg_rate: "Gemiddelde",
+    // Illness pattern detection
+    illness_high: "ZIEKTE GEDETECTEERD - Rust Vereist",
+    illness_likely: "Waarschijnlijk Ziek - Geen Training",
+    illness_possible: "Mogelijke Ziekteverschijnselen",
+    consecutive_days: "Patroonduur",
+    symptoms: "Symptomen"
   }
 };

@@ -59,7 +59,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Sleep Quality Scoring** | Create quality score from deep sleep %, REM %, efficiency. Weight quality > quantity | Coaching |
 | **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
-| **Illness Detection Patterns** | Detect illness: elevated RHR + suppressed HRV + poor sleep for 2+ days | Coaching |
+| ~~**Illness Detection Patterns**~~ | ~~Detect illness: elevated RHR + suppressed HRV + poor sleep + elevated skin temp for 2+ days~~ | **COMPLETE** |
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
 | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
@@ -97,6 +97,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Volume Jump Detection~~ | Flag week-to-week volume increases >15% as injury risk |
 | ~~Z-Score Intensity Modifier~~ | Continuous intensity scaling from HRV/RHR z-scores instead of discrete categories |
 | ~~Training Load Rate Warnings~~ | Warn when CTL ramp rate exceeds safe thresholds for 2+ weeks |
+| ~~Illness Detection Patterns~~ | Detect illness from elevated RHR, suppressed HRV, poor sleep, elevated skin temp for 2+ days |
 
 ---
 
@@ -749,4 +750,44 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-28 (Added Training Load Rate Warnings feature)*
+### Feature: Illness Detection Patterns ✅ COMPLETE
+
+**Implementation:**
+- Added `checkIllnessPattern()` in `tracking.gs` - analyzes 2-3 days of wellness data for illness markers
+- Integrated into `main.gs` daily flow after ramp rate warning
+- Added to `warnings` object passed to AI prompts
+- Updated `createPrompt()` and `createRunPrompt()` in `prompts_workout.gs` with illness rules
+- Added illness pattern section to `sendDailyEmail()` in `emails.gs`
+- Added translations for all 5 languages
+- Added `testIllnessPatternDetection()` in `test_recovery.gs`
+
+**Key features:**
+- Analyzes multiple illness markers using z-scores:
+  - Elevated RHR (z ≥ 0.5 to z ≥ 1.5)
+  - Suppressed HRV (z ≤ -0.5 to z ≤ -1.5)
+  - Poor sleep (<5h, <6h, <6.5h thresholds)
+  - Elevated skin temperature (Whoop) vs baseline
+  - Low recovery score (<34%, <50%)
+- Daily scoring system (0-12+ points per day)
+- Consecutive day analysis (2+ days required for detection)
+
+**Probability Levels:**
+| Level | Condition | Training Guidance |
+|-------|-----------|-------------------|
+| HIGH | 2+ days at score ≥8 | Complete rest. Resume only when symptoms clear 24-48h |
+| LIKELY | 2+ days at score ≥5 | Light activity only (walk, easy spin). No structured training |
+| POSSIBLE | 1 day at score ≥4 | Reduce intensity 30-50%. Stop if feeling worse |
+
+**Prompt integration:**
+- Illness warnings appear FIRST in warnings section (highest priority)
+- Special rules for running: "Running while sick risks heart damage"
+- High/Likely illness: REST DAY or NO RUNNING
+- Possible illness: easy activity only
+
+**Email display:**
+- Shows probability level with emoji (🤒 HIGH, ⚠️ LIKELY, 👀 POSSIBLE)
+- Lists identified symptoms
+- Displays pattern duration (consecutive days)
+- Provides training guidance
+
+*Last updated: 2025-12-28 (Added Illness Detection Patterns feature)*

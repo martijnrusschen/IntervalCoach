@@ -869,3 +869,240 @@ function addZoneProgressionToHistory(progression) {
     Logger.log("Error adding zone progression to history: " + e.toString());
   }
 }
+
+// =========================================================
+// ILLNESS PATTERN DETECTION
+// =========================================================
+
+/**
+ * Check for illness pattern in recent wellness data
+ * Detects: elevated RHR + suppressed HRV + poor sleep + elevated skin temp
+ * over 2+ consecutive days
+ *
+ * @param {object} options - Optional configuration
+ * @param {number} options.daysToCheck - Number of days to check (default 3)
+ * @param {number} options.minConsecutiveDays - Minimum days with pattern (default 2)
+ * @returns {object} Illness pattern analysis
+ */
+function checkIllnessPattern(options = {}) {
+  const daysToCheck = options.daysToCheck || 3;
+  const minConsecutiveDays = options.minConsecutiveDays || 2;
+
+  const result = {
+    detected: false,
+    probability: 'none',  // none, possible, likely, high
+    consecutiveDays: 0,
+    symptoms: [],
+    dailyAnalysis: [],
+    recommendation: '',
+    trainingGuidance: ''
+  };
+
+  try {
+    // Fetch recent wellness data (3-5 days to analyze patterns)
+    const wellnessRecords = fetchWellnessData(daysToCheck + 2, 0);
+    if (!wellnessRecords || wellnessRecords.length < 2) {
+      return result;
+    }
+
+    // Get baseline for comparison
+    const baseline = getWellnessBaseline();
+    if (!baseline) {
+      Logger.log("Illness check: No baseline available for comparison");
+      return result;
+    }
+
+    // Calculate skin temp baseline from recent data if not in stored baseline
+    let skinTempBaseline = null;
+    let skinTempStdDev = null;
+    const skinTempValues = wellnessRecords.map(w => w.skinTemp).filter(v => v != null);
+    if (skinTempValues.length >= 3) {
+      skinTempBaseline = average(skinTempValues);
+      skinTempStdDev = calculateStdDev(skinTempValues) || 0.3; // Default 0.3°C if no std dev
+    }
+
+    // Analyze each day
+    const dailyPatterns = [];
+
+    for (let i = 0; i < Math.min(daysToCheck, wellnessRecords.length); i++) {
+      const day = wellnessRecords[i];
+      const dayAnalysis = {
+        date: day.date,
+        markers: [],
+        score: 0,  // Higher score = more concerning
+        details: {}
+      };
+
+      // Check RHR (elevated = bad)
+      if (day.restingHR && baseline.rhr?.baseline30d) {
+        const rhrDeviation = calculateBaselineDeviation(day.restingHR, baseline.rhr, 'rhr');
+        dayAnalysis.details.rhr = {
+          value: day.restingHR,
+          baseline: baseline.rhr.baseline30d,
+          zScore: rhrDeviation.zScore
+        };
+
+        // RHR elevated > 1σ above baseline is concerning
+        if (rhrDeviation.zScore >= 1.5) {
+          dayAnalysis.markers.push('rhr_very_elevated');
+          dayAnalysis.score += 3;
+        } else if (rhrDeviation.zScore >= 1.0) {
+          dayAnalysis.markers.push('rhr_elevated');
+          dayAnalysis.score += 2;
+        } else if (rhrDeviation.zScore >= 0.5) {
+          dayAnalysis.markers.push('rhr_slightly_elevated');
+          dayAnalysis.score += 1;
+        }
+      }
+
+      // Check HRV (suppressed = bad)
+      if (day.hrv && baseline.hrv?.baseline30d) {
+        const hrvDeviation = calculateBaselineDeviation(day.hrv, baseline.hrv, 'hrv');
+        dayAnalysis.details.hrv = {
+          value: day.hrv,
+          baseline: baseline.hrv.baseline30d,
+          zScore: hrvDeviation.zScore
+        };
+
+        // HRV suppressed < -1σ below baseline is concerning
+        if (hrvDeviation.zScore <= -1.5) {
+          dayAnalysis.markers.push('hrv_very_suppressed');
+          dayAnalysis.score += 3;
+        } else if (hrvDeviation.zScore <= -1.0) {
+          dayAnalysis.markers.push('hrv_suppressed');
+          dayAnalysis.score += 2;
+        } else if (hrvDeviation.zScore <= -0.5) {
+          dayAnalysis.markers.push('hrv_slightly_suppressed');
+          dayAnalysis.score += 1;
+        }
+      }
+
+      // Check sleep (poor sleep = bad)
+      if (day.sleep != null) {
+        dayAnalysis.details.sleep = { value: day.sleep };
+
+        if (day.sleep < 5) {
+          dayAnalysis.markers.push('sleep_very_poor');
+          dayAnalysis.score += 3;
+        } else if (day.sleep < 6) {
+          dayAnalysis.markers.push('sleep_poor');
+          dayAnalysis.score += 2;
+        } else if (day.sleep < 6.5) {
+          dayAnalysis.markers.push('sleep_insufficient');
+          dayAnalysis.score += 1;
+        }
+      }
+
+      // Check skin temperature (elevated = bad, especially from Whoop)
+      if (day.skinTemp != null && skinTempBaseline != null) {
+        const skinTempDev = (day.skinTemp - skinTempBaseline) / (skinTempStdDev || 0.3);
+        dayAnalysis.details.skinTemp = {
+          value: day.skinTemp,
+          baseline: skinTempBaseline,
+          zScore: skinTempDev
+        };
+
+        // Skin temp elevated > 0.5°C above baseline (roughly 1.5σ)
+        if (skinTempDev >= 2.0) {
+          dayAnalysis.markers.push('skinTemp_very_elevated');
+          dayAnalysis.score += 3;
+        } else if (skinTempDev >= 1.0) {
+          dayAnalysis.markers.push('skinTemp_elevated');
+          dayAnalysis.score += 2;
+        } else if (skinTempDev >= 0.5) {
+          dayAnalysis.markers.push('skinTemp_slightly_elevated');
+          dayAnalysis.score += 1;
+        }
+      }
+
+      // Check recovery score if available (Whoop)
+      if (day.recovery != null) {
+        dayAnalysis.details.recovery = { value: day.recovery };
+
+        if (day.recovery < 34) {
+          dayAnalysis.markers.push('recovery_very_low');
+          dayAnalysis.score += 2;
+        } else if (day.recovery < 50) {
+          dayAnalysis.markers.push('recovery_low');
+          dayAnalysis.score += 1;
+        }
+      }
+
+      dailyPatterns.push(dayAnalysis);
+    }
+
+    // Count consecutive days with concerning patterns (score >= 3)
+    let consecutiveConcerning = 0;
+    for (const day of dailyPatterns) {
+      if (day.score >= 3) {
+        consecutiveConcerning++;
+      } else {
+        break; // Stop counting at first non-concerning day (most recent first)
+      }
+    }
+
+    result.consecutiveDays = consecutiveConcerning;
+    result.dailyAnalysis = dailyPatterns;
+
+    // Aggregate symptoms across all days
+    const allMarkers = new Set();
+    for (const day of dailyPatterns.slice(0, consecutiveConcerning || 1)) {
+      day.markers.forEach(m => allMarkers.add(m));
+    }
+
+    // Build human-readable symptoms
+    const symptomLabels = {
+      'rhr_very_elevated': 'Very elevated resting HR',
+      'rhr_elevated': 'Elevated resting HR',
+      'rhr_slightly_elevated': 'Slightly elevated resting HR',
+      'hrv_very_suppressed': 'Very suppressed HRV',
+      'hrv_suppressed': 'Suppressed HRV',
+      'hrv_slightly_suppressed': 'Slightly suppressed HRV',
+      'sleep_very_poor': 'Very poor sleep (<5h)',
+      'sleep_poor': 'Poor sleep (<6h)',
+      'sleep_insufficient': 'Insufficient sleep (<6.5h)',
+      'skinTemp_very_elevated': 'Significantly elevated skin temp',
+      'skinTemp_elevated': 'Elevated skin temp',
+      'skinTemp_slightly_elevated': 'Slightly elevated skin temp',
+      'recovery_very_low': 'Very low recovery (<34%)',
+      'recovery_low': 'Low recovery (<50%)'
+    };
+
+    result.symptoms = Array.from(allMarkers).map(m => symptomLabels[m] || m);
+
+    // Determine illness probability based on pattern
+    const recentDayScore = dailyPatterns[0]?.score || 0;
+    const totalScore = dailyPatterns.slice(0, minConsecutiveDays).reduce((sum, d) => sum + d.score, 0);
+
+    if (consecutiveConcerning >= minConsecutiveDays && totalScore >= 8) {
+      result.detected = true;
+      result.probability = 'high';
+      result.recommendation = 'Strong illness indicators. Complete rest recommended.';
+      result.trainingGuidance = 'NO training. Focus on rest, hydration, and recovery. Resume only when symptoms clear for 24-48 hours.';
+    } else if (consecutiveConcerning >= minConsecutiveDays && totalScore >= 5) {
+      result.detected = true;
+      result.probability = 'likely';
+      result.recommendation = 'Likely illness developing. Avoid intensity.';
+      result.trainingGuidance = 'Light activity only (walk, easy spin). No structured training. Monitor symptoms closely.';
+    } else if (consecutiveConcerning >= 1 && recentDayScore >= 4) {
+      result.detected = true;
+      result.probability = 'possible';
+      result.recommendation = 'Possible early illness signs. Monitor closely.';
+      result.trainingGuidance = 'Reduce intensity by 30-50%. Prioritize recovery. Stop immediately if feeling worse.';
+    } else if (recentDayScore >= 3) {
+      result.detected = false;
+      result.probability = 'none';
+      result.recommendation = 'Some stress markers present but no clear illness pattern.';
+      result.trainingGuidance = 'Train conservatively. Extra attention to recovery.';
+    }
+
+    if (result.detected) {
+      Logger.log(`Illness pattern detected (${result.probability}): ${result.consecutiveDays} days, symptoms: ${result.symptoms.join(', ')}`);
+    }
+
+  } catch (e) {
+    Logger.log("Error checking illness pattern: " + e.toString());
+  }
+
+  return result;
+}

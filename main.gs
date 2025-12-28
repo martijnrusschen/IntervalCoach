@@ -469,6 +469,20 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log(`Ramp rate warning check failed (non-critical): ${e.toString()}`);
   }
 
+  // ===== ILLNESS PATTERN DETECTION =====
+  // Check for illness indicators: elevated RHR + suppressed HRV + poor sleep + elevated skin temp
+  let illnessPattern = null;
+  try {
+    illnessPattern = checkIllnessPattern();
+    if (illnessPattern.detected) {
+      Logger.log(`Illness Pattern Detected (${illnessPattern.probability}): ${illnessPattern.consecutiveDays} consecutive day(s)`);
+      Logger.log(`  Symptoms: ${illnessPattern.symptoms.join(', ')}`);
+      Logger.log(`  Guidance: ${illnessPattern.trainingGuidance}`);
+    }
+  } catch (e) {
+    Logger.log(`Illness pattern check failed (non-critical): ${e.toString()}`);
+  }
+
   // ===== TAPER TIMING =====
   // Calculate optimal taper timing for upcoming A races (within 6 weeks)
   let taperRecommendation = null;
@@ -705,7 +719,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const warnings = {
     volumeJump: volumeJump,
     rampRateWarning: rampRateWarning,
-    deloadCheck: deloadCheck
+    deloadCheck: deloadCheck,
+    illnessPattern: illnessPattern
   };
 
   const prompt = isRun
@@ -796,7 +811,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     deloadCheck: deloadCheck,  // Include deload recommendation if needed
     taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
     volumeJump: volumeJump,  // Include volume jump warning if >15% increase
-    rampRateWarning: rampRateWarning  // Include ramp rate warning if sustained high rate
+    rampRateWarning: rampRateWarning,  // Include ramp rate warning if sustained high rate
+    illnessPattern: illnessPattern  // Include illness pattern detection if concerning markers found
   });
 }
 

@@ -115,7 +115,8 @@ function sendDailyEmail(params) {
     deloadCheck,
     taperRecommendation,
     volumeJump,
-    rampRateWarning
+    rampRateWarning,
+    illnessPattern
   } = params;
 
   // Build subject based on type
@@ -413,7 +414,35 @@ ${volumeJump.recommendation || ''}
 `;
   }
 
-  // === SECTION 3.4: Ramp Rate Warning ===
+  // === SECTION 3.4: Illness Pattern Warning ===
+  if (illnessPattern?.detected) {
+    const probEmoji = {
+      'high': '🤒',
+      'likely': '⚠️',
+      'possible': '👀'
+    }[illnessPattern.probability] || '⚠️';
+
+    const probLabel = {
+      'high': t.illness_high || 'ILLNESS DETECTED - Rest Required',
+      'likely': t.illness_likely || 'Likely Illness - Avoid Training',
+      'possible': t.illness_possible || 'Possible Illness Signs'
+    }[illnessPattern.probability] || 'Health Warning';
+
+    // Format symptoms for display
+    const symptomsDisplay = illnessPattern.symptoms.slice(0, 4).join(', ');
+
+    body += `
+===================================
+${probEmoji} ${probLabel}
+===================================
+${t.consecutive_days || "Pattern duration"}: ${illnessPattern.consecutiveDays} ${t.days || "days"}
+${t.symptoms || "Symptoms"}: ${symptomsDisplay}
+
+${illnessPattern.trainingGuidance || ''}
+`;
+  }
+
+  // === SECTION 3.5: Ramp Rate Warning ===
   if (rampRateWarning?.warning) {
     const levelEmoji = {
       'critical': '🚨',
@@ -443,7 +472,7 @@ ${rampRateWarning.recommendation || ''}
 `;
   }
 
-  // === SECTION 3.5: Taper Timing (within 6 weeks of A race) ===
+  // === SECTION 3.6: Taper Timing (within 6 weeks of A race) ===
   if (taperRecommendation?.available) {
     body += formatTaperEmailSection(taperRecommendation);
   }
