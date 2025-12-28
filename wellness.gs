@@ -90,6 +90,15 @@ function fetchWellnessDataEnhanced(daysBack = 7, daysBackEnd = 0) {
           skinTemp: whoopData.skinTemp,  // Whoop skin temperature for illness detection
           dayStrain: whoopData.dayStrain,  // Whoop day strain (0-21) - total cardiovascular load
           dayKilojoules: whoopData.dayKilojoules,  // Energy expenditure from day strain
+          // Sleep quality indicators (Whoop)
+          respiratoryRate: whoopData.respiratoryRate,  // Breaths/min (elevated = illness indicator)
+          sleepDisturbances: whoopData.sleepDisturbances,  // Times woken up during sleep
+          sleepCycles: whoopData.sleepCycles,  // Complete sleep cycles
+          sleepNeedHours: whoopData.sleepNeedHours,  // How much sleep body needed
+          sleepDebtHours: whoopData.sleepDebtHours,  // Accumulated sleep debt
+          remSleep: whoopData.remSleep,  // REM sleep hours
+          deepSleep: whoopData.deepSleep,  // Deep sleep hours
+          sleepEfficiency: whoopData.sleepEfficiency,  // Sleep efficiency %
           respiration: todayIdx >= 0 ? icuRecords[todayIdx].respiration : null,
           // Subjective markers from Intervals.icu (user-entered)
           soreness: todayIdx >= 0 ? icuRecords[todayIdx].soreness : null,
@@ -330,6 +339,12 @@ function createWellnessSummary(wellnessRecords) {
       remSleep: latestWithData.remSleep,
       deepSleep: latestWithData.deepSleep,
       sleepEfficiency: latestWithData.sleepEfficiency,
+      // Sleep quality indicators (Whoop)
+      respiratoryRate: latestWithData.respiratoryRate,  // Breaths/min (elevated = illness)
+      sleepDisturbances: latestWithData.sleepDisturbances,  // Times woken up
+      sleepCycles: latestWithData.sleepCycles,  // Complete sleep cycles
+      sleepNeedHours: latestWithData.sleepNeedHours,  // How much sleep needed
+      sleepDebtHours: latestWithData.sleepDebtHours,  // Accumulated sleep debt
       // Subjective markers
       soreness: latestWithData.soreness,
       fatigue: latestWithData.fatigue,

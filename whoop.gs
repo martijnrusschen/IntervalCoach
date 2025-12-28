@@ -441,6 +441,13 @@ function getWhoopCurrentSleep() {
   // Calculate actual sleep from stages if not directly available
   const actualSleepHours = msToHours(stages.total_sleep_time_milli) || (remHours + deepHours + lightHours);
 
+  // Sleep need breakdown
+  const sleepNeed = score.sleep_needed || {};
+  const sleepNeedHours = msToHours(sleepNeed.baseline_milli) +
+                         msToHours(sleepNeed.need_from_sleep_debt_milli) +
+                         msToHours(sleepNeed.need_from_recent_strain_milli) -
+                         msToHours(sleepNeed.need_from_recent_nap_milli);
+
   return {
     available: true,
     source: 'whoop_api',
@@ -453,10 +460,17 @@ function getWhoopCurrentSleep() {
     deepHours: deepHours,
     lightHours: lightHours,
     awakeHours: awakeHours,
+    // Quality indicators
+    disturbances: stages.disturbance_count,  // Number of times woken up
+    sleepCycles: stages.sleep_cycle_count,   // Complete sleep cycles
     // Scores
     sleepPerformance: score.sleep_performance_percentage,
     sleepConsistency: score.sleep_consistency_percentage,
     sleepEfficiency: score.sleep_efficiency_percentage,
+    respiratoryRate: score.respiratory_rate,  // Breaths per minute (elevated = illness indicator)
+    // Sleep need
+    sleepNeedHours: sleepNeedHours > 0 ? sleepNeedHours : null,
+    sleepDebtHours: msToHours(sleepNeed.need_from_sleep_debt_milli),
     // Timing
     startTime: sleep.start,
     endTime: sleep.end,
@@ -564,6 +578,12 @@ function fetchWhoopWellnessData() {
     remSleep: sleep.available ? sleep.remHours : null,
     deepSleep: sleep.available ? sleep.deepHours : null,
     sleepEfficiency: sleep.available ? sleep.sleepEfficiency : null,
+    // Sleep quality indicators (new)
+    respiratoryRate: sleep.available ? sleep.respiratoryRate : null,  // Breaths/min (elevated = illness)
+    sleepDisturbances: sleep.available ? sleep.disturbances : null,   // Times woken up
+    sleepCycles: sleep.available ? sleep.sleepCycles : null,          // Complete sleep cycles
+    sleepNeedHours: sleep.available ? sleep.sleepNeedHours : null,    // How much sleep needed
+    sleepDebtHours: sleep.available ? sleep.sleepDebtHours : null,    // Accumulated sleep debt
     // Day strain metrics (captures non-workout load)
     dayStrain: dayStrain.available ? dayStrain.strain : null,
     dayKilojoules: dayStrain.available ? dayStrain.kilojoules : null,
@@ -683,6 +703,11 @@ function testWhoopApi() {
     Logger.log('  Light: ' + sleep.lightHours.toFixed(1) + 'h');
     Logger.log('  Performance: ' + (sleep.sleepPerformance || 'N/A') + '%');
     Logger.log('  Efficiency: ' + (sleep.sleepEfficiency || 'N/A') + '%');
+    Logger.log('  Respiratory Rate: ' + (sleep.respiratoryRate ? sleep.respiratoryRate.toFixed(1) + ' breaths/min' : 'N/A'));
+    Logger.log('  Disturbances: ' + (sleep.disturbances != null ? sleep.disturbances : 'N/A'));
+    Logger.log('  Sleep Cycles: ' + (sleep.sleepCycles != null ? sleep.sleepCycles : 'N/A'));
+    Logger.log('  Sleep Need: ' + (sleep.sleepNeedHours ? sleep.sleepNeedHours.toFixed(1) + 'h' : 'N/A'));
+    Logger.log('  Sleep Debt: ' + (sleep.sleepDebtHours ? sleep.sleepDebtHours.toFixed(1) + 'h' : 'N/A'));
   } else {
     Logger.log('❌ Sleep not available: ' + sleep.reason);
   }
@@ -714,6 +739,9 @@ function testWhoopApi() {
     Logger.log('  Sleep: ' + (wellness.sleep ? wellness.sleep.toFixed(1) + 'h' : 'N/A'));
     Logger.log('  Day Strain: ' + (wellness.dayStrain ? wellness.dayStrain.toFixed(1) + '/21' : 'N/A'));
     Logger.log('  Skin Temp: ' + (wellness.skinTemp ? wellness.skinTemp.toFixed(1) + '°C' : 'N/A'));
+    Logger.log('  Respiratory Rate: ' + (wellness.respiratoryRate ? wellness.respiratoryRate.toFixed(1) + ' breaths/min' : 'N/A'));
+    Logger.log('  Sleep Disturbances: ' + (wellness.sleepDisturbances != null ? wellness.sleepDisturbances : 'N/A'));
+    Logger.log('  Sleep Debt: ' + (wellness.sleepDebtHours ? wellness.sleepDebtHours.toFixed(1) + 'h' : 'N/A'));
     Logger.log('  Source: ' + wellness.source);
   } else {
     Logger.log('❌ Wellness not available: ' + wellness.reason);

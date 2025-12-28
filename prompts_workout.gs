@@ -171,11 +171,32 @@ ${buildZoneContext(powerProfile)}
 
     // Build physiological indicators
     let physioIndicators = '';
-    if (w.spO2 || w.skinTemp) {
+    if (w.spO2 || w.skinTemp || w.respiratoryRate) {
       const parts = [];
       if (w.spO2) parts.push(`SpO2: ${w.spO2.toFixed(1)}%`);
       if (w.skinTemp) parts.push(`Skin Temp: ${w.skinTemp.toFixed(1)}°C`);
+      if (w.respiratoryRate) {
+        const rrLevel = w.respiratoryRate >= 18 ? ' (ELEVATED)' : w.respiratoryRate >= 16 ? ' (high)' : '';
+        parts.push(`Resp Rate: ${w.respiratoryRate.toFixed(1)} br/min${rrLevel}`);
+      }
       physioIndicators = `\n- **Physiological:** ${parts.join(' | ')}`;
+    }
+
+    // Build sleep quality indicators
+    let sleepQualityIndicators = '';
+    if (w.sleepDisturbances != null || w.sleepDebtHours != null) {
+      const parts = [];
+      if (w.sleepDisturbances != null) {
+        const distLevel = w.sleepDisturbances >= 15 ? ' (POOR)' : w.sleepDisturbances >= 10 ? ' (restless)' : '';
+        parts.push(`Disturbances: ${w.sleepDisturbances}${distLevel}`);
+      }
+      if (w.sleepDebtHours != null && w.sleepDebtHours > 0.5) {
+        const debtLevel = w.sleepDebtHours >= 3 ? ' (SIGNIFICANT)' : w.sleepDebtHours >= 1.5 ? ' (moderate)' : '';
+        parts.push(`Sleep Debt: ${w.sleepDebtHours.toFixed(1)}h${debtLevel}`);
+      }
+      if (parts.length > 0) {
+        sleepQualityIndicators = `\n- **Sleep Quality:** ${parts.join(' | ')}`;
+      }
     }
 
     // Build day strain context (captures non-workout cardiovascular load)
@@ -211,7 +232,7 @@ ${buildZoneContext(powerProfile)}
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})${sleepDetails} | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv ? w.hrv.toFixed(0) : 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
-- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}${dayStrainContext}
+- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}${sleepQualityIndicators}${dayStrainContext}
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 ${w.stress ? `- **Stress:** ${w.stress}/5` : ''}
@@ -495,6 +516,36 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
   - Breakdown: ${breakdownParts}`;
     }
 
+    // Build physiological indicators
+    let physioIndicators = '';
+    if (w.spO2 || w.skinTemp || w.respiratoryRate) {
+      const parts = [];
+      if (w.spO2) parts.push(`SpO2: ${w.spO2.toFixed(1)}%`);
+      if (w.skinTemp) parts.push(`Skin Temp: ${w.skinTemp.toFixed(1)}°C`);
+      if (w.respiratoryRate) {
+        const rrLevel = w.respiratoryRate >= 18 ? ' (ELEVATED)' : w.respiratoryRate >= 16 ? ' (high)' : '';
+        parts.push(`Resp Rate: ${w.respiratoryRate.toFixed(1)} br/min${rrLevel}`);
+      }
+      physioIndicators = `\n- **Physiological:** ${parts.join(' | ')}`;
+    }
+
+    // Build sleep quality indicators
+    let sleepQualityIndicators = '';
+    if (w.sleepDisturbances != null || w.sleepDebtHours != null) {
+      const parts = [];
+      if (w.sleepDisturbances != null) {
+        const distLevel = w.sleepDisturbances >= 15 ? ' (POOR)' : w.sleepDisturbances >= 10 ? ' (restless)' : '';
+        parts.push(`Disturbances: ${w.sleepDisturbances}${distLevel}`);
+      }
+      if (w.sleepDebtHours != null && w.sleepDebtHours > 0.5) {
+        const debtLevel = w.sleepDebtHours >= 3 ? ' (SIGNIFICANT)' : w.sleepDebtHours >= 1.5 ? ' (moderate)' : '';
+        parts.push(`Sleep Debt: ${w.sleepDebtHours.toFixed(1)}h${debtLevel}`);
+      }
+      if (parts.length > 0) {
+        sleepQualityIndicators = `\n- **Sleep Quality:** ${parts.join(' | ')}`;
+      }
+    }
+
     // Build day strain context (captures non-workout cardiovascular load)
     let dayStrainContext = '';
     if (w.dayStrain != null) {
@@ -514,7 +565,7 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus}) | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv || 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
-- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${dayStrainContext}
+- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}${sleepQualityIndicators}${dayStrainContext}
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 

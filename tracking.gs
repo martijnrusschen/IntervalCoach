@@ -1015,6 +1015,24 @@ function checkIllnessPattern(options = {}) {
         }
       }
 
+      // Check respiratory rate (elevated = illness indicator, from Whoop)
+      // Normal range: 12-20 breaths/min, illness often shows 16+ during sleep
+      if (day.respiratoryRate != null) {
+        dayAnalysis.details.respiratoryRate = { value: day.respiratoryRate };
+
+        // Respiratory rate above normal is a strong illness signal
+        if (day.respiratoryRate >= 18) {
+          dayAnalysis.markers.push('respiratory_very_elevated');
+          dayAnalysis.score += 3;  // Strong illness indicator
+        } else if (day.respiratoryRate >= 16) {
+          dayAnalysis.markers.push('respiratory_elevated');
+          dayAnalysis.score += 2;
+        } else if (day.respiratoryRate >= 14) {
+          dayAnalysis.markers.push('respiratory_slightly_elevated');
+          dayAnalysis.score += 1;
+        }
+      }
+
       // Check recovery score if available (Whoop)
       if (day.recovery != null) {
         dayAnalysis.details.recovery = { value: day.recovery };
@@ -1064,6 +1082,9 @@ function checkIllnessPattern(options = {}) {
       'skinTemp_very_elevated': 'Significantly elevated skin temp',
       'skinTemp_elevated': 'Elevated skin temp',
       'skinTemp_slightly_elevated': 'Slightly elevated skin temp',
+      'respiratory_very_elevated': 'Very elevated respiratory rate (18+ br/min)',
+      'respiratory_elevated': 'Elevated respiratory rate (16+ br/min)',
+      'respiratory_slightly_elevated': 'Slightly elevated respiratory rate',
       'recovery_very_low': 'Very low recovery (<34%)',
       'recovery_low': 'Low recovery (<50%)'
     };
