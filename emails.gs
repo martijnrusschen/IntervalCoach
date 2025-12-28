@@ -20,7 +20,7 @@
  * @param {object} params.restAssessment - AI rest assessment (for type='rest')
  * @param {object} params.weekProgress - Week progress data
  * @param {Array} params.upcomingDays - Upcoming 7 days schedule
- * @param {object} params.weeklyPlanContext - Plan adaptation context
+ * @param {object} params.midWeekAdaptation - Mid-week adaptation results (if any)
  */
 /**
  * Determine the reason for a rest day based on context
@@ -107,11 +107,13 @@ function sendDailyEmail(params) {
     restAssessment,
     weekProgress,
     upcomingDays,
-    weeklyPlanContext,
     raceDayAdvice,
     raceName,
     raceCategory,
-    raceDescription
+    raceDescription,
+    midWeekAdaptation,
+    deloadCheck,
+    taperRecommendation
   } = params;
 
   // Build subject based on type
@@ -156,6 +158,32 @@ ${t.sleep}: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatu
     body += ` | ${t.resting_hr}: ${w.restingHR || 'N/A'} bpm`;
     if (w.recovery != null) {
       body += `\nWhoop: ${w.recovery}%`;
+    }
+
+    // Show baseline deviation if available
+    const ba = wellness.baselineAnalysis;
+    if (ba?.available) {
+      let deviationLine = '\n' + (t.vs_baseline || 'vs Baseline') + ': ';
+      const parts = [];
+      if (ba.hrvDeviation?.available) {
+        const hrv = ba.hrvDeviation;
+        const sign = hrv.deviationPercent >= 0 ? '+' : '';
+        parts.push(`HRV ${sign}${hrv.deviationPercent.toFixed(0)}%`);
+      }
+      if (ba.rhrDeviation?.available) {
+        const rhr = ba.rhrDeviation;
+        const sign = rhr.deviationPercent >= 0 ? '+' : '';
+        parts.push(`RHR ${sign}${rhr.deviationPercent.toFixed(0)}%`);
+      }
+      if (parts.length > 0) {
+        deviationLine += parts.join(' | ');
+        if (ba.overallStatus === 'warning') {
+          deviationLine += ' ⚠️';
+        } else if (ba.overallStatus === 'good') {
+          deviationLine += ' ✓';
+        }
+        body += deviationLine;
+      }
     }
   }
   body += '\n';
@@ -298,14 +326,69 @@ ${t.weekly_overview || "Week Progress"}
     }
     body += ` | TSS: ${wp.tssCompleted}${wp.tssPlanned > 0 ? '/' + wp.tssPlanned : ''}`;
 
-    if (weeklyPlanContext?.needsAdaptation) {
+    // Mid-week adaptation section (when plan was modified)
+    if (midWeekAdaptation?.success && midWeekAdaptation?.changes?.length > 0) {
       body += `
 
-[!] ${t.plan_adaptation_title || "Adaptation Suggested"}:
-${weeklyPlanContext.adaptationReason}
-${weeklyPlanContext.suggestion || ''}`;
+[+] ${t.plan_adapted_title || "Plan Adapted"}:
+${midWeekAdaptation.summary || 'Your remaining week has been adjusted.'}
+
+${t.changes_made || "Changes"}:`;
+      for (const change of midWeekAdaptation.changes) {
+        body += `\n• ${change}`;
+      }
     }
     body += '\n';
+  }
+
+  // === SECTION 3.25: Deload Recommendation ===
+  if (deloadCheck?.needed) {
+    const urgencyEmoji = {
+      'high': '⚠️',
+      'medium': '📊',
+      'low': '💡'
+    }[deloadCheck.urgency] || '📊';
+
+    const urgencyLabel = {
+      'high': t.deload_urgent || 'DELOAD RECOMMENDED',
+      'medium': t.deload_suggested || 'Recovery Week Suggested',
+      'low': t.deload_consider || 'Consider Recovery'
+    }[deloadCheck.urgency] || 'Recovery Week';
+
+    body += `
+-----------------------------------
+${urgencyEmoji} ${urgencyLabel}
+-----------------------------------
+`;
+
+    if (deloadCheck.reason) {
+      body += `${t.reason || "Reason"}: ${deloadCheck.reason}\n`;
+    }
+
+    body += `${t.weeks_without_recovery || "Weeks without recovery"}: ${deloadCheck.weeksWithoutDeload}\n`;
+
+    // Show weekly TSS breakdown
+    if (deloadCheck.weeklyBreakdown?.length > 0) {
+      body += `\n${t.recent_load || "Recent load"}:\n`;
+      deloadCheck.weeklyBreakdown.forEach((week, i) => {
+        const marker = (i === deloadCheck.weeklyBreakdown.length - 1) ? ` <- ${t.this_week || "This week"}` : '';
+        body += `  ${t.week || "Week"} ${week.weekNumber}: ${week.totalTSS} TSS (${week.activities} ${t.activities || "activities"})${marker}\n`;
+      });
+    }
+
+    if (deloadCheck.recommendation) {
+      body += `\n${t.recommendation || "Recommendation"}:\n${deloadCheck.recommendation}\n`;
+    }
+  } else if (deloadCheck?.weeksWithoutDeload >= 3) {
+    // Soft reminder when approaching need for deload
+    body += `
+${t.deload_reminder || "Deload reminder"}: ${deloadCheck.weeksWithoutDeload} ${t.weeks_training || "weeks of training"}. ${deloadCheck.recommendation || ""}
+`;
+  }
+
+  // === SECTION 3.4: Taper Timing (within 6 weeks of A race) ===
+  if (taperRecommendation?.available) {
+    body += formatTaperEmailSection(taperRecommendation);
   }
 
   // === SECTION 3.5: Race Advice (for race tomorrow or yesterday) ===

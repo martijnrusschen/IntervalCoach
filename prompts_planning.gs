@@ -651,3 +651,160 @@ Use ${langName} for all string values within the JSON:
   result.aiEnhanced = true;
   return result;
 }
+
+// =========================================================
+// MID-WEEK ADAPTATION PROMPT
+// =========================================================
+
+/**
+ * Build AI prompt for mid-week adaptation decisions
+ * Handles both missed session rescheduling and fatigue-based adjustments
+ *
+ * @param {object} weekProgress - Week progress data
+ * @param {array} remainingDays - Remaining placeholders for the week
+ * @param {object} wellness - Wellness data
+ * @param {object} fitness - Fitness metrics
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal information
+ * @param {object} triggers - Adaptation triggers from checkMidWeekAdaptationNeeded()
+ * @returns {string} AI prompt
+ */
+function buildMidWeekAdaptationPrompt(weekProgress, remainingDays, wellness, fitness, phaseInfo, goals, triggers) {
+  const langName = getPromptLanguage();
+
+  // Build week progress summary
+  let progressSummary = 'No data available';
+  if (weekProgress) {
+    progressSummary = `Days analyzed: ${weekProgress.daysAnalyzed}
+Planned: ${weekProgress.plannedSessions} sessions (${weekProgress.tssPlanned} TSS)
+Completed: ${weekProgress.completedSessions} sessions (${weekProgress.tssCompleted} TSS)
+Missed: ${weekProgress.missedSessions} sessions
+Adherence: ${weekProgress.adherenceRate?.toFixed(0) || 'N/A'}%`;
+
+    if (weekProgress.missedTypes && weekProgress.missedTypes.length > 0) {
+      progressSummary += `\nMissed workout types: ${weekProgress.missedTypes.join(', ')}`;
+    }
+    if (weekProgress.completedTypes && weekProgress.completedTypes.length > 0) {
+      progressSummary += `\nCompleted workout types: ${weekProgress.completedTypes.join(', ')}`;
+    }
+  }
+
+  // Build remaining days summary
+  const remainingSummary = remainingDays.map(d => {
+    const type = d.placeholderName ? extractWorkoutType(d.placeholderName) : 'Unspecified';
+    const duration = d.duration ? `${d.duration.min || d.duration}-${d.duration.max || d.duration}min` : 'TBD';
+    const event = d.hasEvent ? ` [${d.eventCategory} event: ${d.eventName}]` : '';
+    return `- ${d.dayName} (${d.date}): ${type} ${duration}${event}`;
+  }).join('\n');
+
+  // Build wellness context
+  let wellnessContext = 'Not available';
+  if (wellness?.available) {
+    wellnessContext = `Recovery status: ${wellness.recoveryStatus}
+Sleep: ${wellness.today?.sleep?.toFixed(1) || 'N/A'}h (${wellness.sleepStatus || 'N/A'})
+HRV: ${wellness.today?.hrv || 'N/A'}
+Resting HR: ${wellness.today?.restingHR || 'N/A'}`;
+  }
+
+  // Build fitness context
+  let fitnessContext = 'Not available';
+  if (fitness) {
+    fitnessContext = `CTL: ${fitness.ctl?.toFixed(0) || 'N/A'}
+ATL: ${fitness.atl?.toFixed(0) || 'N/A'}
+TSB: ${fitness.tsb?.toFixed(1) || 'N/A'}
+Ramp rate: ${fitness.rampRate?.toFixed(1) || 'N/A'} TSS/week`;
+  }
+
+  // Build trigger context
+  let triggerContext = 'Unknown triggers';
+  if (triggers) {
+    const triggerList = [];
+    if (triggers.missedIntensity?.length > 0) {
+      triggerList.push(`Missed intensity sessions: ${triggers.missedIntensity.join(', ')}`);
+    }
+    if (triggers.tssDeficit > 0) {
+      triggerList.push(`TSS deficit: ${triggers.tssDeficit.toFixed(0)}`);
+    }
+    if (triggers.lowRecovery) {
+      triggerList.push('Low recovery status');
+    }
+    if (triggers.highFatigue) {
+      triggerList.push('High fatigue (low TSB)');
+    }
+    if (triggers.recoveryMismatch) {
+      triggerList.push('Recovery/intensity mismatch');
+    }
+    triggerContext = triggerList.join('; ') || 'General adjustment';
+  }
+
+  // Build goal context
+  let goalContext = 'General fitness improvement';
+  if (goals?.available && goals.primaryGoal) {
+    const daysOut = goals.primaryGoal.daysUntil || 'Unknown';
+    goalContext = `${goals.primaryGoal.name} (${goals.primaryGoal.date}, ${daysOut} days away)
+Event type: ${goals.primaryGoal.type || 'Unknown'}`;
+  }
+
+  const prompt = `You are a professional cycling/running coach. The athlete needs their remaining week adjusted based on what happened earlier this week.
+
+**ADAPTATION TRIGGERS:**
+${triggerContext}
+
+**WEEK PROGRESS (Monday to yesterday):**
+${progressSummary}
+
+**REMAINING DAYS (to adapt):**
+${remainingSummary}
+
+**CURRENT WELLNESS:**
+${wellnessContext}
+
+**CURRENT FITNESS:**
+${fitnessContext}
+
+**TRAINING PHASE:**
+Phase: ${phaseInfo?.phaseName || 'Unknown'}
+Focus: ${phaseInfo?.focus || 'General fitness'}
+Weeks out: ${phaseInfo?.weeksOut || 'N/A'}
+
+**GOAL:**
+${goalContext}
+
+**YOUR TASK:**
+Analyze the situation and recommend adaptations to the remaining week. Consider:
+
+1. **If intensity was missed**: Can it be rescheduled to a remaining day? Don't stack too much intensity on one day.
+2. **If recovery is low**: Should intensity be reduced, swapped to endurance, or postponed?
+3. **If TSS deficit is large**: Can remaining workouts be extended, or is it better to accept the shortfall?
+4. **Constraints**:
+   - Don't schedule hard workouts the day before events
+   - Maximum 2 intensity days remaining in a week
+   - If overreaching (TSB < -30), prioritize recovery over catching up
+
+Return a JSON response in ${langName} with this structure:
+{
+  "needsChanges": true|false,
+  "summary": "Brief explanation of what's being changed and why (2-3 sentences)",
+  "adaptedPlan": [
+    {
+      "date": "YYYY-MM-DD",
+      "dayName": "Friday",
+      "workoutType": "Threshold",
+      "duration": 60,
+      "intensity": "moderate",
+      "description": "Brief description of the adapted workout",
+      "durationChanged": true|false,
+      "typeChanged": true|false
+    }
+  ],
+  "changes": [
+    "Moved VO2max from missed Wednesday to Saturday",
+    "Reduced Friday's intensity due to low recovery"
+  ],
+  "reasoning": "Detailed reasoning for the adaptations"
+}
+
+If no changes are needed, set needsChanges to false and explain why in the summary.`;
+
+  return prompt;
+}

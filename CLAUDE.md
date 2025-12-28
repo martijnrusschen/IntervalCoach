@@ -109,7 +109,7 @@ Tests are organized by domain in separate files (test_*.gs):
 - `test_training.gs`: `testAdaptiveTraining()`, `testTrainingLoadAdvisor()`, `testAITrainingLoadAdvisor()`
 - `test_recovery.gs`: `testAIRecoveryAssessment()`
 - `test_workout.gs`: `testWorkoutSelection()`, `testCoachingNote()`
-- `test_planning.gs`: `testTrainingProposal()`, `testWorkoutImpactPreview()`
+- `test_planning.gs`: `testTrainingProposal()`, `testWorkoutImpactPreview()`, `testMidWeekAdaptation()`
 - `test_power.gs`: `testAIPowerProfileAnalysis()`
 - `test_zones.gs`: `testZoneProgression()`
 - `test_email.gs`: `testRestDayEmail()`

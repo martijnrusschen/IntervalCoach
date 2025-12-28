@@ -781,73 +781,176 @@ function cleanupMissedPlaceholders(weekProgress) {
   return result;
 }
 
+// NOTE: checkWeeklyPlanAdaptation() has been removed and unified into
+// checkMidWeekAdaptationNeeded() in workouts_planning.gs which handles
+// both missed sessions AND fatigue-based triggers, and actually applies changes.
+
+// =========================================================
+// PLANNED DELOAD DETECTION
+// =========================================================
+
 /**
- * Check if the weekly plan needs adaptation based on current conditions
- * Compares current wellness/fitness to planned workout intensity
- * @param {object} wellness - Current wellness summary
- * @param {object} fitnessMetrics - Current CTL/ATL/TSB
- * @param {Array} upcomingDays - Upcoming placeholders from fetchUpcomingPlaceholders
- * @returns {object} { needsAdaptation, adaptationReason, suggestion }
+ * Check if a deload/recovery week is needed based on recent training patterns
+ * Analyzes last 4 weeks of training to detect:
+ * - Sustained high load without recovery
+ * - Accumulated fatigue indicators
+ * - Missing deload pattern in training cycle
+ *
+ * @param {object} fitnessMetrics - Current CTL/ATL/TSB from fetchFitnessMetrics()
+ * @returns {object} { needed: boolean, urgency: 'low'|'medium'|'high', reason: string, weeklyBreakdown: [], recommendation: string }
  */
-function checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays) {
+function checkDeloadNeeded(fitnessMetrics) {
   const result = {
-    needsAdaptation: false,
-    adaptationReason: '',
-    suggestion: ''
+    needed: false,
+    urgency: 'low',
+    reason: '',
+    weeklyBreakdown: [],
+    weeksWithoutDeload: 0,
+    recommendation: '',
+    suggestedDeloadTSS: null
   };
 
-  if (!wellness || !fitnessMetrics) {
-    return result;
+  const currentCTL = fitnessMetrics?.ctl || 0;
+  const currentTSB = fitnessMetrics?.tsb || 0;
+  const currentRampRate = fitnessMetrics?.rampRate || 0;
+
+  // Fetch last 4 weeks of activities
+  const weeklyData = [];
+  for (let week = 0; week < 4; week++) {
+    const weekActivities = fetchWeeklyActivities(7, week * 7);
+    weeklyData.push({
+      weekNumber: 4 - week, // Week 4 = oldest, Week 1 = most recent
+      totalTSS: weekActivities.totalTss,
+      totalTime: weekActivities.totalTime,
+      activities: weekActivities.totalActivities,
+      avgDailyTSS: Math.round(weekActivities.totalTss / 7)
+    });
   }
 
-  // Check for significant wellness changes that warrant plan review
-  const recoveryStatus = wellness.recoveryStatus || 'Unknown';
-  const tsb = fitnessMetrics.tsb || 0;
+  // Reverse so oldest is first
+  weeklyData.reverse();
+  result.weeklyBreakdown = weeklyData;
 
-  // Find today's and tomorrow's planned workouts
-  const todayStr = formatDateISO(new Date());
-  const tomorrowDate = new Date();
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrowStr = formatDateISO(tomorrowDate);
+  // Calculate average weekly TSS
+  const avgWeeklyTSS = weeklyData.reduce((sum, w) => sum + w.totalTSS, 0) / 4;
+  const targetWeeklyTSS = currentCTL * 7; // Expected TSS to maintain current CTL
 
-  const todayPlan = upcomingDays?.find(d => d.date === todayStr);
-  const tomorrowPlan = upcomingDays?.find(d => d.date === tomorrowStr);
+  // Deload threshold: 70% of average = recovery week
+  const deloadThreshold = avgWeeklyTSS * 0.70;
 
-  // Check for mismatch between recovery and planned intensity
-  const isLowRecovery = recoveryStatus.includes('Red') || recoveryStatus.includes('Strained');
-  const isVeryFatigued = tsb < -20;
-  const isOverreaching = tsb < -30;
+  // Count consecutive weeks without deload (TSS > 70% of average)
+  let consecutiveHighWeeks = 0;
+  let hadRecentDeload = false;
 
-  // Count upcoming high-intensity days
-  const upcomingIntenseDays = upcomingDays?.filter(d => {
-    const name = d.placeholderName || '';
-    return name.includes('VO2') || name.includes('Threshold') || name.includes('Intervals') ||
-           name.includes('Tempo') || name.includes('SweetSpot');
-  }).length || 0;
-
-  // Determine if adaptation is needed
-  if (isOverreaching && upcomingIntenseDays > 0) {
-    result.needsAdaptation = true;
-    result.adaptationReason = `Your TSB is very low (${tsb.toFixed(1)}) indicating significant fatigue. ` +
-      `You have ${upcomingIntenseDays} intensity day(s) planned this week.`;
-    result.suggestion = 'Consider converting some intensity days to endurance or recovery rides.';
-  } else if (isLowRecovery && tomorrowPlan?.placeholderName?.match(/VO2|Threshold|Intervals/)) {
-    result.needsAdaptation = true;
-    result.adaptationReason = `Recovery status is ${recoveryStatus} but tomorrow has a high-intensity workout planned.`;
-    result.suggestion = 'Consider swapping tomorrow\'s intensity for an easier day, or take today fully off.';
-  } else if (isVeryFatigued && upcomingIntenseDays >= 2) {
-    result.needsAdaptation = true;
-    result.adaptationReason = `You're carrying fatigue (TSB: ${tsb.toFixed(1)}) with ${upcomingIntenseDays} hard days ahead.`;
-    result.suggestion = 'Consider reducing volume or intensity on one of the upcoming days.';
+  for (let i = weeklyData.length - 1; i >= 0; i--) {
+    const week = weeklyData[i];
+    if (week.totalTSS < deloadThreshold && week.totalTSS > 0) {
+      hadRecentDeload = true;
+      result.weeksWithoutDeload = consecutiveHighWeeks;
+      break;
+    } else if (week.totalTSS > 0) {
+      consecutiveHighWeeks++;
+    }
   }
 
-  // Check for positive adaptation opportunity (very fresh, could add intensity)
-  const isVeryFresh = tsb > 15 && !isLowRecovery;
-  if (isVeryFresh && upcomingIntenseDays === 0) {
-    result.needsAdaptation = true;
-    result.adaptationReason = `You're well-rested (TSB: ${tsb.toFixed(1)}) with no intensity planned this week.`;
-    result.suggestion = 'This could be a good opportunity to add a quality session if your goals support it.';
+  if (!hadRecentDeload) {
+    result.weeksWithoutDeload = consecutiveHighWeeks;
+  }
+
+  // Analyze weekly TSS pattern
+  const reasons = [];
+  let urgencyScore = 0;
+
+  // Trigger 1: 4+ weeks without deload
+  if (result.weeksWithoutDeload >= 4) {
+    reasons.push(`${result.weeksWithoutDeload} consecutive weeks without recovery week`);
+    urgencyScore += 3;
+  } else if (result.weeksWithoutDeload >= 3) {
+    reasons.push(`${result.weeksWithoutDeload} consecutive weeks of sustained load`);
+    urgencyScore += 2;
+  }
+
+  // Trigger 2: High sustained ramp rate
+  if (currentRampRate > 5) {
+    reasons.push(`High ramp rate (${currentRampRate.toFixed(1)} CTL/week) sustained`);
+    urgencyScore += 2;
+  } else if (currentRampRate > 3) {
+    reasons.push(`Elevated ramp rate (${currentRampRate.toFixed(1)} CTL/week)`);
+    urgencyScore += 1;
+  }
+
+  // Trigger 3: Deep negative TSB (accumulated fatigue)
+  if (currentTSB < -30) {
+    reasons.push(`High fatigue (TSB: ${currentTSB.toFixed(0)})`);
+    urgencyScore += 3;
+  } else if (currentTSB < -20) {
+    reasons.push(`Moderate fatigue accumulation (TSB: ${currentTSB.toFixed(0)})`);
+    urgencyScore += 1;
+  }
+
+  // Trigger 4: Consistently above target TSS (overreaching pattern)
+  const weeksAboveTarget = weeklyData.filter(w => w.totalTSS > targetWeeklyTSS * 1.1).length;
+  if (weeksAboveTarget >= 3) {
+    reasons.push(`${weeksAboveTarget}/4 weeks above target load`);
+    urgencyScore += 2;
+  }
+
+  // Determine if deload is needed
+  if (urgencyScore >= 4) {
+    result.needed = true;
+    result.urgency = 'high';
+  } else if (urgencyScore >= 2 && result.weeksWithoutDeload >= 3) {
+    result.needed = true;
+    result.urgency = 'medium';
+  } else if (urgencyScore >= 1 && result.weeksWithoutDeload >= 4) {
+    result.needed = true;
+    result.urgency = 'low';
+  }
+
+  result.reason = reasons.join('; ');
+
+  // Generate recommendation
+  if (result.needed) {
+    const deloadTSS = Math.round(avgWeeklyTSS * 0.5);
+    result.suggestedDeloadTSS = deloadTSS;
+
+    if (result.urgency === 'high') {
+      result.recommendation = `Deload strongly recommended. Reduce to ${deloadTSS} TSS this week (50% of normal). Focus on recovery and easy spinning only.`;
+    } else if (result.urgency === 'medium') {
+      result.recommendation = `Consider scheduling a deload week soon. Target ${deloadTSS}-${Math.round(avgWeeklyTSS * 0.6)} TSS with reduced intensity.`;
+    } else {
+      result.recommendation = `A recovery week in the next 1-2 weeks would help consolidate fitness gains. Plan for ${Math.round(avgWeeklyTSS * 0.6)}-${Math.round(avgWeeklyTSS * 0.7)} TSS.`;
+    }
+  } else if (result.weeksWithoutDeload >= 2) {
+    result.recommendation = `Training pattern is sustainable. Consider a deload in ${4 - result.weeksWithoutDeload} week(s) to optimize adaptation.`;
   }
 
   return result;
+}
+
+/**
+ * Format deload check results for logging
+ * @param {object} deloadCheck - Result from checkDeloadNeeded()
+ * @returns {string} Formatted log string
+ */
+function formatDeloadCheckLog(deloadCheck) {
+  let log = '\n=== DELOAD CHECK ===\n';
+  log += `Deload Needed: ${deloadCheck.needed ? 'YES (' + deloadCheck.urgency.toUpperCase() + ')' : 'No'}\n`;
+  log += `Weeks Without Recovery: ${deloadCheck.weeksWithoutDeload}\n`;
+
+  if (deloadCheck.reason) {
+    log += `Reasons: ${deloadCheck.reason}\n`;
+  }
+
+  log += '\nWeekly TSS Breakdown:\n';
+  deloadCheck.weeklyBreakdown.forEach((week, i) => {
+    const marker = (i === deloadCheck.weeklyBreakdown.length - 1) ? ' <- This week' : '';
+    log += `  Week ${week.weekNumber}: ${week.totalTSS} TSS (${week.activities} activities)${marker}\n`;
+  });
+
+  if (deloadCheck.recommendation) {
+    log += `\nRecommendation: ${deloadCheck.recommendation}\n`;
+  }
+
+  return log;
 }

@@ -52,6 +52,7 @@ const TRANSLATIONS = {
     avg_hrv: "Avg HRV",
     avg_rhr: "Avg Resting HR",
     avg_recovery: "Avg Recovery",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Keep up the great work!",
     // Training Load Advisor
@@ -137,6 +138,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Add a 'Ride' or 'Run' placeholder to your Intervals.icu calendar to trigger workout generation.",
     daily_status_footer: "To get a personalized workout, add a 'Ride' or 'Run - 60min' placeholder to today's calendar in Intervals.icu.",
     plan_adaptation_title: "Plan Adaptation Suggested",
+    plan_adapted_title: "Plan Adapted",
+    changes_made: "Changes made",
     // Smart rest day reasons
     rest_after_training: "Recovery day after recent training. Your body adapts during rest.",
     rest_before_intensity: "Rest day before tomorrow's intensity. Arrive fresh for quality work.",
@@ -151,7 +154,32 @@ const TRANSLATIONS = {
     completed: "completed",
     extra: "extra",
     missed: "missed",
-    today: "Today"
+    today: "Today",
+    // Deload detection
+    deload_urgent: "DELOAD RECOMMENDED",
+    deload_suggested: "Recovery Week Suggested",
+    deload_consider: "Consider Recovery",
+    deload_reminder: "Deload reminder",
+    weeks_without_recovery: "Weeks without recovery",
+    weeks_training: "weeks of training",
+    recent_load: "Recent load",
+    this_week: "This week",
+    week: "Week",
+    activities: "activities",
+    reason: "Reason",
+    recommendation: "Recommendation",
+    // Taper timing
+    taper_timing_title: "Taper Timing",
+    race: "Race",
+    days: "days",
+    taper_start: "Taper start",
+    taper_type: "Type",
+    taper_length: "Length",
+    taper_plan: "Plan",
+    race_day_projection: "Race Day Projection",
+    key_workouts: "Key Workouts",
+    notes: "Notes",
+    in: "in"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -192,6 +220,7 @@ const TRANSLATIONS = {
     avg_hrv: "平均HRV",
     avg_rhr: "平均安静時心拍",
     avg_recovery: "平均リカバリー",
+    vs_baseline: "30日ベースライン比",
     ramp_rate: "ランプレート",
     weekly_footer: "今週もお疲れ様でした！",
     // Training Load Advisor
@@ -243,7 +272,32 @@ const TRANSLATIONS = {
     last_trained: "最終",
     ai_recommendation: "AI推奨",
     priority_this_week: "今週の優先",
-    suggested_workouts: "推奨ワークアウト"
+    suggested_workouts: "推奨ワークアウト",
+    // Deload detection
+    deload_urgent: "デロード推奨",
+    deload_suggested: "リカバリー週の提案",
+    deload_consider: "リカバリーを検討",
+    deload_reminder: "デロードのお知らせ",
+    weeks_without_recovery: "リカバリーなしの週数",
+    weeks_training: "週間のトレーニング",
+    recent_load: "最近の負荷",
+    this_week: "今週",
+    week: "週",
+    activities: "アクティビティ",
+    reason: "理由",
+    recommendation: "推奨",
+    // Taper timing
+    taper_timing_title: "テーパリング計画",
+    race: "レース",
+    days: "日",
+    taper_start: "テーパー開始",
+    taper_type: "タイプ",
+    taper_length: "期間",
+    taper_plan: "計画",
+    race_day_projection: "レース当日予測",
+    key_workouts: "重要ワークアウト",
+    notes: "注意事項",
+    in: "あと"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -284,6 +338,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Promedio",
     avg_rhr: "FC Reposo Promedio",
     avg_recovery: "Recuperación Promedio",
+    vs_baseline: "vs Línea Base 30d",
     ramp_rate: "Tasa de Rampa",
     weekly_footer: "¡Sigue así!",
     // Training Load Advisor
@@ -335,7 +390,32 @@ const TRANSLATIONS = {
     last_trained: "Último",
     ai_recommendation: "Recomendación IA",
     priority_this_week: "Prioridad esta semana",
-    suggested_workouts: "Entrenamientos sugeridos"
+    suggested_workouts: "Entrenamientos sugeridos",
+    // Deload detection
+    deload_urgent: "DESCARGA RECOMENDADA",
+    deload_suggested: "Semana de Recuperación Sugerida",
+    deload_consider: "Considerar Recuperación",
+    deload_reminder: "Recordatorio de descarga",
+    weeks_without_recovery: "Semanas sin recuperación",
+    weeks_training: "semanas de entrenamiento",
+    recent_load: "Carga reciente",
+    this_week: "Esta semana",
+    week: "Semana",
+    activities: "actividades",
+    reason: "Razón",
+    recommendation: "Recomendación",
+    // Taper timing
+    taper_timing_title: "Planificación del Taper",
+    race: "Carrera",
+    days: "días",
+    taper_start: "Inicio del taper",
+    taper_type: "Tipo",
+    taper_length: "Duración",
+    taper_plan: "Plan",
+    race_day_projection: "Proyección Día de Carrera",
+    key_workouts: "Entrenamientos Clave",
+    notes: "Notas",
+    in: "en"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -382,6 +462,7 @@ const TRANSLATIONS = {
     avg_hrv: "VFC Moyenne",
     avg_rhr: "FC Repos Moyenne",
     avg_recovery: "Récupération Moyenne",
+    vs_baseline: "vs Référence 30j",
     ramp_rate: "Taux de Rampe",
     weekly_footer: "Continuez comme ça!",
     // Training Load Advisor
@@ -433,7 +514,32 @@ const TRANSLATIONS = {
     last_trained: "Dernier",
     ai_recommendation: "Recommandation IA",
     priority_this_week: "Priorité cette semaine",
-    suggested_workouts: "Entraînements suggérés"
+    suggested_workouts: "Entraînements suggérés",
+    // Deload detection
+    deload_urgent: "DÉCHARGE RECOMMANDÉE",
+    deload_suggested: "Semaine de Récupération Suggérée",
+    deload_consider: "Considérer Récupération",
+    deload_reminder: "Rappel de décharge",
+    weeks_without_recovery: "Semaines sans récupération",
+    weeks_training: "semaines d'entraînement",
+    recent_load: "Charge récente",
+    this_week: "Cette semaine",
+    week: "Semaine",
+    activities: "activités",
+    reason: "Raison",
+    recommendation: "Recommandation",
+    // Taper timing
+    taper_timing_title: "Planification de l'Affûtage",
+    race: "Course",
+    days: "jours",
+    taper_start: "Début de l'affûtage",
+    taper_type: "Type",
+    taper_length: "Durée",
+    taper_plan: "Plan",
+    race_day_projection: "Projection Jour de Course",
+    key_workouts: "Entraînements Clés",
+    notes: "Notes",
+    in: "dans"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -481,6 +587,7 @@ const TRANSLATIONS = {
     avg_hrv: "Gem. HRV",
     avg_rhr: "Gem. Rustpols",
     avg_recovery: "Gem. Herstel",
+    vs_baseline: "vs 30d Baseline",
     ramp_rate: "Ramp Rate",
     weekly_footer: "Goed bezig, ga zo door!",
     // Training Load Advisor
@@ -566,6 +673,8 @@ const TRANSLATIONS = {
     add_placeholder_hint: "Voeg een 'Ride' of 'Run' placeholder toe aan je Intervals.icu kalender voor workout generatie.",
     daily_status_footer: "Voor een gepersonaliseerde workout, voeg een 'Ride' of 'Run - 60min' placeholder toe aan je kalender in Intervals.icu.",
     plan_adaptation_title: "Plan Aanpassing Voorgesteld",
+    plan_adapted_title: "Plan Aangepast",
+    changes_made: "Wijzigingen",
     // Smart rest day reasons
     rest_after_training: "Hersteldag na recente training. Je lichaam past zich aan tijdens rust.",
     rest_before_intensity: "Rustdag voor morgen's intensiteit. Kom fris aan de start.",
@@ -580,6 +689,31 @@ const TRANSLATIONS = {
     completed: "voltooid",
     extra: "extra",
     missed: "gemist",
-    today: "Vandaag"
+    today: "Vandaag",
+    // Deload detection
+    deload_urgent: "DELOAD AANBEVOLEN",
+    deload_suggested: "Herstelweek Voorgesteld",
+    deload_consider: "Overweeg Herstel",
+    deload_reminder: "Deload herinnering",
+    weeks_without_recovery: "Weken zonder herstel",
+    weeks_training: "weken trainen",
+    recent_load: "Recente belasting",
+    this_week: "Deze week",
+    week: "Week",
+    activities: "activiteiten",
+    reason: "Reden",
+    recommendation: "Aanbeveling",
+    // Taper timing
+    taper_timing_title: "Taper Planning",
+    race: "Wedstrijd",
+    days: "dagen",
+    taper_start: "Taper start",
+    taper_type: "Type",
+    taper_length: "Duur",
+    taper_plan: "Plan",
+    race_day_projection: "Wedstrijddag Projectie",
+    key_workouts: "Belangrijke Workouts",
+    notes: "Notities",
+    in: "over"
   }
 };

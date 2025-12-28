@@ -311,6 +311,30 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
 `;
   }
 
+  // Build taper context if within race window
+  let taperContext = '';
+  if (context.taperRecommendation?.available) {
+    const taper = context.taperRecommendation;
+    const rec = taper.analysis?.recommended;
+    const ai = taper.aiRecommendation;
+
+    taperContext = `
+**TAPER TIMING (CRITICAL - follow this guidance):**
+- Race: ${taper.analysis.raceDate} (${taper.analysis.daysToRace} days away)
+- Recommended: ${rec.taperType} (${rec.taperDescription})
+- Taper Start: ${rec.taperStartDate}${rec.daysUntilTaperStart <= 0 ? ' (STARTED)' : rec.daysUntilTaperStart <= 7 ? ' (STARTING THIS WEEK)' : ''}
+- Days Until Taper: ${rec.daysUntilTaperStart}
+- Target Race Day TSB: ${taper.analysis.targetTSB}
+- Projected Race Day CTL: ${rec.raceDayCTL}
+${ai?.weekByWeekPlan ? '- Plan: ' + ai.weekByWeekPlan.join(' | ') : ''}
+
+**TAPER RULES TO APPLY:**
+${rec.daysUntilTaperStart <= 0 ? '- IN TAPER: Reduce volume to ' + Math.round(rec.taperIntensity * 100) + '%. Keep sessions short and sharp. No long endurance rides.' : ''}
+${rec.daysUntilTaperStart > 0 && rec.daysUntilTaperStart <= 7 ? '- TAPER STARTS THIS WEEK: Begin reducing volume from ' + rec.taperStartDate + '. Last hard workout 3-4 days before race.' : ''}
+${taper.analysis.daysToRace <= 7 ? '- RACE WEEK: Focus on freshness. Easy spinning with opener 1-2 days before.' : ''}
+`;
+  }
+
   // Get user's language for localized output
   const lang = USER_SETTINGS.LANGUAGE || 'en';
   const langMap = { en: 'English', nl: 'Dutch', ja: 'Japanese', es: 'Spanish', fr: 'French' };
@@ -331,7 +355,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
 - eFTP: ${context.eftp || 'N/A'}W
 - CTL Trend: ${context.ctlTrend || 'stable'}
-${goalsContext}
+${goalsContext}${taperContext}
 **RECOVERY STATUS:**
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
@@ -360,6 +384,8 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
 11. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
 12. ZONE PROGRESSION: If zone levels are provided, include at least one workout targeting underdeveloped zones (focus areas)
+13. TAPER: If in taper period, reduce volume significantly. Keep intensity short and sharp. Last hard workout 3-4 days before race.
+14. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
@@ -760,4 +786,358 @@ Write all text in ${langName}.
     Logger.log("AI plan adaptation: Failed to parse response");
   }
   return insights;
+}
+
+// =========================================================
+// MID-WEEK ADAPTATION
+// =========================================================
+
+/**
+ * Check if mid-week adaptation is needed based on missed sessions AND wellness/recovery
+ * Combines execution-based (missed workouts) and fatigue-based (wellness) adaptation triggers
+ * Also considers taper timing to ensure race readiness
+ *
+ * @param {object} weekProgress - Result from checkWeekProgress()
+ * @param {object} upcomingDays - Remaining week placeholders
+ * @param {object} wellness - Wellness summary (optional)
+ * @param {object} fitness - Fitness metrics with TSB (optional)
+ * @param {object} taperRecommendation - Taper recommendation from generateTaperRecommendation() (optional)
+ * @returns {object} { needed: boolean, reason: string, priority: string, triggers: object }
+ */
+function checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitness, taperRecommendation) {
+  const result = {
+    needed: false,
+    reason: '',
+    priority: 'low',
+    triggers: {
+      missedIntensity: [],
+      tssDeficit: 0,
+      lowAdherence: false,
+      lowRecovery: false,
+      highFatigue: false,
+      recoveryMismatch: false,
+      taperMismatch: false
+    }
+  };
+
+  const reasons = [];
+
+  // ===== EXECUTION-BASED TRIGGERS (missed sessions) =====
+  if (weekProgress && weekProgress.daysAnalyzed > 0) {
+    // High-priority workout types that should be rescheduled if missed
+    const intensityTypes = ['VO2max', 'Threshold', 'SweetSpot', 'Intervals', 'Tempo'];
+
+    // Check for missed intensity sessions
+    const missedIntensity = (weekProgress.missedTypes || []).filter(type =>
+      intensityTypes.some(it => type.toLowerCase().includes(it.toLowerCase()))
+    );
+
+    if (missedIntensity.length > 0) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.missedIntensity = missedIntensity;
+      reasons.push(`Missed key intensity: ${missedIntensity.join(', ')}`);
+    }
+
+    // Check TSS deficit
+    const tssDelta = (weekProgress.tssPlanned || 0) - (weekProgress.tssCompleted || 0);
+    if (tssDelta > 100) {
+      result.needed = true;
+      if (result.priority !== 'high') result.priority = 'medium';
+      result.triggers.tssDeficit = tssDelta;
+      reasons.push(`TSS deficit: ${tssDelta.toFixed(0)}`);
+    }
+
+    // Check adherence
+    const adherence = weekProgress.adherenceRate || 100;
+    if (adherence < 70 && weekProgress.plannedSessions >= 2) {
+      result.needed = true;
+      if (result.priority !== 'high') result.priority = 'medium';
+      result.triggers.lowAdherence = true;
+      reasons.push(`Low adherence: ${adherence.toFixed(0)}%`);
+    }
+  }
+
+  // ===== FATIGUE-BASED TRIGGERS (wellness/recovery) =====
+  if (wellness && upcomingDays) {
+    const recoveryStatus = wellness.recoveryStatus || 'Unknown';
+    const isLowRecovery = recoveryStatus.includes('Red') || recoveryStatus.includes('Strained');
+    const isYellowRecovery = recoveryStatus.includes('Yellow') || recoveryStatus.includes('Moderate');
+
+    // Check TSB for fatigue
+    const tsb = fitness?.tsb || 0;
+    const isVeryFatigued = tsb < -20;
+    const isOverreaching = tsb < -30;
+
+    // Find upcoming intensity days (tomorrow onwards)
+    const today = formatDateISO(new Date());
+    const upcomingIntenseDays = upcomingDays.filter(d => {
+      if (d.date <= today) return false;
+      const name = d.placeholderName || '';
+      return name.match(/VO2|Threshold|Intervals|Tempo|SweetSpot/i);
+    });
+
+    // Low recovery + intensity planned = adapt
+    if (isLowRecovery && upcomingIntenseDays.length > 0) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.lowRecovery = true;
+      result.triggers.recoveryMismatch = true;
+      reasons.push(`Low recovery (${recoveryStatus}) with ${upcomingIntenseDays.length} intensity day(s) ahead`);
+    }
+
+    // Yellow recovery + multiple intensity days = consider adapting
+    if (isYellowRecovery && upcomingIntenseDays.length >= 2) {
+      result.needed = true;
+      if (result.priority !== 'high') result.priority = 'medium';
+      result.triggers.recoveryMismatch = true;
+      reasons.push(`Moderate recovery with ${upcomingIntenseDays.length} intensity days planned`);
+    }
+
+    // Overreaching + any intensity = adapt
+    if (isOverreaching && upcomingIntenseDays.length > 0) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.highFatigue = true;
+      reasons.push(`High fatigue (TSB: ${tsb.toFixed(1)}) with intensity planned`);
+    }
+
+    // Very fatigued + multiple intensity days = adapt
+    if (isVeryFatigued && upcomingIntenseDays.length >= 2) {
+      result.needed = true;
+      if (result.priority !== 'high') result.priority = 'medium';
+      result.triggers.highFatigue = true;
+      reasons.push(`Fatigued (TSB: ${tsb.toFixed(1)}) with ${upcomingIntenseDays.length} hard days ahead`);
+    }
+  }
+
+  // ===== TAPER-BASED TRIGGERS (race preparation) =====
+  if (taperRecommendation?.available && upcomingDays) {
+    const taper = taperRecommendation.analysis;
+    const rec = taper.recommended;
+
+    // Check if we're in taper window
+    const inTaper = rec.daysUntilTaperStart <= 0;
+    const taperStartsThisWeek = rec.daysUntilTaperStart <= 7 && rec.daysUntilTaperStart > 0;
+    const raceWeek = taper.daysToRace <= 7;
+
+    // Find high intensity planned in remaining week
+    const today = formatDateISO(new Date());
+    const upcomingIntense = upcomingDays.filter(d => {
+      if (d.date <= today) return false;
+      const name = d.placeholderName || '';
+      return name.match(/VO2|Threshold|Intervals|SweetSpot/i);
+    });
+
+    // In taper but still have hard workouts planned (except opener)
+    if (inTaper && upcomingIntense.length > 1) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.taperMismatch = true;
+      reasons.push(`In taper (race in ${taper.daysToRace} days) but ${upcomingIntense.length} intensity sessions still planned`);
+    }
+
+    // Race week with too much intensity
+    if (raceWeek && upcomingIntense.length > 1) {
+      result.needed = true;
+      result.priority = 'high';
+      result.triggers.taperMismatch = true;
+      reasons.push(`Race week - too many intensity sessions (${upcomingIntense.length}) planned`);
+    }
+
+    // Taper starting this week but no volume reduction yet
+    if (taperStartsThisWeek) {
+      // Find days after taper start that still have high intensity
+      const taperStartDate = rec.taperStartDate;
+      const postTaperIntense = upcomingIntense.filter(d => d.date >= taperStartDate);
+      if (postTaperIntense.length > 1) {
+        result.needed = true;
+        if (result.priority !== 'high') result.priority = 'medium';
+        result.triggers.taperMismatch = true;
+        reasons.push(`Taper starts ${rec.taperStartDate} but ${postTaperIntense.length} hard workouts still planned after`);
+      }
+    }
+  }
+
+  result.reason = reasons.join('; ');
+
+  return result;
+}
+
+/**
+ * Generate mid-week adaptation plan using AI
+ * @param {object} weekProgress - Result from checkWeekProgress()
+ * @param {array} upcomingDays - Remaining week placeholders from fetchUpcomingPlaceholders()
+ * @param {object} wellness - Wellness summary
+ * @param {object} fitness - Fitness metrics
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} goals - Goal information
+ * @param {object} adaptationCheck - Result from checkMidWeekAdaptationNeeded() with triggers
+ * @returns {object} { success: boolean, adaptedPlan: array, changes: array, summary: string }
+ */
+function generateMidWeekAdaptation(weekProgress, upcomingDays, wellness, fitness, phaseInfo, goals, adaptationCheck) {
+  const result = {
+    success: false,
+    adaptedPlan: [],
+    changes: [],
+    summary: '',
+    reasoning: ''
+  };
+
+  // Filter to only remaining days with placeholders (excluding today)
+  const today = formatDateISO(new Date());
+  const remainingDays = upcomingDays.filter(d =>
+    d.date > today && d.activityType !== null
+  );
+
+  if (remainingDays.length === 0) {
+    result.summary = 'No remaining placeholders to adapt';
+    return result;
+  }
+
+  // Build context for AI with triggers
+  const triggers = adaptationCheck?.triggers || {};
+  const prompt = buildMidWeekAdaptationPrompt(weekProgress, remainingDays, wellness, fitness, phaseInfo, goals, triggers);
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    const adaptation = parseGeminiJsonResponse(response);
+
+    if (!adaptation) {
+      Logger.log("Mid-week adaptation: Failed to parse AI response");
+      return result;
+    }
+
+    // Check if AI decided no changes needed
+    if (adaptation.needsChanges === false) {
+      result.success = true;
+      result.summary = adaptation.summary || 'No changes needed';
+      result.reasoning = adaptation.reasoning || '';
+      Logger.log("Mid-week adaptation: AI determined no changes needed - " + result.summary);
+      return result;
+    }
+
+    if (!adaptation.adaptedPlan || adaptation.adaptedPlan.length === 0) {
+      Logger.log("Mid-week adaptation: No adapted plan in response");
+      return result;
+    }
+
+    result.success = true;
+    result.adaptedPlan = adaptation.adaptedPlan;
+    result.changes = adaptation.changes || [];
+    result.summary = adaptation.summary || '';
+    result.reasoning = adaptation.reasoning || '';
+
+    // Apply the adapted plan to the calendar
+    if (result.changes.length > 0) {
+      const applied = applyMidWeekAdaptation(result.adaptedPlan, remainingDays);
+      Logger.log(`Mid-week adaptation: Applied ${applied} change(s) to calendar`);
+    }
+
+    return result;
+
+  } catch (e) {
+    Logger.log("Mid-week adaptation error: " + e.toString());
+    return result;
+  }
+}
+
+/**
+ * Apply mid-week adaptation by updating placeholders in Intervals.icu
+ * @param {array} adaptedPlan - New plan from AI
+ * @param {array} remainingDays - Original remaining days
+ * @returns {number} Number of changes applied
+ */
+function applyMidWeekAdaptation(adaptedPlan, remainingDays) {
+  let changesApplied = 0;
+
+  // For each day in the adapted plan, update the placeholder if changed
+  for (const adapted of adaptedPlan) {
+    const original = remainingDays.find(d => d.date === adapted.date);
+    if (!original) continue;
+
+    // Check if workout type or duration changed
+    const originalType = extractWorkoutType(original.placeholderName);
+    const newType = adapted.workoutType;
+    const typeChanged = adapted.typeChanged || (originalType !== newType);
+    const durationChanged = adapted.durationChanged;
+
+    if (typeChanged || durationChanged) {
+      // Delete old placeholder and create new one
+      try {
+        // Find and delete the existing event
+        const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + adapted.date + "&newest=" + adapted.date);
+        if (eventsResult.success && eventsResult.data) {
+          const placeholder = eventsResult.data.find(e =>
+            e.category === 'WORKOUT' &&
+            (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
+          );
+
+          if (placeholder && placeholder.id) {
+            // Delete old placeholder
+            deleteIntervalEvent(placeholder.id);
+
+            // Create new placeholder with adapted workout
+            const activityType = original.activityType || 'Ride';
+            const duration = adapted.duration || original.duration?.max || 60;
+            const newName = `${activityType} - ${newType} - ${duration}min [Weekly Plan - Adapted]`;
+            const description = `[Weekly Plan] Mid-week adaptation: ${adapted.description || 'Adjusted based on week progress'}`;
+
+            createWeeklyPlanPlaceholder(adapted.date, activityType, newName, description);
+            Logger.log(`Adapted ${adapted.date}: ${originalType || 'unspecified'} → ${newType}`);
+            changesApplied++;
+          }
+        }
+      } catch (e) {
+        Logger.log(`Failed to adapt ${adapted.date}: ${e.toString()}`);
+      }
+    }
+  }
+
+  return changesApplied;
+}
+
+/**
+ * Extract workout type from placeholder name
+ * @param {string} name - Placeholder name like "Ride - Threshold - 60min"
+ * @returns {string} Workout type or null
+ */
+function extractWorkoutType(name) {
+  if (!name) return null;
+
+  const types = ['VO2max', 'Threshold', 'SweetSpot', 'Tempo', 'Endurance', 'Recovery', 'Intervals', 'Long'];
+  for (const type of types) {
+    if (name.toLowerCase().includes(type.toLowerCase())) {
+      return type;
+    }
+  }
+  return null;
+}
+
+/**
+ * Create a weekly plan placeholder in Intervals.icu
+ * @param {string} date - ISO date string
+ * @param {string} activityType - 'Ride' or 'Run'
+ * @param {string} name - Placeholder name
+ * @param {string} description - Optional description
+ */
+function createWeeklyPlanPlaceholder(date, activityType, name, description) {
+  const event = {
+    category: 'WORKOUT',
+    start_date_local: date,
+    name: name,
+    description: description || '[Weekly Plan] Mid-week adaptation',
+    type: activityType
+  };
+
+  const result = fetchIcuApi('/athlete/0/events', {
+    method: 'POST',
+    payload: JSON.stringify(event)
+  });
+
+  if (!result.success) {
+    Logger.log("Failed to create placeholder: " + result.error);
+  }
+
+  return result;
 }

@@ -217,39 +217,6 @@ function testAIWeeklyPlan() {
 }
 
 /**
- * Test weekly plan adaptation check
- */
-function testWeeklyPlanAdaptation() {
-  Logger.log("=== WEEKLY PLAN ADAPTATION TEST ===");
-  requireValidConfig();
-
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitnessMetrics = fetchFitnessMetrics();
-  const upcomingDays = fetchUpcomingPlaceholders(7);
-
-  Logger.log("Current Status:");
-  Logger.log("  Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
-  Logger.log("  TSB: " + (fitnessMetrics.tsb?.toFixed(1) || "N/A"));
-
-  Logger.log("\nUpcoming workouts:");
-  upcomingDays.filter(d => d.activityType || d.hasEvent).forEach(d => {
-    Logger.log("  " + d.dayName + ": " + (d.placeholderName || d.activityType || "Event"));
-  });
-
-  const result = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
-
-  Logger.log("\nAdaptation Check Result:");
-  Logger.log("  Needs Adaptation: " + result.needsAdaptation);
-  if (result.needsAdaptation) {
-    Logger.log("  Reason: " + result.adaptationReason);
-    Logger.log("  Suggestion: " + result.suggestion);
-  }
-
-  Logger.log("\n=== TEST COMPLETE ===");
-}
-
-/**
  * Test week progress check (planned vs completed)
  */
 function testWeekProgress() {
@@ -332,4 +299,278 @@ function testMonthlyProgress() {
   Logger.log("\n--- Totals ---");
   Logger.log("Total TSS: " + currentMonth.totals.tss.toFixed(0));
   Logger.log("Avg Weekly TSS: " + currentMonth.totals.avgWeeklyTss.toFixed(0));
+}
+
+/**
+ * Test mid-week adaptation functionality
+ * Checks if adaptation is needed based on current week progress and wellness
+ */
+function testMidWeekAdaptation() {
+  Logger.log("=== MID-WEEK ADAPTATION TEST ===\n");
+
+  // Fetch current data
+  const weekProgress = checkWeekProgress();
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const wellness = createWellnessSummary(fetchWellnessDataEnhanced(7));
+  const fitness = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  // Log current state
+  Logger.log("=== CURRENT STATE ===");
+  Logger.log("Day of week: " + new Date().toLocaleDateString('en-US', { weekday: 'long' }));
+  Logger.log("Days analyzed: " + weekProgress.daysAnalyzed);
+
+  Logger.log("\n--- Week Progress ---");
+  Logger.log("Planned: " + weekProgress.plannedSessions + " sessions (" + weekProgress.tssPlanned + " TSS)");
+  Logger.log("Completed: " + weekProgress.completedSessions + " sessions (" + weekProgress.tssCompleted + " TSS)");
+  Logger.log("Missed: " + weekProgress.missedSessions + " sessions");
+  Logger.log("Adherence: " + (weekProgress.adherenceRate || 100).toFixed(0) + "%");
+
+  if (weekProgress.missedTypes && weekProgress.missedTypes.length > 0) {
+    Logger.log("Missed types: " + weekProgress.missedTypes.join(", "));
+  }
+
+  Logger.log("\n--- Wellness ---");
+  Logger.log("Recovery: " + (wellness?.recoveryStatus || "Unknown"));
+  Logger.log("TSB: " + (fitness?.tsb?.toFixed(1) || "N/A"));
+
+  Logger.log("\n--- Remaining Week ---");
+  const today = formatDateISO(new Date());
+  const remaining = upcomingDays.filter(d => d.date > today && d.activityType);
+  remaining.forEach(d => {
+    const type = d.placeholderName ? extractWorkoutType(d.placeholderName) : "Unspecified";
+    Logger.log("  " + d.dayName + " (" + d.date + "): " + type);
+  });
+
+  // Check if adaptation is needed
+  Logger.log("\n=== ADAPTATION CHECK ===");
+  const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitness);
+
+  Logger.log("Adaptation needed: " + adaptationCheck.needed);
+  Logger.log("Priority: " + adaptationCheck.priority);
+  if (adaptationCheck.reason) {
+    Logger.log("Reason: " + adaptationCheck.reason);
+  }
+
+  // Log triggers
+  if (adaptationCheck.triggers) {
+    const triggers = adaptationCheck.triggers;
+    Logger.log("\nTriggers:");
+    if (triggers.missedIntensity?.length > 0) {
+      Logger.log("  - Missed intensity: " + triggers.missedIntensity.join(", "));
+    }
+    if (triggers.tssDeficit > 0) {
+      Logger.log("  - TSS deficit: " + triggers.tssDeficit.toFixed(0));
+    }
+    if (triggers.lowRecovery) Logger.log("  - Low recovery");
+    if (triggers.highFatigue) Logger.log("  - High fatigue");
+    if (triggers.recoveryMismatch) Logger.log("  - Recovery/intensity mismatch");
+  }
+
+  // Generate adaptation if needed (dry run - don't apply)
+  if (adaptationCheck.needed && remaining.length > 0) {
+    Logger.log("\n=== GENERATING ADAPTATION (dry run) ===");
+
+    try {
+      // Build the prompt to show what would be sent to AI
+      const prompt = buildMidWeekAdaptationPrompt(
+        weekProgress, remaining, wellness, fitness, phaseInfo, goals, adaptationCheck.triggers
+      );
+      Logger.log("\nPrompt length: " + prompt.length + " chars");
+
+      // Actually call the AI to see what it would recommend
+      const response = callGeminiAPIText(prompt);
+      const adaptation = parseGeminiJsonResponse(response);
+
+      if (adaptation) {
+        Logger.log("\n--- AI Recommendation ---");
+        Logger.log("Needs changes: " + adaptation.needsChanges);
+        Logger.log("Summary: " + adaptation.summary);
+
+        if (adaptation.changes && adaptation.changes.length > 0) {
+          Logger.log("\nProposed changes:");
+          adaptation.changes.forEach(c => Logger.log("  • " + c));
+        }
+
+        if (adaptation.adaptedPlan && adaptation.adaptedPlan.length > 0) {
+          Logger.log("\nAdapted plan:");
+          adaptation.adaptedPlan.forEach(d => {
+            Logger.log("  " + d.dayName + " (" + d.date + "): " + d.workoutType +
+                      (d.typeChanged ? " [TYPE CHANGED]" : "") +
+                      (d.durationChanged ? " [DURATION CHANGED]" : ""));
+          });
+        }
+
+        Logger.log("\nReasoning: " + (adaptation.reasoning || "N/A"));
+      } else {
+        Logger.log("Failed to parse AI response");
+      }
+    } catch (e) {
+      Logger.log("Error generating adaptation: " + e.toString());
+    }
+  } else if (!adaptationCheck.needed) {
+    Logger.log("\nNo adaptation needed - current plan is appropriate.");
+  } else {
+    Logger.log("\nNo remaining placeholders to adapt.");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test planned deload detection
+ * Analyzes last 4 weeks of training to determine if a recovery week is needed
+ */
+function testDeloadDetection() {
+  Logger.log("=== DELOAD DETECTION TEST ===\n");
+  requireValidConfig();
+
+  // Fetch current fitness metrics
+  const fitness = fetchFitnessMetrics();
+
+  Logger.log("=== CURRENT FITNESS ===");
+  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
+  Logger.log("ATL: " + (fitness.atl?.toFixed(1) || "N/A"));
+  Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
+  Logger.log("Ramp Rate: " + (fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
+
+  // Run deload check
+  const deloadCheck = checkDeloadNeeded(fitness);
+
+  Logger.log("\n=== DELOAD ANALYSIS ===");
+  Logger.log(formatDeloadCheckLog(deloadCheck));
+
+  // Additional analysis
+  Logger.log("\n=== ANALYSIS DETAILS ===");
+  Logger.log("Urgency Score Factors:");
+
+  if (deloadCheck.weeksWithoutDeload >= 4) {
+    Logger.log("  [+3] 4+ consecutive weeks without recovery");
+  } else if (deloadCheck.weeksWithoutDeload >= 3) {
+    Logger.log("  [+2] 3 consecutive weeks of sustained load");
+  }
+
+  if (fitness.rampRate > 5) {
+    Logger.log("  [+2] High ramp rate (>" + 5 + " CTL/week)");
+  } else if (fitness.rampRate > 3) {
+    Logger.log("  [+1] Elevated ramp rate (>" + 3 + " CTL/week)");
+  }
+
+  if (fitness.tsb < -30) {
+    Logger.log("  [+3] High fatigue (TSB < -30)");
+  } else if (fitness.tsb < -20) {
+    Logger.log("  [+1] Moderate fatigue (TSB < -20)");
+  }
+
+  Logger.log("\n=== RESULT ===");
+  if (deloadCheck.needed) {
+    Logger.log("DELOAD RECOMMENDED (" + deloadCheck.urgency.toUpperCase() + ")");
+    Logger.log("Suggested deload TSS: ~" + deloadCheck.suggestedDeloadTSS);
+    Logger.log("\n" + deloadCheck.recommendation);
+  } else {
+    Logger.log("No deload needed at this time");
+    if (deloadCheck.recommendation) {
+      Logger.log(deloadCheck.recommendation);
+    }
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test taper timing calculation
+ * Analyzes optimal taper start date for upcoming A race
+ */
+function testTaperTiming() {
+  Logger.log("=== TAPER TIMING TEST ===\n");
+  requireValidConfig();
+
+  // Fetch goals and fitness
+  const goals = fetchUpcomingGoals();
+  const fitness = fetchFitnessMetrics();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+
+  Logger.log("=== CURRENT FITNESS ===");
+  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
+  Logger.log("ATL: " + (fitness.atl?.toFixed(1) || "N/A"));
+  Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
+
+  Logger.log("\n=== GOALS ===");
+  if (goals?.available && goals?.primaryGoal) {
+    Logger.log("Primary: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+  } else {
+    Logger.log("No primary goal found (using TARGET_DATE: " + USER_SETTINGS.TARGET_DATE + ")");
+  }
+
+  // Generate taper recommendation
+  const primaryGoal = goals?.primaryGoal || { date: USER_SETTINGS.TARGET_DATE, name: "Target Event" };
+  const taperRec = generateTaperRecommendation(fitness, primaryGoal, phaseInfo);
+
+  Logger.log("\n=== TAPER ANALYSIS ===");
+
+  if (!taperRec.available) {
+    Logger.log("Taper recommendation not available: " + taperRec.reason);
+    if (taperRec.daysToRace) {
+      Logger.log("Days to race: " + taperRec.daysToRace);
+    }
+    Logger.log("\n=== TEST COMPLETE ===");
+    return;
+  }
+
+  const analysis = taperRec.analysis;
+  const rec = analysis.recommended;
+
+  Logger.log("Race Date: " + analysis.raceDate);
+  Logger.log("Days to Race: " + analysis.daysToRace);
+  Logger.log("Current TSB: " + analysis.currentTSB);
+  Logger.log("Target Race Day TSB: " + analysis.targetTSB);
+
+  Logger.log("\n=== RECOMMENDED TAPER ===");
+  Logger.log("Type: " + rec.taperType + " (" + rec.taperDescription + ")");
+  Logger.log("Length: " + rec.taperLengthDays + " days");
+  Logger.log("Start Date: " + rec.taperStartDate);
+  Logger.log("Days Until Taper: " + rec.daysUntilTaperStart);
+
+  Logger.log("\n=== RACE DAY PROJECTION ===");
+  Logger.log("CTL: " + analysis.currentCTL + " → " + rec.raceDayCTL + " (loss: " + rec.ctlLoss + ")");
+  Logger.log("TSB: " + analysis.currentTSB + " → " + rec.raceDayTSB);
+
+  // Show AI recommendation if available
+  const ai = taperRec.aiRecommendation;
+  if (ai?.success) {
+    Logger.log("\n=== AI RECOMMENDATION ===");
+    Logger.log("Summary: " + ai.summary);
+
+    if (ai.weekByWeekPlan && ai.weekByWeekPlan.length > 0) {
+      Logger.log("\nWeek-by-Week Plan:");
+      ai.weekByWeekPlan.forEach(w => Logger.log("  • " + w));
+    }
+
+    if (ai.keyWorkouts && ai.keyWorkouts.length > 0) {
+      Logger.log("\nKey Workouts:");
+      ai.keyWorkouts.forEach(w => Logger.log("  • " + w));
+    }
+
+    if (ai.warnings && ai.warnings.length > 0) {
+      Logger.log("\nWarnings:");
+      ai.warnings.forEach(w => Logger.log("  ⚠️ " + w));
+    }
+
+    Logger.log("\nExpected Performance: " + ai.expectedPerformance);
+    Logger.log("Confidence: " + ai.confidenceLevel);
+  }
+
+  // Show alternatives
+  if (analysis.alternatives && analysis.alternatives.length > 0) {
+    Logger.log("\n=== ALTERNATIVE SCENARIOS ===");
+    analysis.alternatives.forEach(alt => {
+      Logger.log(alt.taperType + ": Start " + alt.taperStartDate +
+                " (" + alt.taperLengthDays + " days) → TSB " + alt.raceDayTSB);
+    });
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
 }
