@@ -363,7 +363,8 @@ ${goalsContext}${taperContext}
 ${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${zoneProgressionContext}${crossSportContext}${eventsContext}${scheduledContext}${existingWorkoutsContext}
 
 **WEEKLY TARGETS:**
-- Last Week Activities: ${context.lastWeek?.activities || 0} → Max This Week: ${Math.min((context.lastWeek?.activities || 3) + 1, 6)} workouts
+- Last Week Activities: ${context.lastWeek?.activities || 0} → Max This Week: ${Math.min((context.lastWeek?.activities || 3) + 1, 6)} workouts (including any C events)
+- C Events This Week: ${context.upcomingEvents?.filter(e => e.eventCategory === 'C').length || 0} (count these toward weekly total)
 - Recommended TSS: ${context.tssTarget?.min || 300}-${context.tssTarget?.max || 500}
 - Daily TSS Range: ${context.dailyTss?.min || 50}-${context.dailyTss?.max || 100}
 
@@ -374,20 +375,21 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 
 **PLANNING RULES:**
 1. ADAPTIVE FREQUENCY: Base workout count on last week's activity count. Max increase of +1 workout from last week. If last week had 3 activities, plan max 4 this week.
-2. Never schedule back-to-back intensity 4-5 days
-3. After intensity 5, next day should be 1-2
-4. Include at least 1 full rest day if TSB < -10
-5. Pre-race day (A/B event): intensity 1-2 only
-6. Post-race day (A/B event): rest or intensity 1
-7. Build week = 3-4 quality sessions; Recovery week = 1-2 quality sessions
-8. Respect already scheduled days, enhance with type recommendations
-9. If fatigued (TSB < -15), reduce volume and intensity
-10. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
-11. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
-12. ZONE PROGRESSION: If zone levels are provided, include at least one workout targeting underdeveloped zones (focus areas)
-13. TAPER: If in taper period, reduce volume significantly. Keep intensity short and sharp. Last hard workout 3-4 days before race.
-14. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
-15. SPORT BALANCE: Aim for roughly 2:1 ratio of cycling to running (e.g., 3 rides + 1-2 runs, or 2 rides + 1 run)
+2. C EVENTS COUNT: Any C events (group rides) already on the calendar count toward the weekly workout total. If max is 4 and there's 1 C event, only add 3 new workouts.
+3. Never schedule back-to-back intensity 4-5 days
+4. After intensity 5, next day should be 1-2
+5. Include at least 1 full rest day if TSB < -10
+6. Pre-race day (A/B event): intensity 1-2 only
+7. Post-race day (A/B event): rest or intensity 1
+8. Build week = 3-4 quality sessions; Recovery week = 1-2 quality sessions
+9. Respect already scheduled days, enhance with type recommendations
+10. If fatigued (TSB < -15), reduce volume and intensity
+11. VARIETY: Avoid repeating same workout type from last 2 weeks unless strategically needed
+12. EXISTING WORKOUTS: Include any existing workouts AS-IS in your plan (use exact name, count toward weekly totals)
+13. ZONE PROGRESSION: If zone levels are provided, include at least one workout targeting underdeveloped zones (focus areas)
+14. TAPER: If in taper period, reduce volume significantly. Keep intensity short and sharp. Last hard workout 3-4 days before race.
+15. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
+16. SPORT BALANCE: Aim for roughly 2:1 ratio of cycling to running (e.g., 3 rides + 1-2 runs, or 2 rides + 1 run)
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
