@@ -31,6 +31,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
 - [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on 4-week TSS patterns
 - [x] **Data-Driven Taper Timing** - Models ATL decay to calculate optimal taper start date for target TSB on race day
+- [x] **Adaptive Phase Transitions** - Shift Base→Build based on fitness trajectory, not just calendar date
 
 ---
 
@@ -45,7 +46,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
 | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
-| **Adaptive Phase Transitions** | Shift Base→Build based on fitness trajectory, not just calendar date | Coaching |
 
 ### 🟡 MEDIUM Priority
 
@@ -91,6 +91,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
 | ~~Planned Deload Weeks~~ | Auto-detect when recovery week is needed based on 4-week TSS patterns |
 | ~~Data-Driven Taper Timing~~ | Model ATL decay to calculate optimal taper start date for target TSB on race day |
+| ~~Adaptive Phase Transitions~~ | Shift Base→Build based on fitness trajectory, not just calendar date |
 
 ---
 
@@ -560,6 +561,42 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Race week protection: blocks high intensity except opener
 - Auto-adapts if taper plan is violated
 
+### Feature: Adaptive Phase Transitions ✅ COMPLETE
+
+**Implementation:**
+- Added `analyzeFitnessTrajectory()` in `goals.gs` - Analyzes 4-week CTL/eFTP/recovery trends
+- Added `checkPhaseTransitionReadiness()` in `goals.gs` - Recommends phase transitions based on objectives achieved
+- Updated `calculateTrainingPhase()` in `goals.gs` to include trajectory analysis
+- Updated `generateAIPhaseAssessment()` in `prompts_planning.gs` to include trajectory context
+- Added `testAdaptivePhaseTransitions()` in `test_planning.gs`
+
+**Key features:**
+- Analyzes CTL trajectory: weekly values, changes, trend (building/stable/declining), consistency
+- Analyzes eFTP trajectory: progress to target, trend, on-track assessment
+- Analyzes recovery trend: avg recovery/sleep/HRV, sustainable load assessment
+- Determines phase readiness indicators:
+  - Base Complete: CTL ≥40, consistent progression
+  - Build Complete: eFTP within 5W of target
+  - Ready for Specialty: base complete, CTL ≥50, sustainable load
+  - Ready for Taper: peak fitness achieved, CTL ≥60
+
+**Transition logic:**
+| Current Phase | Condition | Recommendation |
+|---------------|-----------|----------------|
+| Base | Base objectives achieved + ≤12 weeks out | Accelerate to Build |
+| Base | Base not complete + ≤10 weeks out | Extend Base phase |
+| Build | FTP target achieved + ≤6 weeks out | Accelerate to Specialty |
+| Build | Recovery compromised + CTL declining | Return to Base |
+| Build | eFTP not on track + >4 weeks out | Extend Build phase |
+| Specialty | Peak fitness achieved + ≤3 weeks out | Accelerate to Taper |
+| Specialty | CTL still building + >2 weeks out | Continue Specialty |
+
+**AI enhancement:**
+- Trajectory data passed to AI phase assessment
+- AI considers both calendar timing AND fitness readiness
+- Returns `trajectoryInfluence` field explaining phase decision
+- Can override date-based phase based on trajectory analysis
+
 ---
 
 ## How to Use This Document
@@ -572,4 +609,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-28 (Added Data-Driven Taper Timing feature)*
+*Last updated: 2025-12-28 (Added Adaptive Phase Transitions feature)*

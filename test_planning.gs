@@ -574,3 +574,122 @@ function testTaperTiming() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+// =========================================================
+// ADAPTIVE PHASE TRANSITION TEST
+// =========================================================
+
+/**
+ * Test adaptive phase transitions based on fitness trajectory
+ */
+function testAdaptivePhaseTransitions() {
+  Logger.log("=== ADAPTIVE PHASE TRANSITIONS TEST ===\n");
+  requireValidConfig();
+
+  // Fetch current data
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+
+  Logger.log("=== GOALS ===");
+  if (goals?.available && goals?.primaryGoal) {
+    Logger.log("Primary: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+  } else {
+    Logger.log("Using TARGET_DATE: " + targetDate);
+  }
+
+  // Test trajectory analysis
+  Logger.log("\n=== FITNESS TRAJECTORY ANALYSIS ===");
+  const trajectory = analyzeFitnessTrajectory(4);
+
+  if (!trajectory.available) {
+    Logger.log("Trajectory analysis not available (insufficient data)");
+  } else {
+    // CTL trajectory
+    Logger.log("\nCTL Trajectory:");
+    Logger.log("  Current: " + trajectory.ctlTrajectory.current);
+    Logger.log("  Weekly Values: " + trajectory.ctlTrajectory.weeklyValues.join(" → "));
+    Logger.log("  Weekly Changes: " + trajectory.ctlTrajectory.weeklyChanges.join(", "));
+    Logger.log("  Avg Change: " + trajectory.ctlTrajectory.avgChange + "/week");
+    Logger.log("  Trend: " + trajectory.ctlTrajectory.trend);
+    Logger.log("  Consistency: " + trajectory.ctlTrajectory.consistency + "% positive weeks");
+
+    // eFTP trajectory
+    Logger.log("\neFTP Trajectory:");
+    Logger.log("  Current: " + (trajectory.eftpTrajectory.current || "N/A") + "W");
+    Logger.log("  Target: " + (trajectory.eftpTrajectory.target || "N/A") + "W");
+    Logger.log("  Progress: " + (trajectory.eftpTrajectory.progressToTarget || "N/A") + "%");
+    Logger.log("  Trend: " + trajectory.eftpTrajectory.trend);
+    Logger.log("  On Track: " + trajectory.eftpTrajectory.onTrack);
+
+    // Recovery trend
+    Logger.log("\nRecovery Trend:");
+    Logger.log("  Avg Recovery: " + (trajectory.recoveryTrend.avgRecovery || "N/A") + "%");
+    Logger.log("  Avg Sleep: " + (trajectory.recoveryTrend.avgSleep || "N/A") + "h");
+    Logger.log("  Avg HRV: " + (trajectory.recoveryTrend.avgHRV || "N/A") + "ms");
+    Logger.log("  Trend: " + trajectory.recoveryTrend.trend);
+    Logger.log("  Sustainable Load: " + trajectory.recoveryTrend.sustainableLoad);
+
+    // Phase readiness
+    Logger.log("\nPhase Readiness:");
+    Logger.log("  Base Complete: " + trajectory.phaseReadiness.baseComplete);
+    Logger.log("  Build Complete: " + trajectory.phaseReadiness.buildComplete);
+    Logger.log("  Ready for Specialty: " + trajectory.phaseReadiness.readyForSpecialty);
+    Logger.log("  Ready for Taper: " + trajectory.phaseReadiness.readyForTaper);
+    if (trajectory.phaseReadiness.indicators.length > 0) {
+      Logger.log("  Indicators: " + trajectory.phaseReadiness.indicators.join("; "));
+    }
+  }
+
+  // Calculate phase with trajectory (no AI for faster testing)
+  Logger.log("\n=== PHASE CALCULATION (Date-based) ===");
+  const phaseNoAI = calculateTrainingPhase(targetDate, { enableAI: false });
+  Logger.log("Phase: " + phaseNoAI.phaseName);
+  Logger.log("Weeks Out: " + phaseNoAI.weeksOut);
+  Logger.log("Focus: " + phaseNoAI.focus);
+
+  if (phaseNoAI.transitionRecommendation) {
+    const tr = phaseNoAI.transitionRecommendation;
+    Logger.log("\nTransition Recommendation:");
+    Logger.log("  Should Transition: " + tr.shouldTransition);
+    if (tr.shouldTransition) {
+      Logger.log("  Recommended: " + phaseNoAI.phaseName + " → " + tr.recommendedPhase);
+      Logger.log("  Urgency: " + tr.urgency);
+    }
+    Logger.log("  Reason: " + tr.reason);
+    Logger.log("  Adaptation Type: " + (tr.adaptationType || "maintain"));
+  }
+
+  // Calculate phase with AI enhancement
+  Logger.log("\n=== PHASE CALCULATION (AI-enhanced) ===");
+  const fitness = fetchFitnessMetrics();
+  const wellness = createWellnessSummary(fetchWellnessData(7));
+
+  const context = {
+    enableAI: true,
+    goals: goals,
+    goalDescription: goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION,
+    ctl: fitness.ctl,
+    rampRate: fitness.rampRate,
+    currentEftp: fitness.eftp,
+    targetFtp: USER_SETTINGS.MANUAL_FTP,
+    wellnessAverages: wellness.averages,
+    recoveryStatus: wellness.recoveryStatus,
+    tsb: fitness.tsb
+  };
+
+  const phaseAI = calculateTrainingPhase(targetDate, context);
+  Logger.log("Phase: " + phaseAI.phaseName);
+  Logger.log("AI Enhanced: " + phaseAI.aiEnhanced);
+  Logger.log("Focus: " + phaseAI.focus);
+  Logger.log("Reasoning: " + phaseAI.reasoning);
+
+  if (phaseAI.phaseOverride) {
+    Logger.log("\n⚠️ AI OVERRODE date-based phase!");
+  }
+
+  if (phaseAI.adjustments) {
+    Logger.log("Adjustments: " + phaseAI.adjustments);
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

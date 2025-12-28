@@ -385,6 +385,45 @@ ${cRacesStr ? '- **C-Races (Stepping Stones):** ' + cRacesStr : ''}
 `;
   }
 
+  // Build fitness trajectory context (for adaptive phase transitions)
+  let trajectoryContext = '';
+  if (context.trajectory && context.trajectory.available) {
+    const traj = context.trajectory;
+    const ctlTrend = traj.ctlTrajectory;
+    const eftpTrend = traj.eftpTrajectory;
+    const recoveryTrend = traj.recoveryTrend;
+    const readiness = traj.phaseReadiness;
+
+    trajectoryContext = `
+**Fitness Trajectory Analysis (${traj.weeksAnalyzed} weeks):**
+- CTL Trend: ${ctlTrend.current || 'N/A'} (${ctlTrend.trend}) | Weekly Change: ${ctlTrend.avgChange || 'N/A'}/week
+- CTL Consistency: ${ctlTrend.consistency || 'N/A'}% positive weeks
+- eFTP Trend: ${eftpTrend.trend || 'N/A'} | Progress to Target: ${eftpTrend.progressToTarget || 'N/A'}%
+- Recovery Trend: ${recoveryTrend.trend || 'N/A'} | Sustainable Load: ${recoveryTrend.sustainableLoad ? 'Yes' : 'No'}
+
+**Phase Readiness Indicators:**
+- Base Complete: ${readiness.baseComplete ? 'Yes' : 'No'}
+- Build Complete: ${readiness.buildComplete ? 'Yes' : 'No'}
+- Ready for Specialty: ${readiness.readyForSpecialty ? 'Yes' : 'No'}
+- Ready for Taper: ${readiness.readyForTaper ? 'Yes' : 'No'}
+${readiness.indicators.length > 0 ? '- Indicators: ' + readiness.indicators.join('; ') : ''}
+`;
+  }
+
+  // Build transition recommendation context
+  let transitionContext = '';
+  if (context.transitionRecommendation && context.transitionRecommendation.reason) {
+    const tr = context.transitionRecommendation;
+    transitionContext = `
+**Trajectory-Based Transition Recommendation:**
+- Should Transition: ${tr.shouldTransition ? 'Yes' : 'No'}
+- Recommended Phase: ${tr.recommendedPhase}
+- Reason: ${tr.reason}
+- Urgency: ${tr.urgency}
+- Adaptation Type: ${tr.adaptationType || 'maintain'}
+`;
+  }
+
   const prompt = `You are an expert cycling coach analyzing an athlete's current training phase.
 
 **Date-Based Reference:**
@@ -406,8 +445,14 @@ ${eventsContext}
 **Recent Training Load:**
 - Recent Z5+ Time: ${context.z5Recent > 1500 ? 'High' : 'Normal'}
 - TSB: ${context.tsb ? context.tsb.toFixed(1) : 'N/A'}
-${workoutPatternContext}
-**Question:** Based on fitness trajectory AND the event calendar (not just weeks to A-race), what phase should this athlete be in?
+${workoutPatternContext}${trajectoryContext}${transitionContext}
+**IMPORTANT: Adaptive Phase Transitions**
+The phase should be determined by BOTH calendar timing AND fitness readiness. Use the trajectory analysis above to determine if the athlete:
+- Should ACCELERATE to the next phase (objectives achieved ahead of schedule)
+- Should DELAY transition (not yet ready, extend current phase)
+- Should stay on the traditional schedule
+
+**Question:** Based on fitness trajectory, phase readiness indicators, AND the event calendar (not just weeks to A-race), what phase should this athlete be in?
 
 Consider:
 1. Is CTL building appropriately for the goal timeline?
@@ -416,15 +461,18 @@ Consider:
 4. Should we accelerate, maintain, or ease the progression?
 5. **Are there upcoming B/C races that require mini-tapers or intensity peaks?**
 6. **Is the athlete's current fitness on track for the A-race, or behind/ahead of schedule?**
+7. **Do the Phase Readiness Indicators suggest the athlete is ready to advance or should extend current phase?**
+8. **Is the trajectory-based transition recommendation appropriate given all factors?**
 
 **Output JSON only (no markdown wrapping):**
 {
   "phaseName": "Base|Build|Specialty|Taper|Race Week",
   "focus": "1-sentence phase focus description",
-  "reasoning": "Brief explanation of why this phase (2-3 sentences)",
+  "reasoning": "Brief explanation of why this phase, including trajectory-based reasoning (2-3 sentences)",
   "adjustments": "Any modifications to standard phase approach (e.g., mini-taper for upcoming C-race)",
   "confidenceLevel": "high|medium|low",
   "phaseOverride": true or false,
+  "trajectoryInfluence": "How fitness trajectory affected the phase decision (accelerate/delay/maintain)",
   "upcomingEventNote": "Note about any near-term B/C races affecting this week's approach (optional, null if none)"
 }`;
 
