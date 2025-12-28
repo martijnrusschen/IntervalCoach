@@ -445,6 +445,17 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log(`Deload check failed (non-critical): ${e.toString()}`);
   }
 
+  // ===== VOLUME JUMP DETECTION =====
+  let volumeJump = null;
+  try {
+    volumeJump = checkVolumeJump();
+    if (volumeJump.detected) {
+      Logger.log(`Volume Jump: ${volumeJump.percentChange}% (${volumeJump.lastWeekTSS} → ${volumeJump.thisWeekTSS} TSS) - Risk: ${volumeJump.risk}`);
+    }
+  } catch (e) {
+    Logger.log(`Volume jump check failed (non-critical): ${e.toString()}`);
+  }
+
   // ===== TAPER TIMING =====
   // Calculate optimal taper timing for upcoming A races (within 6 weeks)
   let taperRecommendation = null;
@@ -763,7 +774,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     upcomingDays: upcomingDays,
     midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
     deloadCheck: deloadCheck,  // Include deload recommendation if needed
-    taperRecommendation: taperRecommendation  // Include taper timing if within 6 weeks of race
+    taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
+    volumeJump: volumeJump  // Include volume jump warning if >15% increase
   });
 }
 

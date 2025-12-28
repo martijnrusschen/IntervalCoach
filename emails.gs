@@ -113,7 +113,8 @@ function sendDailyEmail(params) {
     raceDescription,
     midWeekAdaptation,
     deloadCheck,
-    taperRecommendation
+    taperRecommendation,
+    volumeJump
   } = params;
 
   // Build subject based on type
@@ -383,6 +384,31 @@ ${urgencyEmoji} ${urgencyLabel}
     // Soft reminder when approaching need for deload
     body += `
 ${t.deload_reminder || "Deload reminder"}: ${deloadCheck.weeksWithoutDeload} ${t.weeks_training || "weeks of training"}. ${deloadCheck.recommendation || ""}
+`;
+  }
+
+  // === SECTION 3.3: Volume Jump Warning ===
+  if (volumeJump?.detected) {
+    const riskEmoji = {
+      'high': '🚨',
+      'medium': '⚠️',
+      'low': '📈',
+      'check': '📉'
+    }[volumeJump.risk] || '📊';
+
+    const riskLabel = {
+      'high': t.volume_jump_high || 'HIGH INJURY RISK',
+      'medium': t.volume_jump_medium || 'Volume Warning',
+      'low': t.volume_jump_low || 'Volume Increase',
+      'check': t.volume_drop || 'Volume Drop Detected'
+    }[volumeJump.risk] || 'Volume Change';
+
+    body += `
+-----------------------------------
+${riskEmoji} ${riskLabel}
+-----------------------------------
+${t.week_comparison || "Week-over-week"}: ${volumeJump.lastWeekTSS} → ${volumeJump.thisWeekTSS} TSS (${volumeJump.percentChange > 0 ? '+' : ''}${volumeJump.percentChange}%)
+${volumeJump.recommendation || ''}
 `;
   }
 

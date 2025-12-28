@@ -72,8 +72,8 @@ All pending features, unified and ordered by priority. Pick from the top for max
 |---------|-------------|------|
 | ~~**Post-Workout → Next Day**~~ | ~~Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10%~~ | **COMPLETE** |
 | ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
+| ~~**Volume Jump Detection**~~ | ~~Flag week-to-week volume increases >15% as injury risk, suggest spreading load~~ | **COMPLETE** |
 | **Z-Score Intensity Modifier** | Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green | Coaching |
-| **Volume Jump Detection** | Flag week-to-week volume increases >15% as injury risk, suggest spreading load | Coaching |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
 | **Training Load Rate Warnings** | Warn when CTL ramp rate exceeds safe thresholds for multiple weeks | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
@@ -94,6 +94,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Data-Driven Taper Timing~~ | Model ATL decay to calculate optimal taper start date for target TSB on race day |
 | ~~Adaptive Phase Transitions~~ | Shift Base→Build based on fitness trajectory, not just calendar date |
 | ~~Post-Workout → Next Day~~ | Pass yesterday's workout difficulty to today's decision. Reduce intensity 10% if harder than expected |
+| ~~Volume Jump Detection~~ | Flag week-to-week volume increases >15% as injury risk |
 
 ---
 
@@ -642,4 +643,37 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-28 (Added Post-Workout → Next Day feature)*
+### Feature: Volume Jump Detection ✅ COMPLETE
+
+**Implementation:**
+- Added `checkVolumeJump()` in `adaptation.gs` - Compares this week vs last week TSS
+- Integrated into `main.gs` daily flow after deload check
+- Added volume jump section to `sendDailyEmail()` in `emails.gs`
+- Added translations for all 5 languages
+- Added `testVolumeJump()` in `test_planning.gs`
+
+**Key features:**
+- Fetches this week and last week TSS using `fetchWeeklyActivities()`
+- Calculates week-over-week percentage change
+- Risk thresholds:
+  - >30% increase: HIGH risk (injury warning)
+  - >20% increase: MEDIUM risk (caution needed)
+  - >15% increase: LOW risk (monitor closely)
+  - <-30% decrease: Volume drop check (possible detraining/illness)
+
+**Email display:**
+- Shows risk level with appropriate emoji (🚨 HIGH, ⚠️ MEDIUM, 📈 LOW, 📉 DROP)
+- Displays week-over-week TSS comparison
+- Provides recommendation for managing load
+
+**Recommendations by risk level:**
+| Risk | Recommendation |
+|------|----------------|
+| HIGH | Reduce today's intensity significantly. Consider recovery day. |
+| MEDIUM | Monitor fatigue closely. Consider easier than planned today. |
+| LOW | Stay aware of recovery. Don't stack more intensity. |
+| DROP | Check if planned. May need to rebuild gradually if returning. |
+
+---
+
+*Last updated: 2025-12-28 (Added Volume Jump Detection feature)*

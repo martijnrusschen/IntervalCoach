@@ -162,6 +162,12 @@ const TRANSLATIONS = {
     deload_reminder: "Deload reminder",
     weeks_without_recovery: "Weeks without recovery",
     weeks_training: "weeks of training",
+    // Volume jump detection
+    volume_jump_high: "HIGH INJURY RISK",
+    volume_jump_medium: "Volume Warning",
+    volume_jump_low: "Volume Increase",
+    volume_drop: "Volume Drop Detected",
+    week_comparison: "Week-over-week",
     recent_load: "Recent load",
     this_week: "This week",
     week: "Week",
@@ -297,7 +303,13 @@ const TRANSLATIONS = {
     race_day_projection: "レース当日予測",
     key_workouts: "重要ワークアウト",
     notes: "注意事項",
-    in: "あと"
+    in: "あと",
+    // Volume jump detection
+    volume_jump_high: "高い怪我リスク",
+    volume_jump_medium: "ボリューム警告",
+    volume_jump_low: "ボリューム増加",
+    volume_drop: "ボリューム低下検出",
+    week_comparison: "週比較"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -415,7 +427,13 @@ const TRANSLATIONS = {
     race_day_projection: "Proyección Día de Carrera",
     key_workouts: "Entrenamientos Clave",
     notes: "Notas",
-    in: "en"
+    in: "en",
+    // Volume jump detection
+    volume_jump_high: "ALTO RIESGO DE LESIÓN",
+    volume_jump_medium: "Advertencia de Volumen",
+    volume_jump_low: "Aumento de Volumen",
+    volume_drop: "Caída de Volumen Detectada",
+    week_comparison: "Semana a semana"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -539,7 +557,13 @@ const TRANSLATIONS = {
     race_day_projection: "Projection Jour de Course",
     key_workouts: "Entraînements Clés",
     notes: "Notes",
-    in: "dans"
+    in: "dans",
+    // Volume jump detection
+    volume_jump_high: "RISQUE ÉLEVÉ DE BLESSURE",
+    volume_jump_medium: "Avertissement Volume",
+    volume_jump_low: "Augmentation du Volume",
+    volume_drop: "Baisse de Volume Détectée",
+    week_comparison: "Semaine par semaine"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -714,6 +738,12 @@ const TRANSLATIONS = {
     race_day_projection: "Wedstrijddag Projectie",
     key_workouts: "Belangrijke Workouts",
     notes: "Notities",
-    in: "over"
+    in: "over",
+    // Volume jump detection
+    volume_jump_high: "HOOG BLESSURERISICO",
+    volume_jump_medium: "Volume Waarschuwing",
+    volume_jump_low: "Volume Toename",
+    volume_drop: "Volume Daling Gedetecteerd",
+    week_comparison: "Week-over-week"
   }
 };

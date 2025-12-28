@@ -480,6 +480,50 @@ function testDeloadDetection() {
 }
 
 /**
+ * Test volume jump detection
+ * Analyzes week-over-week TSS changes to identify injury risk
+ */
+function testVolumeJump() {
+  Logger.log("=== VOLUME JUMP DETECTION TEST ===\n");
+  requireValidConfig();
+
+  // Run volume jump check
+  const volumeJump = checkVolumeJump();
+
+  Logger.log("=== TSS COMPARISON ===");
+  Logger.log("This Week TSS: " + volumeJump.thisWeekTSS);
+  Logger.log("Last Week TSS: " + volumeJump.lastWeekTSS);
+  Logger.log("Change: " + (volumeJump.percentChange >= 0 ? "+" : "") + volumeJump.percentChange + "%");
+
+  Logger.log("\n=== DETECTION RESULT ===");
+  Logger.log("Volume Jump Detected: " + volumeJump.detected);
+  Logger.log("Risk Level: " + volumeJump.risk);
+
+  if (volumeJump.detected) {
+    const riskEmoji = {
+      'high': '🚨',
+      'medium': '⚠️',
+      'low': '📈',
+      'check': '📉'
+    }[volumeJump.risk] || '📊';
+
+    Logger.log("\n=== WARNING ===");
+    Logger.log(riskEmoji + " " + volumeJump.recommendation);
+  } else {
+    Logger.log("\nNo volume jump concerns - week-over-week change is within safe range.");
+  }
+
+  // Show thresholds for reference
+  Logger.log("\n=== THRESHOLDS ===");
+  Logger.log(">30% increase → HIGH risk (injury warning)");
+  Logger.log(">20% increase → MEDIUM risk (caution)");
+  Logger.log(">15% increase → LOW risk (monitor)");
+  Logger.log("<-30% decrease → Volume drop check");
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test taper timing calculation
  * Analyzes optimal taper start date for upcoming A race
  */

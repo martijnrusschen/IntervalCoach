@@ -954,3 +954,68 @@ function formatDeloadCheckLog(deloadCheck) {
 
   return log;
 }
+
+// =========================================================
+// VOLUME JUMP DETECTION
+// =========================================================
+
+/**
+ * Check for volume jump between weeks
+ * Flags week-to-week TSS increases >15% as injury risk
+ *
+ * @returns {object} { detected, percentChange, thisWeekTSS, lastWeekTSS, risk, recommendation }
+ */
+function checkVolumeJump() {
+  const result = {
+    detected: false,
+    percentChange: 0,
+    thisWeekTSS: 0,
+    lastWeekTSS: 0,
+    risk: 'none',  // none, low, medium, high
+    recommendation: null
+  };
+
+  try {
+    // Fetch this week's and last week's activities
+    const thisWeek = fetchWeeklyActivities(7);
+    const lastWeek = fetchWeeklyActivities(7, 7);
+
+    result.thisWeekTSS = Math.round(thisWeek.totalTss);
+    result.lastWeekTSS = Math.round(lastWeek.totalTss);
+
+    // Calculate percentage change
+    if (result.lastWeekTSS > 0) {
+      result.percentChange = Math.round(((result.thisWeekTSS - result.lastWeekTSS) / result.lastWeekTSS) * 100);
+    } else if (result.thisWeekTSS > 0) {
+      // Last week was 0, any TSS is technically infinite increase
+      result.percentChange = 100;
+    }
+
+    // Determine risk level based on % increase
+    if (result.percentChange > 30) {
+      result.detected = true;
+      result.risk = 'high';
+      result.recommendation = `Volume jumped ${result.percentChange}% (${result.lastWeekTSS} → ${result.thisWeekTSS} TSS). High injury risk! Consider reducing intensity or spreading load over more days.`;
+    } else if (result.percentChange > 20) {
+      result.detected = true;
+      result.risk = 'medium';
+      result.recommendation = `Volume increased ${result.percentChange}% week-over-week. Monitor fatigue closely and prioritize recovery.`;
+    } else if (result.percentChange > 15) {
+      result.detected = true;
+      result.risk = 'low';
+      result.recommendation = `Volume up ${result.percentChange}% from last week. Within acceptable range but stay attentive to recovery signals.`;
+    }
+
+    // Also check for sudden drops (could indicate illness/fatigue)
+    if (result.percentChange < -30 && result.lastWeekTSS > 100) {
+      result.detected = true;
+      result.risk = 'check';
+      result.recommendation = `Volume dropped ${Math.abs(result.percentChange)}% from last week. If unplanned, check for illness or accumulated fatigue.`;
+    }
+
+  } catch (e) {
+    Logger.log('Volume jump detection error: ' + e.toString());
+  }
+
+  return result;
+}
