@@ -521,30 +521,63 @@ Use ${langName} for all string values within the JSON:
  * @param {object} runningData - Running data (for runs)
  * @returns {object} AI analysis with effectiveness, insights, recommendations
  */
-function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData) {
+function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData, activityCategory) {
   const langName = getPromptLanguage();
-  const isRun = activity.type === "Run";
 
-  // Extract zone distribution for stimulus analysis
+  // Determine activity category if not provided (backwards compatibility)
+  if (!activityCategory) {
+    activityCategory = activity.type === "Run" || activity.type === "VirtualRun" ? 'running' :
+                       activity.type === "Ride" || activity.type === "VirtualRide" ? 'cycling' : 'other';
+  }
+
+  // Extract zone distribution for stimulus analysis (if available)
   const zoneDistribution = activity.icu_zone_times ?
     activity.icu_zone_times.map(z => `${z.id}: ${Math.round(z.secs / 60)}min`).join(", ") :
     "Not available";
 
-  // Build sport-specific context
+  // Build sport-specific context based on category
   let sportContext = "";
-  if (isRun && runningData.available) {
+  let coachType = "fitness";
+
+  if (activityCategory === 'running' && runningData?.available) {
+    coachType = "running";
     sportContext = `
 **Running Profile:**
 - Critical Speed: ${runningData.criticalSpeed || 'N/A'}/km
 - D': ${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}
 - Threshold Pace: ${runningData.thresholdPace || 'N/A'}/km`;
-  } else if (!isRun && powerProfile.available) {
+  } else if (activityCategory === 'cycling' && powerProfile?.available) {
+    coachType = "cycling";
     sportContext = `
 **Power Profile:**
 - eFTP: ${powerProfile.currentEftp || powerProfile.eFTP || 'N/A'}W
 - W': ${powerProfile.wPrimeKj || 'N/A'}kJ
 - VO2max: ${powerProfile.vo2max ? powerProfile.vo2max.toFixed(1) : 'N/A'}
 - Peak Powers: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W`;
+  } else if (activityCategory === 'strength') {
+    coachType = "strength and conditioning";
+    sportContext = `
+**Strength Training Notes:**
+- Focus on muscle groups worked, volume, and recovery needs
+- Consider interaction with endurance training schedule`;
+  } else if (activityCategory === 'walking') {
+    coachType = "fitness";
+    sportContext = `
+**Walking/Hiking Notes:**
+- Low-impact cardiovascular activity
+- Good for active recovery and general fitness`;
+  } else if (activityCategory === 'swimming') {
+    coachType = "triathlon";
+    sportContext = `
+**Swimming Notes:**
+- Upper body dominant cardiovascular workout
+- Low impact, good cross-training for runners/cyclists`;
+  } else {
+    coachType = "fitness";
+    sportContext = `
+**General Activity Notes:**
+- Cross-training activity contributing to overall fitness
+- Consider recovery impact on primary training`;
   }
 
   // Build wellness context
@@ -558,18 +591,54 @@ function generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, 
 - Resting HR: ${wellness.today.restingHR || 'N/A'} bpm`;
   }
 
-  const prompt = `You are an expert cycling and running coach analyzing a completed workout.
+  // Build activity-specific analysis instructions
+  let analysisInstructions = "";
+  let stimulusOptions = "recovery|endurance|tempo|threshold|vo2max|anaerobic|mixed";
+
+  if (activityCategory === 'strength') {
+    stimulusOptions = "recovery|strength_maintenance|hypertrophy|power|endurance_strength|mixed";
+    analysisInstructions = `
+**Strength-Specific Analysis:**
+- Consider muscle fatigue impact on cycling/running
+- Evaluate timing relative to key endurance workouts
+- Assess whether volume/intensity was appropriate for current training phase`;
+  } else if (activityCategory === 'walking') {
+    stimulusOptions = "active_recovery|light_cardio|endurance|mixed";
+    analysisInstructions = `
+**Walking/Hiking-Specific Analysis:**
+- Good for active recovery days
+- Consider elevation gain and duration for load assessment
+- Minimal interference with primary training`;
+  } else if (activityCategory === 'swimming') {
+    stimulusOptions = "recovery|endurance|tempo|threshold|intervals|mixed";
+    analysisInstructions = `
+**Swimming-Specific Analysis:**
+- Upper body focus, minimal leg fatigue
+- Good active recovery for cyclists/runners
+- Consider technique work vs pure cardio`;
+  } else if (activityCategory === 'other_cardio' || activityCategory === 'other') {
+    stimulusOptions = "recovery|light_cardio|moderate_cardio|high_intensity|mixed";
+    analysisInstructions = `
+**Cross-Training Analysis:**
+- Assess cardiovascular contribution
+- Consider fatigue transfer to primary sports
+- Evaluate as part of overall training load`;
+  }
+
+  const prompt = `You are an expert ${coachType} coach analyzing a completed workout.
 
 **Workout Details:**
 - Name: ${activity.name}
-- Type: ${activity.type}
+- Type: ${activity.type} (Category: ${activityCategory})
 - Duration: ${Math.round(activity.moving_time / 60)} minutes
-- TSS/Training Load: ${activity.icu_training_load}
+- TSS/Training Load: ${activity.icu_training_load || 'N/A'}
 - Intensity Factor: ${activity.icu_intensity || 'N/A'}
-- Variability Index: ${activity.icu_variability_index || 'N/A'} (cycling)
+- Average HR: ${activity.average_heartrate || activity.icu_average_hr || 'N/A'} bpm
+- Max HR: ${activity.max_heartrate || 'N/A'} bpm
+- Calories: ${activity.calories || activity.icu_calories || 'N/A'}
 - RPE: ${activity.icu_rpe || 'Not recorded'} / 10
 - Feel: ${activity.feel ? getFeelLabel(activity.feel) : 'Not recorded'} (scale: 1=Strong to 5=Weak)
-- Zone Distribution: ${zoneDistribution}
+${activityCategory === 'cycling' || activityCategory === 'running' ? `- Zone Distribution: ${zoneDistribution}` : ''}
 ${sportContext}
 
 **Current Fitness State:**
@@ -578,19 +647,20 @@ ${sportContext}
 - TSB (Form): ${fitness.tsb || 'N/A'}
 - CTL Ramp Rate: ${fitness.rampRate || 'N/A'} per week
 ${wellnessContext}
+${analysisInstructions}
 
 **Analysis Tasks:**
 
 1. **Workout Effectiveness** (1-10 scale):
-   - Was the workout executed well based on zone distribution and metrics?
+   - Was the workout executed well for its intended purpose?
    - Did it achieve its intended stimulus?
-   - Quality of execution (consistent power/pace, appropriate pacing)
+   - Quality of execution and effort
 
 2. **Difficulty Assessment**:
    - Based on RPE/Feel and the metrics, was this workout:
-     - "easier_than_expected" (RPE < 6 for structured workout)
-     - "as_expected" (RPE 6-8 for hard intervals, 3-5 for endurance)
-     - "harder_than_expected" (RPE > 8, or much higher than typical)
+     - "easier_than_expected"
+     - "as_expected"
+     - "harder_than_expected"
 
 3. **Recovery Impact**:
    - How will this workout affect recovery over next 24-48h?
@@ -598,11 +668,11 @@ ${wellnessContext}
 
 4. **Key Insight**:
    - What's the single most important takeaway from this workout?
-   - Any red flags or exceptional performances to highlight?
+   - How does it fit into overall training?
 
 5. **Training Adjustments**:
-   - Should we adjust future workouts based on this performance?
-   - Calibration needed for FTP/zones or workout intensity?
+   - Should we adjust future workouts based on this?
+   - Any scheduling considerations for upcoming training?
 
 **IMPORTANT: Respond with ONLY valid JSON. No introductory text, no explanations. Just the JSON object.**
 Use ${langName} for all string values within the JSON:
@@ -611,7 +681,7 @@ Use ${langName} for all string values within the JSON:
   "effectivenessReason": "1-2 sentences explaining the effectiveness rating",
   "difficultyMatch": "easier_than_expected|as_expected|harder_than_expected",
   "difficultyReason": "1-2 sentences explaining why difficulty matched or didn't match expectations",
-  "workoutStimulus": "recovery|endurance|tempo|threshold|vo2max|anaerobic|mixed",
+  "workoutStimulus": "${stimulusOptions}",
   "stimulusQuality": "poor|fair|good|excellent",
   "recoveryImpact": {
     "severity": "minimal|moderate|significant|severe",
@@ -622,8 +692,7 @@ Use ${langName} for all string values within the JSON:
   "performanceHighlights": ["List 2-3 specific positive observations or concerns"],
   "trainingAdjustments": {
     "needed": true/false,
-    "ftpCalibration": "none|increase_5w|decrease_5w|retest_recommended",
-    "futureIntensity": "maintain|increase_slightly|decrease_slightly",
+    "recommendation": "Brief recommendation for future sessions",
     "reasoning": "1-2 sentences explaining why adjustments are or aren't needed"
   },
   "congratsMessage": "Brief encouraging message about the workout (1-2 sentences)",
@@ -638,6 +707,7 @@ Use ${langName} for all string values within the JSON:
   }
   result.success = true;
   result.aiEnhanced = true;
+  result.activityCategory = activityCategory;
   return result;
 }
 

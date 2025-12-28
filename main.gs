@@ -944,11 +944,16 @@ function checkForCompletedWorkouts() {
 
 /**
  * Analyze a completed workout using AI
+ * Supports all activity types: cycling, running, strength, walking, etc.
  * @param {object} activity - Activity object from Intervals.icu API
  */
 function analyzeCompletedWorkout(activity) {
   Logger.log(`\n=== Analyzing: ${activity.name} ===`);
   Logger.log(`Type: ${activity.type} | TSS: ${activity.icu_training_load} | Duration: ${formatDuration(activity.moving_time)}`);
+
+  // Classify activity type
+  const activityCategory = classifyActivityCategory(activity.type);
+  Logger.log(`Category: ${activityCategory}`);
 
   // Fetch current wellness and fitness context
   // Uses Whoop API for real-time data if configured
@@ -957,21 +962,21 @@ function analyzeCompletedWorkout(activity) {
   const wellness = createWellnessSummary(wellnessRecords);
   const fitness = fetchFitnessMetrics();
 
-  // Get power/running data based on activity type
-  const isRun = activity.type === "Run";
+  // Get sport-specific data based on activity category
   let powerProfile = { available: false };
   let runningData = { available: false };
 
-  if (isRun) {
+  if (activityCategory === 'running') {
     runningData = fetchRunningData();
-  } else {
+  } else if (activityCategory === 'cycling') {
     const powerCurve = fetchPowerCurve();
     const goals = fetchUpcomingGoals();
     powerProfile = analyzePowerProfile(powerCurve, goals);
   }
+  // For strength, walking, other - no sport-specific profile needed
 
-  // Generate AI analysis
-  const analysis = generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData);
+  // Generate AI analysis (handles all activity types)
+  const analysis = generatePostWorkoutAnalysis(activity, wellness, fitness, powerProfile, runningData, activityCategory);
 
   if (!analysis || !analysis.success) {
     Logger.log("AI analysis failed: " + (analysis?.error || "Unknown error"));
@@ -990,6 +995,52 @@ function analyzeCompletedWorkout(activity) {
   storeWorkoutAnalysis(activity, analysis);
 
   Logger.log("Post-workout analysis email sent");
+}
+
+/**
+ * Classify activity type into categories for analysis
+ * @param {string} activityType - Activity type from Intervals.icu
+ * @returns {string} Category: cycling, running, strength, walking, swimming, other_cardio, other
+ */
+function classifyActivityCategory(activityType) {
+  if (!activityType) return 'other';
+
+  const type = activityType.toLowerCase();
+
+  // Cycling
+  if (type === 'ride' || type === 'virtualride' || type === 'ebikeride' || type === 'handcycle') {
+    return 'cycling';
+  }
+
+  // Running
+  if (type === 'run' || type === 'virtualrun' || type === 'trailrun') {
+    return 'running';
+  }
+
+  // Strength/Weights
+  if (type === 'weighttraining' || type === 'crossfit' || type === 'workout' ||
+      type.includes('strength') || type.includes('weight') || type.includes('gym')) {
+    return 'strength';
+  }
+
+  // Walking/Hiking
+  if (type === 'walk' || type === 'hike' || type.includes('walk')) {
+    return 'walking';
+  }
+
+  // Swimming
+  if (type === 'swim' || type.includes('swim')) {
+    return 'swimming';
+  }
+
+  // Other cardio (rowing, skiing, etc.)
+  if (type === 'rowing' || type === 'elliptical' || type === 'stairstepper' ||
+      type === 'nordicski' || type === 'alpineski' || type === 'snowboard' ||
+      type === 'iceskate' || type === 'inlineskate' || type === 'yoga' || type === 'pilates') {
+    return 'other_cardio';
+  }
+
+  return 'other';
 }
 
 // =========================================================
