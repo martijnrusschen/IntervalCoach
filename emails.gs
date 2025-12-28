@@ -111,7 +111,8 @@ function sendDailyEmail(params) {
     raceName,
     raceCategory,
     raceDescription,
-    midWeekAdaptation
+    midWeekAdaptation,
+    deloadCheck
   } = params;
 
   // Build subject based on type
@@ -337,6 +338,51 @@ ${t.changes_made || "Changes"}:`;
       }
     }
     body += '\n';
+  }
+
+  // === SECTION 3.25: Deload Recommendation ===
+  if (deloadCheck?.needed) {
+    const urgencyEmoji = {
+      'high': '⚠️',
+      'medium': '📊',
+      'low': '💡'
+    }[deloadCheck.urgency] || '📊';
+
+    const urgencyLabel = {
+      'high': t.deload_urgent || 'DELOAD RECOMMENDED',
+      'medium': t.deload_suggested || 'Recovery Week Suggested',
+      'low': t.deload_consider || 'Consider Recovery'
+    }[deloadCheck.urgency] || 'Recovery Week';
+
+    body += `
+-----------------------------------
+${urgencyEmoji} ${urgencyLabel}
+-----------------------------------
+`;
+
+    if (deloadCheck.reason) {
+      body += `${t.reason || "Reason"}: ${deloadCheck.reason}\n`;
+    }
+
+    body += `${t.weeks_without_recovery || "Weeks without recovery"}: ${deloadCheck.weeksWithoutDeload}\n`;
+
+    // Show weekly TSS breakdown
+    if (deloadCheck.weeklyBreakdown?.length > 0) {
+      body += `\n${t.recent_load || "Recent load"}:\n`;
+      deloadCheck.weeklyBreakdown.forEach((week, i) => {
+        const marker = (i === deloadCheck.weeklyBreakdown.length - 1) ? ` <- ${t.this_week || "This week"}` : '';
+        body += `  ${t.week || "Week"} ${week.weekNumber}: ${week.totalTSS} TSS (${week.activities} ${t.activities || "activities"})${marker}\n`;
+      });
+    }
+
+    if (deloadCheck.recommendation) {
+      body += `\n${t.recommendation || "Recommendation"}:\n${deloadCheck.recommendation}\n`;
+    }
+  } else if (deloadCheck?.weeksWithoutDeload >= 3) {
+    // Soft reminder when approaching need for deload
+    body += `
+${t.deload_reminder || "Deload reminder"}: ${deloadCheck.weeksWithoutDeload} ${t.weeks_training || "weeks of training"}. ${deloadCheck.recommendation || ""}
+`;
   }
 
   // === SECTION 3.5: Race Advice (for race tomorrow or yesterday) ===

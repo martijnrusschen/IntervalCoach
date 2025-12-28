@@ -29,6 +29,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
 - [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
 - [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
+- [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on 4-week TSS patterns
 
 ---
 
@@ -54,7 +55,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Zone Weakness Targeting** | Drive workout selection toward undertrained zones (plateau detection → stimulus rotation) | Coaching |
 | **Cross-Sport Load Balance** | Prevent high-intensity in both cycling AND running same week. Track cumulative Z5+ time | Coaching |
 | **Event-Specific Weekly Emphasis** | Climbing goal → 5-20min power focus; TT → threshold focus; Criterium → anaerobic focus | Coaching |
-| **Planned Deload Weeks** | Auto-insert recovery weeks based on 4-week rolling TSS accumulation | Coaching |
 | **Sleep Quality Scoring** | Create quality score from deep sleep %, REM %, efficiency. Weight quality > quantity | Coaching |
 | **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
@@ -89,6 +89,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 |---------|-------------|
 | ~~HRV/RHR Baseline Tracking~~ | Track 30-day rolling baselines and surface deviation % to AI and emails |
 | ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
+| ~~Planned Deload Weeks~~ | Auto-detect when recovery week is needed based on 4-week TSS patterns |
 
 ---
 
@@ -487,6 +488,41 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - AI recovery assessment now considers 30-day baseline context
 - Email shows deviation % with warning indicators (⚠️ for concerns, ✓ for good)
 
+### Feature: Planned Deload Weeks ✅ COMPLETE
+
+**Implementation:**
+- Added `checkDeloadNeeded()` in `adaptation.gs` - Analyzes last 4 weeks of TSS to detect if recovery week needed
+- Added `formatDeloadCheckLog()` in `adaptation.gs` - Formats deload analysis for logging
+- Integrated into `main.gs` daily flow after context gathering
+- Added deload notification section to `sendDailyEmail()` in `emails.gs`
+- Added translations for all 5 languages
+- Added `testDeloadDetection()` in `test_planning.gs`
+
+**Key features:**
+- Fetches last 4 weeks of activities using `fetchWeeklyActivities()`
+- Calculates weekly TSS totals and identifies recovery weeks (< 70% of average TSS)
+- Counts consecutive weeks without deload
+- Urgency scoring based on multiple factors:
+  - 4+ weeks without recovery: +3 points
+  - 3 weeks sustained load: +2 points
+  - High ramp rate (> 5 CTL/week): +2 points
+  - Elevated ramp rate (> 3 CTL/week): +1 point
+  - High fatigue (TSB < -30): +3 points
+  - Moderate fatigue (TSB < -20): +1 point
+  - 3+ weeks above target TSS: +2 points
+
+**Deload triggers:**
+- Urgency >= 4: HIGH urgency deload recommended
+- Urgency >= 2 AND 3+ weeks without deload: MEDIUM urgency
+- Urgency >= 1 AND 4+ weeks without deload: LOW urgency
+
+**Email display:**
+- Shows urgency level with appropriate emoji (⚠️ HIGH, 📊 MEDIUM, 💡 LOW)
+- Displays reason for recommendation
+- Shows 4-week TSS breakdown
+- Provides suggested deload TSS target (50-70% of average)
+- Soft reminder when approaching 3+ weeks without recovery
+
 ---
 
 ## How to Use This Document
@@ -499,4 +535,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-27 (Added HRV/RHR Baseline Tracking feature)*
+*Last updated: 2025-12-28 (Added Planned Deload Weeks feature)*

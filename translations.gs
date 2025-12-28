@@ -154,7 +154,20 @@ const TRANSLATIONS = {
     completed: "completed",
     extra: "extra",
     missed: "missed",
-    today: "Today"
+    today: "Today",
+    // Deload detection
+    deload_urgent: "DELOAD RECOMMENDED",
+    deload_suggested: "Recovery Week Suggested",
+    deload_consider: "Consider Recovery",
+    deload_reminder: "Deload reminder",
+    weeks_without_recovery: "Weeks without recovery",
+    weeks_training: "weeks of training",
+    recent_load: "Recent load",
+    this_week: "This week",
+    week: "Week",
+    activities: "activities",
+    reason: "Reason",
+    recommendation: "Recommendation"
   },
   ja: {
     subject_prefix: "[IntervalCoach] 本日の推奨: ",
@@ -247,7 +260,20 @@ const TRANSLATIONS = {
     last_trained: "最終",
     ai_recommendation: "AI推奨",
     priority_this_week: "今週の優先",
-    suggested_workouts: "推奨ワークアウト"
+    suggested_workouts: "推奨ワークアウト",
+    // Deload detection
+    deload_urgent: "デロード推奨",
+    deload_suggested: "リカバリー週の提案",
+    deload_consider: "リカバリーを検討",
+    deload_reminder: "デロードのお知らせ",
+    weeks_without_recovery: "リカバリーなしの週数",
+    weeks_training: "週間のトレーニング",
+    recent_load: "最近の負荷",
+    this_week: "今週",
+    week: "週",
+    activities: "アクティビティ",
+    reason: "理由",
+    recommendation: "推奨"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -340,7 +366,20 @@ const TRANSLATIONS = {
     last_trained: "Último",
     ai_recommendation: "Recomendación IA",
     priority_this_week: "Prioridad esta semana",
-    suggested_workouts: "Entrenamientos sugeridos"
+    suggested_workouts: "Entrenamientos sugeridos",
+    // Deload detection
+    deload_urgent: "DESCARGA RECOMENDADA",
+    deload_suggested: "Semana de Recuperación Sugerida",
+    deload_consider: "Considerar Recuperación",
+    deload_reminder: "Recordatorio de descarga",
+    weeks_without_recovery: "Semanas sin recuperación",
+    weeks_training: "semanas de entrenamiento",
+    recent_load: "Carga reciente",
+    this_week: "Esta semana",
+    week: "Semana",
+    activities: "actividades",
+    reason: "Razón",
+    recommendation: "Recomendación"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -439,7 +478,20 @@ const TRANSLATIONS = {
     last_trained: "Dernier",
     ai_recommendation: "Recommandation IA",
     priority_this_week: "Priorité cette semaine",
-    suggested_workouts: "Entraînements suggérés"
+    suggested_workouts: "Entraînements suggérés",
+    // Deload detection
+    deload_urgent: "DÉCHARGE RECOMMANDÉE",
+    deload_suggested: "Semaine de Récupération Suggérée",
+    deload_consider: "Considérer Récupération",
+    deload_reminder: "Rappel de décharge",
+    weeks_without_recovery: "Semaines sans récupération",
+    weeks_training: "semaines d'entraînement",
+    recent_load: "Charge récente",
+    this_week: "Cette semaine",
+    week: "Semaine",
+    activities: "activités",
+    reason: "Raison",
+    recommendation: "Recommandation"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -589,6 +641,19 @@ const TRANSLATIONS = {
     completed: "voltooid",
     extra: "extra",
     missed: "gemist",
-    today: "Vandaag"
+    today: "Vandaag",
+    // Deload detection
+    deload_urgent: "DELOAD AANBEVOLEN",
+    deload_suggested: "Herstelweek Voorgesteld",
+    deload_consider: "Overweeg Herstel",
+    deload_reminder: "Deload herinnering",
+    weeks_without_recovery: "Weken zonder herstel",
+    weeks_training: "weken trainen",
+    recent_load: "Recente belasting",
+    this_week: "Deze week",
+    week: "Week",
+    activities: "activiteiten",
+    reason: "Reden",
+    recommendation: "Aanbeveling"
   }
 };

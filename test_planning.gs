@@ -418,3 +418,63 @@ function testMidWeekAdaptation() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Test planned deload detection
+ * Analyzes last 4 weeks of training to determine if a recovery week is needed
+ */
+function testDeloadDetection() {
+  Logger.log("=== DELOAD DETECTION TEST ===\n");
+  requireValidConfig();
+
+  // Fetch current fitness metrics
+  const fitness = fetchFitnessMetrics();
+
+  Logger.log("=== CURRENT FITNESS ===");
+  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
+  Logger.log("ATL: " + (fitness.atl?.toFixed(1) || "N/A"));
+  Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
+  Logger.log("Ramp Rate: " + (fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
+
+  // Run deload check
+  const deloadCheck = checkDeloadNeeded(fitness);
+
+  Logger.log("\n=== DELOAD ANALYSIS ===");
+  Logger.log(formatDeloadCheckLog(deloadCheck));
+
+  // Additional analysis
+  Logger.log("\n=== ANALYSIS DETAILS ===");
+  Logger.log("Urgency Score Factors:");
+
+  if (deloadCheck.weeksWithoutDeload >= 4) {
+    Logger.log("  [+3] 4+ consecutive weeks without recovery");
+  } else if (deloadCheck.weeksWithoutDeload >= 3) {
+    Logger.log("  [+2] 3 consecutive weeks of sustained load");
+  }
+
+  if (fitness.rampRate > 5) {
+    Logger.log("  [+2] High ramp rate (>" + 5 + " CTL/week)");
+  } else if (fitness.rampRate > 3) {
+    Logger.log("  [+1] Elevated ramp rate (>" + 3 + " CTL/week)");
+  }
+
+  if (fitness.tsb < -30) {
+    Logger.log("  [+3] High fatigue (TSB < -30)");
+  } else if (fitness.tsb < -20) {
+    Logger.log("  [+1] Moderate fatigue (TSB < -20)");
+  }
+
+  Logger.log("\n=== RESULT ===");
+  if (deloadCheck.needed) {
+    Logger.log("DELOAD RECOMMENDED (" + deloadCheck.urgency.toUpperCase() + ")");
+    Logger.log("Suggested deload TSS: ~" + deloadCheck.suggestedDeloadTSS);
+    Logger.log("\n" + deloadCheck.recommendation);
+  } else {
+    Logger.log("No deload needed at this time");
+    if (deloadCheck.recommendation) {
+      Logger.log(deloadCheck.recommendation);
+    }
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

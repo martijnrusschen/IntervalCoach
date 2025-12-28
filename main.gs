@@ -431,6 +431,20 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     phaseInfo: phaseInfo
   });
 
+  // ===== DELOAD CHECK =====
+  // Check if a recovery/deload week is needed based on recent training patterns
+  let deloadCheck = null;
+  try {
+    deloadCheck = checkDeloadNeeded(summary);
+    if (deloadCheck.needed) {
+      Logger.log(formatDeloadCheckLog(deloadCheck));
+    } else if (deloadCheck.weeksWithoutDeload >= 2) {
+      Logger.log(`Deload tracking: ${deloadCheck.weeksWithoutDeload} weeks without recovery week`);
+    }
+  } catch (e) {
+    Logger.log(`Deload check failed (non-critical): ${e.toString()}`);
+  }
+
   // Aliases for backward compatibility
   const recentTypes = ctx.recentTypes;
   const twoWeekHistory = ctx.twoWeekHistory;
@@ -717,7 +731,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     powerProfile: isRun ? null : powerProfile,
     weekProgress: weekProgress,
     upcomingDays: upcomingDays,
-    midWeekAdaptation: midWeekAdaptation  // Include adaptation info if any
+    midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
+    deloadCheck: deloadCheck  // Include deload recommendation if needed
   });
 }
 
