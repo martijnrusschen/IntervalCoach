@@ -375,7 +375,7 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 
 **PLANNING RULES:**
 1. ADAPTIVE FREQUENCY: Base workout count on last week's activity count. Max increase of +1 workout from last week. If last week had 3 activities, plan max 4 this week.
-2. C EVENTS COUNT: Any C events (group rides) already on the calendar count toward the weekly workout total. If max is 4 and there's 1 C event, only add 3 new workouts.
+2. C EVENTS COUNT: Any C events (group rides) already on the calendar count toward the weekly workout total. If max is 4 and there's 1 C event, only add 3 new workouts. Do NOT add a workout on a day that already has a C event - the group ride IS the workout for that day.
 3. Never schedule back-to-back intensity 4-5 days
 4. After intensity 5, next day should be 1-2
 5. Include at least 1 full rest day if TSB < -10
