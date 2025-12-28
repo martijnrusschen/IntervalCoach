@@ -456,6 +456,19 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log(`Volume jump check failed (non-critical): ${e.toString()}`);
   }
 
+  // ===== RAMP RATE WARNING =====
+  // Check for sustained high ramp rate over multiple weeks
+  let rampRateWarning = null;
+  try {
+    rampRateWarning = checkRampRateWarning(fitnessMetrics);
+    if (rampRateWarning.warning) {
+      Logger.log(`Ramp Rate Warning (${rampRateWarning.level}): ${rampRateWarning.consecutiveWeeks} weeks at elevated rate`);
+      Logger.log(`  Weekly rates: ${rampRateWarning.weeklyRates.map(w => `${w.label}: ${w.rate}`).join(', ')}`);
+    }
+  } catch (e) {
+    Logger.log(`Ramp rate warning check failed (non-critical): ${e.toString()}`);
+  }
+
   // ===== TAPER TIMING =====
   // Calculate optimal taper timing for upcoming A races (within 6 weeks)
   let taperRecommendation = null;
@@ -775,7 +788,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
     deloadCheck: deloadCheck,  // Include deload recommendation if needed
     taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
-    volumeJump: volumeJump  // Include volume jump warning if >15% increase
+    volumeJump: volumeJump,  // Include volume jump warning if >15% increase
+    rampRateWarning: rampRateWarning  // Include ramp rate warning if sustained high rate
   });
 }
 

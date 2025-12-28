@@ -168,6 +168,12 @@ const TRANSLATIONS = {
     volume_jump_low: "Volume Increase",
     volume_drop: "Volume Drop Detected",
     week_comparison: "Week-over-week",
+    // Ramp rate warning
+    ramp_rate_critical: "CRITICAL: Overtraining Risk",
+    ramp_rate_warning: "Sustained High Load",
+    ramp_rate_caution: "Elevated Training Load",
+    consecutive_weeks: "Consecutive weeks",
+    avg_rate: "Avg",
     recent_load: "Recent load",
     this_week: "This week",
     week: "Week",
@@ -309,7 +315,13 @@ const TRANSLATIONS = {
     volume_jump_medium: "ボリューム警告",
     volume_jump_low: "ボリューム増加",
     volume_drop: "ボリューム低下検出",
-    week_comparison: "週比較"
+    week_comparison: "週比較",
+    // Ramp rate warning
+    ramp_rate_critical: "危険：オーバートレーニングリスク",
+    ramp_rate_warning: "高負荷継続中",
+    ramp_rate_caution: "負荷上昇中",
+    consecutive_weeks: "連続週数",
+    avg_rate: "平均"
   },
   es: {
     subject_prefix: "[IntervalCoach] Selección de hoy: ",
@@ -433,7 +445,13 @@ const TRANSLATIONS = {
     volume_jump_medium: "Advertencia de Volumen",
     volume_jump_low: "Aumento de Volumen",
     volume_drop: "Caída de Volumen Detectada",
-    week_comparison: "Semana a semana"
+    week_comparison: "Semana a semana",
+    // Ramp rate warning
+    ramp_rate_critical: "CRÍTICO: Riesgo de Sobreentrenamiento",
+    ramp_rate_warning: "Carga Alta Sostenida",
+    ramp_rate_caution: "Carga de Entrenamiento Elevada",
+    consecutive_weeks: "Semanas consecutivas",
+    avg_rate: "Promedio"
   },
   fr: {
     subject_prefix: "[IntervalCoach] Choix du jour: ",
@@ -563,7 +581,13 @@ const TRANSLATIONS = {
     volume_jump_medium: "Avertissement Volume",
     volume_jump_low: "Augmentation du Volume",
     volume_drop: "Baisse de Volume Détectée",
-    week_comparison: "Semaine par semaine"
+    week_comparison: "Semaine par semaine",
+    // Ramp rate warning
+    ramp_rate_critical: "CRITIQUE: Risque de Surentraînement",
+    ramp_rate_warning: "Charge Élevée Soutenue",
+    ramp_rate_caution: "Charge d'Entraînement Élevée",
+    consecutive_weeks: "Semaines consécutives",
+    avg_rate: "Moyenne"
   },
   nl: {
     subject_prefix: "[IntervalCoach] Training van vandaag: ",
@@ -744,6 +768,12 @@ const TRANSLATIONS = {
     volume_jump_medium: "Volume Waarschuwing",
     volume_jump_low: "Volume Toename",
     volume_drop: "Volume Daling Gedetecteerd",
-    week_comparison: "Week-over-week"
+    week_comparison: "Week-over-week",
+    // Ramp rate warning
+    ramp_rate_critical: "KRITIEK: Overtraining Risico",
+    ramp_rate_warning: "Aanhoudend Hoge Belasting",
+    ramp_rate_caution: "Verhoogde Trainingsbelasting",
+    consecutive_weeks: "Opeenvolgende weken",
+    avg_rate: "Gemiddelde"
   }
 };

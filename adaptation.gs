@@ -1019,3 +1019,125 @@ function checkVolumeJump() {
 
   return result;
 }
+
+// =========================================================
+// RAMP RATE WARNING
+// =========================================================
+
+/**
+ * Check for sustained high ramp rate over multiple weeks
+ * Warns when CTL ramp rate exceeds safe thresholds for 2+ consecutive weeks
+ *
+ * Safe thresholds:
+ * - Normal: 0-5 CTL/week (sustainable long-term)
+ * - Elevated: 5-7 CTL/week (OK for 1-2 weeks, then needs recovery)
+ * - High: >7 CTL/week (injury risk, only sustainable very short term)
+ *
+ * @param {object} currentFitness - Current fitness metrics with rampRate
+ * @returns {object} { warning, level, consecutiveWeeks, weeklyRates, recommendation }
+ */
+function checkRampRateWarning(currentFitness) {
+  const result = {
+    warning: false,
+    level: 'none',  // none, caution, warning, critical
+    consecutiveWeeks: 0,
+    currentRate: currentFitness?.rampRate || 0,
+    weeklyRates: [],
+    avgRate: 0,
+    recommendation: null
+  };
+
+  try {
+    // Get weekly CTL values for the last 4 weeks to calculate per-week ramp rates
+    const weeklyRates = [];
+
+    for (let week = 0; week < 4; week++) {
+      const daysAgo = week * 7;
+      const weekEndDate = new Date();
+      weekEndDate.setDate(weekEndDate.getDate() - daysAgo);
+      const weekStartDate = new Date();
+      weekStartDate.setDate(weekStartDate.getDate() - daysAgo - 7);
+
+      // Fetch CTL at end and start of each week
+      const endStr = formatDateISO(weekEndDate);
+      const startStr = formatDateISO(weekStartDate);
+
+      const endResult = fetchIcuApi("/athlete/0/wellness/" + endStr);
+      const startResult = fetchIcuApi("/athlete/0/wellness/" + startStr);
+
+      if (endResult.success && startResult.success && endResult.data && startResult.data) {
+        const endCTL = endResult.data.ctl || 0;
+        const startCTL = startResult.data.ctl || 0;
+        const weeklyRate = endCTL - startCTL;
+
+        weeklyRates.push({
+          week: week,
+          label: week === 0 ? 'This week' : week === 1 ? 'Last week' : `${week} weeks ago`,
+          startCTL: Math.round(startCTL * 10) / 10,
+          endCTL: Math.round(endCTL * 10) / 10,
+          rate: Math.round(weeklyRate * 10) / 10
+        });
+      }
+    }
+
+    result.weeklyRates = weeklyRates;
+
+    // Calculate average rate
+    if (weeklyRates.length > 0) {
+      result.avgRate = Math.round((weeklyRates.reduce((sum, w) => sum + w.rate, 0) / weeklyRates.length) * 10) / 10;
+    }
+
+    // Count consecutive weeks of high ramp rate (>5 CTL/week)
+    let consecutiveHigh = 0;
+    let consecutiveElevated = 0;
+
+    for (let i = 0; i < weeklyRates.length; i++) {
+      const rate = weeklyRates[i].rate;
+
+      if (rate > 7) {
+        consecutiveHigh++;
+        consecutiveElevated++;
+      } else if (rate > 5) {
+        consecutiveHigh = 0; // Reset high counter
+        consecutiveElevated++;
+      } else {
+        break; // Stop counting when we hit a normal week
+      }
+    }
+
+    result.consecutiveWeeks = Math.max(consecutiveHigh, consecutiveElevated);
+
+    // Determine warning level
+    if (consecutiveHigh >= 2) {
+      // 2+ weeks at >7 CTL/week = critical
+      result.warning = true;
+      result.level = 'critical';
+      result.recommendation = `CRITICAL: Ramp rate has been very high (>${7} CTL/week) for ${consecutiveHigh} consecutive weeks. High overtraining and injury risk. Schedule a recovery week immediately.`;
+    } else if (consecutiveHigh >= 1 && consecutiveElevated >= 2) {
+      // 1 week high + 1 week elevated = warning
+      result.warning = true;
+      result.level = 'warning';
+      result.recommendation = `WARNING: Sustained high ramp rate for ${consecutiveElevated} weeks (avg ${result.avgRate} CTL/week). Consider reducing load or adding extra recovery days.`;
+    } else if (consecutiveElevated >= 3) {
+      // 3+ weeks at >5 CTL/week = warning
+      result.warning = true;
+      result.level = 'warning';
+      result.recommendation = `Elevated ramp rate (${result.avgRate} CTL/week avg) for ${consecutiveElevated} weeks. Plan a recovery week soon to consolidate gains.`;
+    } else if (consecutiveElevated >= 2) {
+      // 2 weeks at >5 CTL/week = caution
+      result.warning = true;
+      result.level = 'caution';
+      result.recommendation = `Ramp rate has been elevated (>${5} CTL/week) for 2 weeks. Monitor fatigue closely and ensure adequate recovery.`;
+    } else if (weeklyRates.length > 0 && weeklyRates[0].rate > 7) {
+      // Current week very high but not sustained yet
+      result.warning = true;
+      result.level = 'caution';
+      result.recommendation = `This week's ramp rate (${weeklyRates[0].rate} CTL/week) is very high. If this continues, recovery will be needed soon.`;
+    }
+
+  } catch (e) {
+    Logger.log('Ramp rate warning check error: ' + e.toString());
+  }
+
+  return result;
+}

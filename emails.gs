@@ -114,7 +114,8 @@ function sendDailyEmail(params) {
     midWeekAdaptation,
     deloadCheck,
     taperRecommendation,
-    volumeJump
+    volumeJump,
+    rampRateWarning
   } = params;
 
   // Build subject based on type
@@ -412,7 +413,37 @@ ${volumeJump.recommendation || ''}
 `;
   }
 
-  // === SECTION 3.4: Taper Timing (within 6 weeks of A race) ===
+  // === SECTION 3.4: Ramp Rate Warning ===
+  if (rampRateWarning?.warning) {
+    const levelEmoji = {
+      'critical': '🚨',
+      'warning': '⚠️',
+      'caution': '📈'
+    }[rampRateWarning.level] || '📊';
+
+    const levelLabel = {
+      'critical': t.ramp_rate_critical || 'CRITICAL: Overtraining Risk',
+      'warning': t.ramp_rate_warning || 'Sustained High Load',
+      'caution': t.ramp_rate_caution || 'Elevated Training Load'
+    }[rampRateWarning.level] || 'Training Load Notice';
+
+    // Format weekly rates for display
+    const ratesDisplay = rampRateWarning.weeklyRates
+      .slice(0, 3)  // Show last 3 weeks
+      .map(w => `${w.label}: ${w.rate > 0 ? '+' : ''}${w.rate}`)
+      .join(' | ');
+
+    body += `
+-----------------------------------
+${levelEmoji} ${levelLabel}
+-----------------------------------
+${t.consecutive_weeks || "Consecutive weeks"}: ${rampRateWarning.consecutiveWeeks} | ${t.avg_rate || "Avg"}: ${rampRateWarning.avgRate > 0 ? '+' : ''}${rampRateWarning.avgRate} CTL/week
+${ratesDisplay}
+${rampRateWarning.recommendation || ''}
+`;
+  }
+
+  // === SECTION 3.5: Taper Timing (within 6 weeks of A race) ===
   if (taperRecommendation?.available) {
     body += formatTaperEmailSection(taperRecommendation);
   }

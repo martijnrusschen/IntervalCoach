@@ -524,6 +524,68 @@ function testVolumeJump() {
 }
 
 /**
+ * Test ramp rate warning
+ * Checks for sustained high CTL ramp rate over multiple weeks
+ */
+function testRampRateWarning() {
+  Logger.log("=== RAMP RATE WARNING TEST ===\n");
+  requireValidConfig();
+
+  // Fetch current fitness
+  const fitness = fetchFitnessMetrics();
+
+  Logger.log("=== CURRENT FITNESS ===");
+  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
+  Logger.log("Current Ramp Rate: " + (fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
+
+  // Run ramp rate warning check
+  const warning = checkRampRateWarning(fitness);
+
+  Logger.log("\n=== WEEKLY RAMP RATES ===");
+  if (warning.weeklyRates.length > 0) {
+    warning.weeklyRates.forEach(w => {
+      const rateStr = w.rate > 0 ? '+' + w.rate : w.rate.toString();
+      const indicator = w.rate > 7 ? '🚨' : w.rate > 5 ? '⚠️' : '✅';
+      Logger.log(`  ${w.label}: ${w.startCTL} → ${w.endCTL} CTL (${rateStr}/week) ${indicator}`);
+    });
+    Logger.log(`\n  Average: ${warning.avgRate > 0 ? '+' : ''}${warning.avgRate} CTL/week`);
+  } else {
+    Logger.log("  Could not fetch weekly ramp rate data");
+  }
+
+  Logger.log("\n=== WARNING RESULT ===");
+  Logger.log("Warning: " + (warning.warning ? 'YES' : 'No'));
+  Logger.log("Level: " + warning.level);
+  Logger.log("Consecutive elevated weeks: " + warning.consecutiveWeeks);
+
+  if (warning.warning) {
+    const levelEmoji = {
+      'critical': '🚨',
+      'warning': '⚠️',
+      'caution': '📈'
+    }[warning.level] || '📊';
+
+    Logger.log("\n=== RECOMMENDATION ===");
+    Logger.log(levelEmoji + " " + warning.recommendation);
+  } else {
+    Logger.log("\nNo ramp rate warning - training load is sustainable.");
+  }
+
+  // Show thresholds for reference
+  Logger.log("\n=== THRESHOLDS ===");
+  Logger.log("0-5 CTL/week → Normal (sustainable long-term)");
+  Logger.log("5-7 CTL/week → Elevated (OK for 1-2 weeks)");
+  Logger.log(">7 CTL/week → High (injury risk)");
+  Logger.log("\nWarning triggers:");
+  Logger.log("  - 2+ weeks at >7 → CRITICAL");
+  Logger.log("  - 1 week high + 2 weeks elevated → WARNING");
+  Logger.log("  - 3+ weeks at >5 → WARNING");
+  Logger.log("  - 2 weeks at >5 → CAUTION");
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test taper timing calculation
  * Analyzes optimal taper start date for upcoming A race
  */

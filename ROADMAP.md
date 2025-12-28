@@ -74,8 +74,8 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
 | ~~**Volume Jump Detection**~~ | ~~Flag week-to-week volume increases >15% as injury risk, suggest spreading load~~ | **COMPLETE** |
 | ~~**Z-Score Intensity Modifier**~~ | ~~Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green~~ | **COMPLETE** |
+| ~~**Training Load Rate Warnings**~~ | ~~Warn when CTL ramp rate exceeds safe thresholds for multiple weeks~~ | **COMPLETE** |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
-| **Training Load Rate Warnings** | Warn when CTL ramp rate exceeds safe thresholds for multiple weeks | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
 | **Recovery Debt Tracking** | Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates | Coaching |
 | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
@@ -96,6 +96,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Post-Workout → Next Day~~ | Pass yesterday's workout difficulty to today's decision. Reduce intensity 10% if harder than expected |
 | ~~Volume Jump Detection~~ | Flag week-to-week volume increases >15% as injury risk |
 | ~~Z-Score Intensity Modifier~~ | Continuous intensity scaling from HRV/RHR z-scores instead of discrete categories |
+| ~~Training Load Rate Warnings~~ | Warn when CTL ramp rate exceeds safe thresholds for 2+ weeks |
 
 ---
 
@@ -713,6 +714,39 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Provides precise scaling instructions instead of color categories
 - AI can adjust power targets based on exact modifier (e.g., 82% → use 82% of prescribed FTP)
 
+### Feature: Training Load Rate Warnings ✅ COMPLETE
+
+**Implementation:**
+- Added `checkRampRateWarning()` in `adaptation.gs` - checks 4 weeks of ramp rate history
+- Fetches CTL at start and end of each week to calculate per-week ramp rates
+- Integrated into `main.gs` daily flow after volume jump check
+- Added ramp rate warning section to `sendDailyEmail()` in `emails.gs`
+- Added translations for all 5 languages
+- Added `testRampRateWarning()` in `test_planning.gs`
+
+**Key features:**
+- Tracks ramp rate over 4 weeks, not just current week
+- Counts consecutive weeks at elevated (>5 CTL/week) and high (>7 CTL/week) rates
+- Triggers warnings based on sustained patterns
+
+**Warning Levels:**
+| Level | Trigger | Recommendation |
+|-------|---------|----------------|
+| CRITICAL | 2+ weeks at >7 CTL/week | Schedule recovery week immediately |
+| WARNING | 1 week high + 2 weeks elevated, OR 3+ weeks at >5 | Consider reducing load |
+| CAUTION | 2 weeks at >5 CTL/week | Monitor fatigue closely |
+
+**Thresholds:**
+- Normal: 0-5 CTL/week (sustainable long-term)
+- Elevated: 5-7 CTL/week (OK for 1-2 weeks)
+- High: >7 CTL/week (injury risk)
+
+**Email display:**
+- Shows warning level with emoji (🚨 CRITICAL, ⚠️ WARNING, 📈 CAUTION)
+- Displays consecutive weeks count and average ramp rate
+- Shows weekly rate breakdown for last 3 weeks
+- Provides specific recommendation based on warning level
+
 ---
 
-*Last updated: 2025-12-28 (Added Z-Score Intensity Modifier feature)*
+*Last updated: 2025-12-28 (Added Training Load Rate Warnings feature)*
