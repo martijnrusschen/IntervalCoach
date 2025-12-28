@@ -280,16 +280,30 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
       let eventStr = `- ${e.date} (${e.dayName}): ${e.eventCategory} priority`;
       if (e.name) eventStr += ' - ' + e.name;
       if (e.description) eventStr += ' (' + e.description + ')';
+      // Make it clear that C events ARE the workout for that day
+      if (e.eventCategory === 'C') {
+        eventStr += ' [THIS IS THE WORKOUT FOR THIS DAY - do not add another]';
+      }
       return eventStr;
     }).join('\n');
   }
 
   // Build scheduled days context (simple placeholders)
+  // IMPORTANT: Filter out days that already have C events - those days use the group ride as the workout
   let scheduledContext = '';
   if (context.scheduledDays && context.scheduledDays.length > 0) {
-    scheduledContext = '\n**PLACEHOLDER DAYS (need workout type):**\n' + context.scheduledDays.map(d =>
-      `- ${d.dayName} (${d.date}): ${d.activityType} ${d.duration ? d.duration.min + '-' + d.duration.max + 'min' : ''}`
-    ).join('\n');
+    const cEventDates = new Set(
+      (context.upcomingEvents || [])
+        .filter(e => e.eventCategory === 'C')
+        .map(e => e.date)
+    );
+    const daysNeedingWorkouts = context.scheduledDays.filter(d => !cEventDates.has(d.date));
+
+    if (daysNeedingWorkouts.length > 0) {
+      scheduledContext = '\n**PLACEHOLDER DAYS (need workout type):**\n' + daysNeedingWorkouts.map(d =>
+        `- ${d.dayName} (${d.date}): ${d.activityType} ${d.duration ? d.duration.min + '-' + d.duration.max + 'min' : ''}`
+      ).join('\n');
+    }
   }
 
   // Build existing workouts context (user already scheduled specific workouts)
