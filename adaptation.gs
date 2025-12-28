@@ -799,7 +799,7 @@ function cleanupMissedPlaceholders(weekProgress) {
  * @param {object} fitnessMetrics - Current CTL/ATL/TSB from fetchFitnessMetrics()
  * @returns {object} { needed: boolean, urgency: 'low'|'medium'|'high', reason: string, weeklyBreakdown: [], recommendation: string }
  */
-function checkDeloadNeeded(fitnessMetrics) {
+function checkDeloadNeeded(fitnessMetrics, wellness) {
   const result = {
     needed: false,
     urgency: 'low',
@@ -807,7 +807,8 @@ function checkDeloadNeeded(fitnessMetrics) {
     weeklyBreakdown: [],
     weeksWithoutDeload: 0,
     recommendation: '',
-    suggestedDeloadTSS: null
+    suggestedDeloadTSS: null,
+    sleepDebt: null  // Track sleep debt for display
   };
 
   const currentCTL = fitnessMetrics?.ctl || 0;
@@ -893,6 +894,23 @@ function checkDeloadNeeded(fitnessMetrics) {
   if (weeksAboveTarget >= 3) {
     reasons.push(`${weeksAboveTarget}/4 weeks above target load`);
     urgencyScore += 2;
+  }
+
+  // Trigger 5: Accumulated sleep debt (from Whoop)
+  const sleepDebtHours = wellness?.today?.sleepDebtHours;
+  if (sleepDebtHours != null) {
+    result.sleepDebt = sleepDebtHours;
+
+    if (sleepDebtHours >= 5) {
+      reasons.push(`Severe sleep debt (${sleepDebtHours.toFixed(1)}h accumulated)`);
+      urgencyScore += 3;  // Major recovery concern
+    } else if (sleepDebtHours >= 3) {
+      reasons.push(`Significant sleep debt (${sleepDebtHours.toFixed(1)}h accumulated)`);
+      urgencyScore += 2;
+    } else if (sleepDebtHours >= 1.5) {
+      reasons.push(`Moderate sleep debt (${sleepDebtHours.toFixed(1)}h accumulated)`);
+      urgencyScore += 1;
+    }
   }
 
   // Determine if deload is needed

@@ -379,6 +379,12 @@ ${urgencyEmoji} ${urgencyLabel}
       });
     }
 
+    // Show sleep debt if significant (from Whoop)
+    if (deloadCheck.sleepDebt != null && deloadCheck.sleepDebt >= 1.5) {
+      const debtLevel = deloadCheck.sleepDebt >= 5 ? '🔴' : deloadCheck.sleepDebt >= 3 ? '🟠' : '🟡';
+      body += `\n${debtLevel} ${t.sleep_debt || "Sleep debt"}: ${deloadCheck.sleepDebt.toFixed(1)}h ${t.accumulated || "accumulated"}\n`;
+    }
+
     if (deloadCheck.recommendation) {
       body += `\n${t.recommendation || "Recommendation"}:\n${deloadCheck.recommendation}\n`;
     }

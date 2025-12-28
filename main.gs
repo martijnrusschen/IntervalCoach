@@ -433,9 +433,10 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
 
   // ===== DELOAD CHECK =====
   // Check if a recovery/deload week is needed based on recent training patterns
+  // Also considers sleep debt from Whoop for earlier deload triggering
   let deloadCheck = null;
   try {
-    deloadCheck = checkDeloadNeeded(summary);
+    deloadCheck = checkDeloadNeeded(summary, wellness);
     if (deloadCheck.needed) {
       Logger.log(formatDeloadCheckLog(deloadCheck));
     } else if (deloadCheck.weeksWithoutDeload >= 2) {

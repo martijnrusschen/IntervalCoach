@@ -77,7 +77,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~**Training Load Rate Warnings**~~ | ~~Warn when CTL ramp rate exceeds safe thresholds for multiple weeks~~ | **COMPLETE** |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
-| **Recovery Debt Tracking** | Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates | Coaching |
+| ~~**Recovery Debt Tracking**~~ | ~~Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates~~ | **COMPLETE** |
 | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
 | **Training Outcome Simulation** | Simulate multiple workout options before deciding | AI-First |
 | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
@@ -98,6 +98,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Z-Score Intensity Modifier~~ | Continuous intensity scaling from HRV/RHR z-scores instead of discrete categories |
 | ~~Training Load Rate Warnings~~ | Warn when CTL ramp rate exceeds safe thresholds for 2+ weeks |
 | ~~Illness Detection Patterns~~ | Detect illness from elevated RHR, suppressed HRV, poor sleep, elevated skin temp for 2+ days |
+| ~~Recovery Debt Tracking~~ | Use Whoop sleep debt to trigger earlier deload recommendations |
 
 ---
 
@@ -790,4 +791,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Displays pattern duration (consecutive days)
 - Provides training guidance
 
-*Last updated: 2025-12-28 (Added Illness Detection Patterns feature)*
+*Last updated: 2025-12-28 (Added Recovery Debt Tracking feature)*
