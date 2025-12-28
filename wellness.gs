@@ -88,6 +88,8 @@ function fetchWellnessDataEnhanced(daysBack = 7, daysBackEnd = 0) {
           recovery: whoopData.recovery,
           spO2: whoopData.spO2 || (todayIdx >= 0 ? icuRecords[todayIdx].spO2 : null),
           skinTemp: whoopData.skinTemp,  // Whoop skin temperature for illness detection
+          dayStrain: whoopData.dayStrain,  // Whoop day strain (0-21) - total cardiovascular load
+          dayKilojoules: whoopData.dayKilojoules,  // Energy expenditure from day strain
           respiration: todayIdx >= 0 ? icuRecords[todayIdx].respiration : null,
           // Subjective markers from Intervals.icu (user-entered)
           soreness: todayIdx >= 0 ? icuRecords[todayIdx].soreness : null,
@@ -323,6 +325,8 @@ function createWellnessSummary(wellnessRecords) {
       // Whoop-specific metrics
       spO2: latestWithData.spO2,
       skinTemp: latestWithData.skinTemp,
+      dayStrain: latestWithData.dayStrain,  // Day strain 0-21 (total cardiovascular load)
+      dayKilojoules: latestWithData.dayKilojoules,
       remSleep: latestWithData.remSleep,
       deepSleep: latestWithData.deepSleep,
       sleepEfficiency: latestWithData.sleepEfficiency,

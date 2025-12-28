@@ -469,6 +469,64 @@ function getWhoopCurrentSleep() {
 // =========================================================
 
 /**
+ * Get day strain from current or previous cycle
+ * Day strain (0-21) measures total cardiovascular load including non-workout activity
+ * @param {string} targetDate - Optional date to fetch (YYYY-MM-DD format), defaults to today
+ * @returns {object} { available, strain, kilojoules, avgHR, maxHR, cycleId }
+ */
+function getWhoopDayStrain(targetDate) {
+  if (!isWhoopConfigured()) {
+    return { available: false, reason: 'Whoop not configured' };
+  }
+
+  // Fetch recent cycles (limit 3 to find today or yesterday)
+  const result = fetchWhoopApi('/cycle', { limit: 3 });
+
+  if (!result.success || !result.data) {
+    return { available: false, reason: 'Failed to fetch cycles: ' + (result.error || 'No data') };
+  }
+
+  const records = result.data.records || [];
+  if (records.length === 0) {
+    return { available: false, reason: 'No cycle records found' };
+  }
+
+  // Find the cycle for the target date (or most recent scored cycle)
+  const target = targetDate || formatDateISO(new Date());
+  let cycle = null;
+
+  for (const c of records) {
+    // Cycle start date (Whoop cycles typically start at wake time)
+    const cycleDate = c.start ? c.start.substring(0, 10) : null;
+
+    // Match by date or take first scored cycle
+    if (cycleDate === target || (!cycle && c.score_state === 'SCORED')) {
+      cycle = c;
+      if (cycleDate === target) break; // Exact match, stop searching
+    }
+  }
+
+  if (!cycle) {
+    return { available: false, reason: 'No scored cycle found' };
+  }
+
+  const score = cycle.score || {};
+
+  return {
+    available: true,
+    source: 'whoop_api',
+    cycleId: cycle.id,
+    cycleStart: cycle.start,
+    cycleEnd: cycle.end,
+    strain: score.strain,           // Day strain 0-21
+    kilojoules: score.kilojoule,    // Energy expenditure
+    avgHR: score.average_heart_rate,
+    maxHR: score.max_heart_rate,
+    scoreState: cycle.score_state
+  };
+}
+
+/**
  * Fetch fresh wellness data from Whoop API
  * Returns data in format compatible with existing wellness.gs
  * @returns {object} Wellness data formatted for IntervalCoach
@@ -480,6 +538,7 @@ function fetchWhoopWellnessData() {
 
   const recovery = getWhoopCurrentRecovery();
   const sleep = getWhoopCurrentSleep();
+  const dayStrain = getWhoopDayStrain();
 
   if (!recovery.available) {
     return {
@@ -505,6 +564,9 @@ function fetchWhoopWellnessData() {
     remSleep: sleep.available ? sleep.remHours : null,
     deepSleep: sleep.available ? sleep.deepHours : null,
     sleepEfficiency: sleep.available ? sleep.sleepEfficiency : null,
+    // Day strain metrics (captures non-workout load)
+    dayStrain: dayStrain.available ? dayStrain.strain : null,
+    dayKilojoules: dayStrain.available ? dayStrain.kilojoules : null,
     // Metadata
     cycleId: recovery.cycleId,
     sleepId: recovery.sleepId,
@@ -625,6 +687,23 @@ function testWhoopApi() {
     Logger.log('❌ Sleep not available: ' + sleep.reason);
   }
 
+  // Test day strain
+  Logger.log('\n--- Day Strain ---');
+  const dayStrain = getWhoopDayStrain();
+  if (dayStrain.available) {
+    const strainLevel = dayStrain.strain >= 18 ? 'VERY HIGH' :
+                        dayStrain.strain >= 14 ? 'HIGH' :
+                        dayStrain.strain >= 10 ? 'MODERATE' :
+                        dayStrain.strain >= 6 ? 'LIGHT' : 'MINIMAL';
+    Logger.log('✓ Day Strain: ' + dayStrain.strain.toFixed(1) + '/21 (' + strainLevel + ')');
+    Logger.log('  Kilojoules: ' + (dayStrain.kilojoules ? dayStrain.kilojoules.toFixed(0) : 'N/A'));
+    Logger.log('  Avg HR: ' + (dayStrain.avgHR || 'N/A') + ' bpm');
+    Logger.log('  Max HR: ' + (dayStrain.maxHR || 'N/A') + ' bpm');
+    Logger.log('  Cycle: ' + dayStrain.cycleStart?.substring(0, 16) + ' to ' + (dayStrain.cycleEnd?.substring(0, 16) || 'ongoing'));
+  } else {
+    Logger.log('❌ Day strain not available: ' + dayStrain.reason);
+  }
+
   // Test combined wellness
   Logger.log('\n--- Combined Wellness ---');
   const wellness = fetchWhoopWellnessData();
@@ -633,6 +712,8 @@ function testWhoopApi() {
     Logger.log('  Recovery: ' + wellness.recovery + '%');
     Logger.log('  HRV: ' + wellness.hrv + ' ms');
     Logger.log('  Sleep: ' + (wellness.sleep ? wellness.sleep.toFixed(1) + 'h' : 'N/A'));
+    Logger.log('  Day Strain: ' + (wellness.dayStrain ? wellness.dayStrain.toFixed(1) + '/21' : 'N/A'));
+    Logger.log('  Skin Temp: ' + (wellness.skinTemp ? wellness.skinTemp.toFixed(1) + '°C' : 'N/A'));
     Logger.log('  Source: ' + wellness.source);
   } else {
     Logger.log('❌ Wellness not available: ' + wellness.reason);

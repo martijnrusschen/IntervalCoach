@@ -178,6 +178,19 @@ ${buildZoneContext(powerProfile)}
       physioIndicators = `\n- **Physiological:** ${parts.join(' | ')}`;
     }
 
+    // Build day strain context (captures non-workout cardiovascular load)
+    let dayStrainContext = '';
+    if (w.dayStrain != null) {
+      const strainLevel = w.dayStrain >= 18 ? 'VERY HIGH' :
+                          w.dayStrain >= 14 ? 'HIGH' :
+                          w.dayStrain >= 10 ? 'MODERATE' :
+                          w.dayStrain >= 6 ? 'LIGHT' : 'MINIMAL';
+      dayStrainContext = `
+- **Day Strain (Whoop):** ${w.dayStrain.toFixed(1)}/21 (${strainLevel})
+  - This measures TOTAL cardiovascular load, including non-workout activity (work stress, physical labor, etc.)
+  - If high strain without a hard workout logged, athlete had significant life stress. Factor this into recovery assessment.`;
+    }
+
     // Build z-score intensity context if available
     let zScoreContext = '';
     const zsi = wellness.zScoreIntensity;
@@ -198,7 +211,7 @@ ${buildZoneContext(powerProfile)}
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})${sleepDetails} | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv ? w.hrv.toFixed(0) : 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
-- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}
+- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${physioIndicators}${dayStrainContext}
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 ${w.stress ? `- **Stress:** ${w.stress}/5` : ''}
@@ -482,6 +495,18 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
   - Breakdown: ${breakdownParts}`;
     }
 
+    // Build day strain context (captures non-workout cardiovascular load)
+    let dayStrainContext = '';
+    if (w.dayStrain != null) {
+      const strainLevel = w.dayStrain >= 18 ? 'VERY HIGH' :
+                          w.dayStrain >= 14 ? 'HIGH' :
+                          w.dayStrain >= 10 ? 'MODERATE' :
+                          w.dayStrain >= 6 ? 'LIGHT' : 'MINIMAL';
+      dayStrainContext = `
+- **Day Strain (Whoop):** ${w.dayStrain.toFixed(1)}/21 (${strainLevel})
+  - Total cardiovascular load including non-workout activity. High strain without hard workout = life stress.`;
+    }
+
     wellnessContext = `
 **1b. Recovery & Wellness Data (from Whoop/wearable):**
 - **Recovery Status:** ${wellness.recoveryStatus}
@@ -489,7 +514,7 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus}) | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv || 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
-- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}
+- **Whoop Recovery Score:** ${w.recovery != null ? w.recovery + '%' : 'N/A'}${dayStrainContext}
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 
@@ -500,6 +525,7 @@ ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 - If modifier 95-100%: Full intensity is appropriate.
 - If modifier > 100%: Athlete is exceptionally recovered - can push slightly.
 - Running is higher impact than cycling - be MORE conservative with recovery.
+- **Day Strain Rule:** If day strain > 14 AND no hard workout logged, athlete had significant life stress. Be conservative.
 `;
   }
 
