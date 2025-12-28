@@ -32,6 +32,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on 4-week TSS patterns
 - [x] **Data-Driven Taper Timing** - Models ATL decay to calculate optimal taper start date for target TSB on race day
 - [x] **Adaptive Phase Transitions** - Shift Base→Build based on fitness trajectory, not just calendar date
+- [x] **Post-Workout → Next Day** - Pass yesterday's workout difficulty to today's decision
 
 ---
 
@@ -69,7 +70,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Post-Workout → Next Day** | Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10% | Coaching |
+| ~~**Post-Workout → Next Day**~~ | ~~Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10%~~ | **COMPLETE** |
 | ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
 | **Z-Score Intensity Modifier** | Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green | Coaching |
 | **Volume Jump Detection** | Flag week-to-week volume increases >15% as injury risk, suggest spreading load | Coaching |
@@ -92,6 +93,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Planned Deload Weeks~~ | Auto-detect when recovery week is needed based on 4-week TSS patterns |
 | ~~Data-Driven Taper Timing~~ | Model ATL decay to calculate optimal taper start date for target TSB on race day |
 | ~~Adaptive Phase Transitions~~ | Shift Base→Build based on fitness trajectory, not just calendar date |
+| ~~Post-Workout → Next Day~~ | Pass yesterday's workout difficulty to today's decision. Reduce intensity 10% if harder than expected |
 
 ---
 
@@ -597,6 +599,37 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Returns `trajectoryInfluence` field explaining phase decision
 - Can override date-based phase based on trajectory analysis
 
+### Feature: Post-Workout → Next Day ✅ COMPLETE
+
+**Implementation:**
+- Updated `createPrompt()` in `prompts_workout.gs` to accept `lastWorkoutAnalysis` parameter
+- Updated `createRunPrompt()` in `prompts_workout.gs` to accept `lastWorkoutAnalysis` parameter
+- Added `lastWorkoutContext` building in both prompt functions
+- Updated `main.gs` to fetch `getLastWorkoutAnalysis()` and pass to prompts
+- Added `testYesterdaysFeedback()` in `test_workout.gs`
+
+**Key features:**
+- Fetches last workout analysis from storage (stored by post-workout AI analysis)
+- Only includes analysis if within 3 days (recent enough to be relevant)
+- Builds prompt context with:
+  - Activity name and timing
+  - Difficulty match (harder/easier/as expected)
+  - Effectiveness score
+  - Stimulus type
+  - FTP calibration recommendation
+  - Key insight
+
+**Intensity adjustment rules:**
+| Difficulty Match | Action |
+|------------------|--------|
+| Harder than expected | REDUCE intensity 10%. Favor endurance/tempo over threshold/VO2max |
+| Easier than expected | Athlete responding well. Can maintain or increase |
+| As expected | Training calibrated well. Continue as planned |
+
+**FTP calibration rules:**
+- `decrease_5w`: Consider using 95-98% of prescribed power
+- `increase_5w`: Athlete can handle slightly higher intensity
+
 ---
 
 ## How to Use This Document
@@ -609,4 +642,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-28 (Added Adaptive Phase Transitions feature)*
+*Last updated: 2025-12-28 (Added Post-Workout → Next Day feature)*

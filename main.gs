@@ -662,12 +662,24 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
   }
 
+  // Fetch last workout analysis for feedback-driven intensity adjustment
+  let lastWorkoutAnalysis = null;
+  try {
+    lastWorkoutAnalysis = getLastWorkoutAnalysis();
+    if (lastWorkoutAnalysis) {
+      Logger.log("Last workout feedback: " + lastWorkoutAnalysis.activityName +
+                 " - Difficulty: " + (lastWorkoutAnalysis.difficultyMatch || 'unknown'));
+    }
+  } catch (e) {
+    Logger.log("Last workout analysis fetch failed (non-critical): " + e.toString());
+  }
+
   // Generate workout with appropriate prompt
   Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
 
   const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency);
+    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis)
+    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis);
 
   // Build context for regeneration feedback loop
   const regenerationContext = {

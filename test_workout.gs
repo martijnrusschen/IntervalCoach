@@ -392,3 +392,81 @@ function testPostWorkoutAnalysis() {
   Logger.log("2. Set up hourly trigger: ScriptApp.newTrigger('checkForCompletedWorkouts').timeBased().everyHours(1).create()");
   Logger.log("3. Complete a workout and wait 1 hour to test automatic analysis");
 }
+
+// =========================================================
+// POST-WORKOUT → NEXT DAY TEST
+// =========================================================
+
+/**
+ * Test that yesterday's workout analysis is passed to today's workout prompt
+ */
+function testYesterdaysFeedback() {
+  Logger.log("=== YESTERDAY'S FEEDBACK → TODAY'S WORKOUT TEST ===\n");
+  requireValidConfig();
+
+  // Get last workout analysis
+  Logger.log("--- Last Workout Analysis ---");
+  const lastAnalysis = getLastWorkoutAnalysis();
+
+  if (!lastAnalysis) {
+    Logger.log("No stored workout analysis found.");
+    Logger.log("Run a workout and analyze it first (checkForCompletedWorkouts)");
+    Logger.log("Or run testPostWorkoutAnalysis to generate test data.");
+    return;
+  }
+
+  Logger.log("Activity: " + lastAnalysis.activityName);
+  Logger.log("Date: " + lastAnalysis.date);
+  Logger.log("Difficulty Match: " + (lastAnalysis.difficultyMatch || 'not set'));
+  Logger.log("Effectiveness: " + (lastAnalysis.effectiveness || 'not set') + "/10");
+  Logger.log("Stimulus: " + (lastAnalysis.stimulus || 'not set'));
+  Logger.log("FTP Calibration: " + (lastAnalysis.ftpCalibration || 'none'));
+  if (lastAnalysis.keyInsight) {
+    Logger.log("Key Insight: " + lastAnalysis.keyInsight);
+  }
+
+  // Calculate days since
+  const daysSince = Math.floor((new Date() - new Date(lastAnalysis.date)) / (1000 * 60 * 60 * 24));
+  Logger.log("Days since: " + daysSince);
+
+  if (daysSince > 3) {
+    Logger.log("\n⚠️ Analysis is older than 3 days - will NOT be included in prompt");
+  } else {
+    Logger.log("\n✓ Analysis is recent - WILL be included in workout prompt");
+  }
+
+  // Show what would be in the prompt
+  Logger.log("\n--- Expected Prompt Section ---");
+
+  const difficultyText = lastAnalysis.difficultyMatch === 'harder_than_expected' ? 'HARDER than expected'
+    : lastAnalysis.difficultyMatch === 'easier_than_expected' ? 'easier than expected'
+    : lastAnalysis.difficultyMatch === 'as_expected' ? 'as expected'
+    : lastAnalysis.difficultyMatch || 'unknown';
+
+  Logger.log("**1g. Yesterday's Workout Feedback:**");
+  Logger.log("- Last Workout: " + lastAnalysis.activityName + " (" + daysSince + " days ago)");
+  Logger.log("- Difficulty Match: " + difficultyText);
+  Logger.log("- Effectiveness: " + (lastAnalysis.effectiveness || 'N/A') + "/10");
+
+  if (lastAnalysis.difficultyMatch === 'harder_than_expected') {
+    Logger.log("\n📉 INTENSITY ADJUSTMENT: Reduce by 10%");
+    Logger.log("   Favor endurance/tempo over threshold/VO2max");
+  } else if (lastAnalysis.difficultyMatch === 'easier_than_expected') {
+    Logger.log("\n📈 Athlete responding well - can maintain/increase intensity");
+  } else {
+    Logger.log("\n📊 Training load calibrated well - continue as planned");
+  }
+
+  // Get history
+  Logger.log("\n--- Analysis History (7 days) ---");
+  const history = getWorkoutAnalysisHistory(7);
+  if (history.length === 0) {
+    Logger.log("No analysis history");
+  } else {
+    history.forEach((h, i) => {
+      Logger.log((i + 1) + ". " + h.activityName + " (" + h.date.substring(0, 10) + ") - " + (h.difficultyMatch || 'unknown'));
+    });
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

@@ -67,7 +67,7 @@ ${insights ? `- **Note:** ${insights}` : ''}
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency) {
+function createPrompt(type, summary, phaseInfo, dateStr, duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis) {
   const analysisLang = getPromptLanguage();
 
   // Zwift Display Name (Clean, short name without "IntervalCoach_" prefix)
@@ -230,6 +230,43 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build last workout feedback context
+  let lastWorkoutContext = "";
+  if (lastWorkoutAnalysis) {
+    const lw = lastWorkoutAnalysis;
+    const daysSince = lw.date ? Math.floor((new Date() - new Date(lw.date)) / (1000 * 60 * 60 * 24)) : null;
+
+    // Only include if within last 3 days
+    if (daysSince !== null && daysSince <= 3) {
+      const difficultyText = lw.difficultyMatch === 'harder_than_expected' ? 'HARDER than expected'
+        : lw.difficultyMatch === 'easier_than_expected' ? 'easier than expected'
+        : lw.difficultyMatch === 'as_expected' ? 'as expected'
+        : lw.difficultyMatch || 'unknown';
+
+      lastWorkoutContext = `
+**1g. Yesterday's Workout Feedback:**
+- **Last Workout:** ${lw.activityName || 'Unknown'} (${daysSince === 0 ? 'today' : daysSince === 1 ? 'yesterday' : daysSince + ' days ago'})
+- **Difficulty Match:** ${difficultyText}
+- **Effectiveness:** ${lw.effectiveness || 'N/A'}/10
+${lw.stimulus ? `- **Stimulus:** ${lw.stimulus}` : ''}
+${lw.recoveryHours ? `- **Est. Recovery Needed:** ${lw.recoveryHours}h` : ''}
+${lw.ftpCalibration && lw.ftpCalibration !== 'none' ? `- **FTP Calibration:** ${lw.ftpCalibration.replace('_', ' ')}` : ''}
+${lw.keyInsight ? `- **Key Insight:** ${lw.keyInsight}` : ''}
+
+**YESTERDAY'S FEEDBACK RULES (Critical):**
+${lw.difficultyMatch === 'harder_than_expected' ? `- Last workout was HARDER than expected. REDUCE today's intensity by 10%. Favor endurance/tempo over threshold/VO2max.
+- If planning intervals, reduce power targets by 5-10W or shorten interval duration.
+- The athlete may be more fatigued than metrics suggest.` : ''}
+${lw.difficultyMatch === 'easier_than_expected' ? `- Last workout was easier than expected. The athlete is responding well to training.
+- Can maintain or slightly increase intensity if recovery metrics support it.` : ''}
+${lw.difficultyMatch === 'as_expected' ? `- Last workout difficulty matched expectations. Current training load is calibrated well.
+- Continue with planned intensity levels.` : ''}
+${lw.ftpCalibration === 'decrease_5w' ? `- FTP may be set too high. Consider using 95-98% of prescribed power for intervals.` : ''}
+${lw.ftpCalibration === 'increase_5w' ? `- FTP may be set too low. Athlete can handle slightly higher intensity.` : ''}
+`;
+    }
+  }
+
   return `
 You are an expert cycling coach using the logic of Coggan, Friel, and Seiler.
 Generate a Zwift workout (.zwo) and evaluate its suitability.
@@ -241,7 +278,7 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB:** ${summary.tsb_current.toFixed(1)}
 - **Recent Load (Z5+):** ${summary.z5_recent_total > 1500 ? "High" : "Normal"}
-${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}
+${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
 - **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
@@ -289,7 +326,7 @@ ${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}
  * @param {object} adaptiveContext - Adaptive training context
  * @returns {string} Complete prompt for Gemini
  */
-function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossSportEquivalency) {
+function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis) {
   const analysisLang = getPromptLanguage();
 
   const safeType = type.replace(/[^a-zA-Z0-9]/g, "");
@@ -412,6 +449,34 @@ ${adaptiveContext.promptContext}
 `;
   }
 
+  // Build last workout feedback context (same logic as cycling)
+  let lastWorkoutContext = "";
+  if (lastWorkoutAnalysis) {
+    const lw = lastWorkoutAnalysis;
+    const daysSince = lw.date ? Math.floor((new Date() - new Date(lw.date)) / (1000 * 60 * 60 * 24)) : null;
+
+    if (daysSince !== null && daysSince <= 3) {
+      const difficultyText = lw.difficultyMatch === 'harder_than_expected' ? 'HARDER than expected'
+        : lw.difficultyMatch === 'easier_than_expected' ? 'easier than expected'
+        : lw.difficultyMatch === 'as_expected' ? 'as expected'
+        : lw.difficultyMatch || 'unknown';
+
+      lastWorkoutContext = `
+**1f. Yesterday's Workout Feedback:**
+- **Last Workout:** ${lw.activityName || 'Unknown'} (${daysSince === 0 ? 'today' : daysSince === 1 ? 'yesterday' : daysSince + ' days ago'})
+- **Difficulty Match:** ${difficultyText}
+- **Effectiveness:** ${lw.effectiveness || 'N/A'}/10
+${lw.keyInsight ? `- **Key Insight:** ${lw.keyInsight}` : ''}
+
+**YESTERDAY'S FEEDBACK RULES:**
+${lw.difficultyMatch === 'harder_than_expected' ? `- Last workout was HARDER than expected. REDUCE today's intensity. For running this is CRITICAL due to impact stress.
+- Favor easy/recovery runs over intervals. If intervals are needed, reduce pace or distance.` : ''}
+${lw.difficultyMatch === 'easier_than_expected' ? `- Last workout was easier than expected. Athlete is responding well to training.` : ''}
+${lw.difficultyMatch === 'as_expected' ? `- Last workout difficulty matched expectations. Continue with planned intensity.` : ''}
+`;
+    }
+  }
+
   return `
 You are an expert running coach using principles from Daniels, Pfitzinger, and modern training science.
 Generate a running workout and evaluate its suitability.
@@ -423,7 +488,7 @@ Generate a running workout and evaluate its suitability.
 - **Phase Focus:** ${phaseInfo.focus}
 - **Current TSB (Training Stress Balance):** ${summary.tsb_current.toFixed(1)}
 - **Note:** This is a RUNNING workout to complement cycling training.
-${wellnessContext}${runContext}${adaptiveTrainingContext}${crossSportContext}
+${wellnessContext}${runContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}
 **2. Assignment: Design a "${type}" Running Workout**
 - **Duration:** ${durationStr}. Total workout time including warm-up and cool-down.
 - **Type Guidance:**
