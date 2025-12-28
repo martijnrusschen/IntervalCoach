@@ -84,11 +84,22 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 |---------|-------------|---------------|--------|
 | Custom AI models (not ChatGPT) | ✓ Proprietary models | ✓ Custom prompts + Gemini | Similar approach |
 | Workout Simulation | ✓ Simulates hundreds of workouts | ✗ Direct AI recommendation | **Add simulation** |
-| Predicted FTP | ✓ Shows future FTP based on training | ✓ AI eFTP Trajectory Analysis | Similar |
+| AI FTP Prediction | ✓ Live FTP forecast that updates with training | ✓ AI eFTP Trajectory Analysis | Similar |
 | Impact Preview | ✓ See how changes affect future weeks | ✓ AI Workout Impact Preview | Similar - 2-week CTL/TSB projection |
+| **Real-Time Decision Feedback** | ✓ See how skipped/moved workouts affect FTP | ✓ Workout Impact Preview | Similar - shows CTL/TSB impact |
 | Workout Feel Prediction | ✓ Explains how workout will feel | ~ Partial (difficulty 1-5) | **Enhance feel prediction** |
 | Training Future Visibility | ✓ Multi-week forward view | ✓ Weekly planning only | **Extend to multi-week** |
 | Fatigue Prediction | ✓ Predicts burnout before it happens | ✓ AI Cumulative Fatigue Prediction | **Ahead** - distinguishes FOR/NFOR/OTS |
+
+**AI FTP Detection & Prediction** (December 2025):
+
+TrainerRoad's AI FTP Detection is getting improved accuracy and better edge case handling. Additionally, they're introducing **AI FTP Prediction**:
+
+- 🔮 **See Your Future Fitness**: Live FTP forecast that updates as training evolves
+- 🔄 **Real-Time Feedback**: See how completing, moving, or skipping workouts affects future FTP
+- 🧭 **Stay Guided**: Use the prediction as insight while TrainerRoad AI keeps you on the right path
+
+*"What really stands out is how effortless everything feels now. I don't have to second guess the workout choices, progression, or whether I'm doing the 'right' thing."* — Beta Athlete Review
 
 **Red Light Green Light** (Flagship fatigue feature, March 2024):
 
@@ -414,4 +425,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 
 ---
 
-*Last updated: 2025-12-27 (Added TrainerRoad Training Approach features to backlog)*
+*Last updated: 2025-12-28 (Added TrainerRoad AI FTP Prediction competitor intel)*
