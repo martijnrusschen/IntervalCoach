@@ -197,11 +197,15 @@ function generateWeeklyInsight(weekData, prevWeekData, fitnessMetrics, prevFitne
   const sleepChange = (currAvg.sleep && prevAvg.sleep) ? currAvg.sleep - prevAvg.sleep : null;
   const hrvChange = (currAvg.hrv && prevAvg.hrv) ? currAvg.hrv - prevAvg.hrv : null;
 
-  // Build upcoming week context
+  // Build upcoming week context (filter out rest days)
   let upcomingContext = '';
   if (upcomingPlaceholders && upcomingPlaceholders.length > 0) {
-    const workoutList = upcomingPlaceholders.map(p => p.name || p.type || 'Workout').join(', ');
-    upcomingContext = `\nUPCOMING WEEK PLANNED:\n- ${upcomingPlaceholders.length} sessions: ${workoutList}`;
+    // Filter to only days with actual workouts (has activityType or placeholderName)
+    const actualWorkouts = upcomingPlaceholders.filter(p => p.activityType || p.placeholderName);
+    if (actualWorkouts.length > 0) {
+      const workoutList = actualWorkouts.map(p => p.placeholderName || p.activityType || 'Workout').join(', ');
+      upcomingContext = `\nUPCOMING WEEK PLANNED:\n- ${actualWorkouts.length} workouts: ${workoutList}`;
+    }
   }
 
   // Build load advice context
