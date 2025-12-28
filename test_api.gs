@@ -180,3 +180,53 @@ function formatTestPace(metersPerSecond) {
   const secs = Math.round(secsPerKm % 60);
   return mins + ":" + (secs < 10 ? "0" : "") + secs + "/km";
 }
+
+/**
+ * Debug raw fitness data from Intervals.icu
+ * Compare with what you see in the Intervals.icu UI
+ */
+function testRawFitnessData() {
+  Logger.log("=== RAW FITNESS DATA FROM INTERVALS.ICU ===\n");
+  requireValidConfig();
+
+  const today = formatDateISO(new Date());
+
+  // Fetch raw wellness data (contains CTL/ATL)
+  const wellnessResult = fetchIcuApi("/athlete/0/wellness/" + today);
+
+  if (wellnessResult.success && wellnessResult.data) {
+    const w = wellnessResult.data;
+    Logger.log("Date: " + today);
+    Logger.log("CTL (Fitness): " + (w.ctl ?? 'N/A'));
+    Logger.log("ATL (Fatigue): " + (w.atl ?? 'N/A'));
+
+    if (w.ctl != null && w.atl != null) {
+      const tsb = w.ctl - w.atl;
+      Logger.log("TSB (Form): " + tsb.toFixed(1));
+
+      // Form zone interpretation
+      let zone;
+      if (tsb >= 25) zone = "Transition (detraining)";
+      else if (tsb >= 5) zone = "Fresh (blue)";
+      else if (tsb >= -10) zone = "Grey Zone";
+      else if (tsb >= -30) zone = "Optimal (green)";
+      else zone = "HIGH RISK (red)";
+
+      Logger.log("Zone: " + zone);
+    }
+
+    Logger.log("\nRaw wellness object keys: " + Object.keys(w).join(', '));
+  } else {
+    Logger.log("Failed to fetch wellness: " + (wellnessResult.error || 'unknown'));
+  }
+
+  // Also check what fetchFitnessMetrics returns
+  Logger.log("\n=== VIA fetchFitnessMetrics() ===");
+  const fitness = fetchFitnessMetrics();
+  Logger.log("CTL: " + (fitness.ctl ?? 'N/A'));
+  Logger.log("ATL: " + (fitness.atl ?? 'N/A'));
+  Logger.log("TSB: " + (fitness.tsb ?? 'N/A'));
+  Logger.log("Ramp Rate: " + (fitness.rampRate ?? 'N/A'));
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
