@@ -87,6 +87,7 @@ function fetchWellnessDataEnhanced(daysBack = 7, daysBackEnd = 0) {
           hrv: whoopData.hrv,
           recovery: whoopData.recovery,
           spO2: whoopData.spO2 || (todayIdx >= 0 ? icuRecords[todayIdx].spO2 : null),
+          skinTemp: whoopData.skinTemp,  // Whoop skin temperature for illness detection
           respiration: todayIdx >= 0 ? icuRecords[todayIdx].respiration : null,
           // Subjective markers from Intervals.icu (user-entered)
           soreness: todayIdx >= 0 ? icuRecords[todayIdx].soreness : null,
@@ -161,6 +162,7 @@ function fetchWellnessData(daysBack = 7, daysBackEnd = 0) {
       hrvSDNN: data.hrvSDNN || null,             // HRV SDNN (if available)
       recovery: data.readiness || null,          // Whoop recovery score is stored as "readiness"
       spO2: data.spO2 || null,                   // Blood oxygen
+      skinTemp: data.skinTemp || null,           // Skin temperature (Whoop)
       respiration: data.respiration || null,     // Breathing rate
       soreness: data.soreness || null,           // 1-5 scale
       fatigue: data.fatigue || null,             // 1-5 scale
