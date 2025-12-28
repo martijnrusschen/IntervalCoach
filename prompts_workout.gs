@@ -138,7 +138,10 @@ ${powerProfile.climbingStrength ? `- **Note:** ${powerProfile.climbingStrength}`
 ${buildZoneContext(powerProfile)}
 **POWER PROFILE RULES:**
 - Use current eFTP (${powerProfile.ftp}W) for zone calculations - this reflects current fitness.
-- **W' (${powerProfile.wPrimeKj || 'N/A'}kJ)** represents anaerobic capacity. If low, include 30s-2min hard efforts to build it.
+- **W' (${powerProfile.wPrimeKj || 'N/A'}kJ)** represents anaerobic capacity. Use W' to guide interval structure:
+  - **Low W' (<15kJ):** Athlete depletes anaerobic reserves quickly. Use LONGER recovery (3-4min between hard efforts), FEWER repeats per set (3-4 max), and avoid stacking back-to-back max efforts. Build W' with 30s-2min efforts with full recovery.
+  - **Normal W' (15-25kJ):** Standard interval structure. 2-3min recovery between VO2max efforts, 4-5 repeats per set.
+  - **High W' (>25kJ):** Athlete can sustain repeated hard efforts. Can use SHORTER recovery (1.5-2min), MORE repeats (5-6 per set), and stack efforts with incomplete recovery for race simulation.
 - **TTE** (time to exhaustion at FTP) indicates threshold endurance. Low TTE = prescribe longer threshold intervals.
 - Peak powers are all-time bests; current capabilities may be lower due to seasonal fitness variation.
 - Design intervals that target identified weaknesses when appropriate for the phase.
@@ -334,7 +337,10 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
 
 **CRITICAL NOTES:**
 - Critical Speed (${primaryPace}/km) is the running equivalent of cycling FTP.
-- D' (${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}) represents anaerobic capacity - larger = better sprint/kick.
+- **D' (${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'})** represents anaerobic capacity. Use D' to guide interval structure:
+  - **Low D' (<150m):** Athlete depletes anaerobic reserves quickly. Use LONGER recovery (2-3min jog between hard efforts), FEWER repeats per set (4-5 max), and prioritize building D' with 200-400m repeats with full recovery.
+  - **Normal D' (150-250m):** Standard interval structure. 90s-2min jog recovery between VO2max efforts, 5-6 repeats per set.
+  - **High D' (>250m):** Athlete can sustain repeated hard efforts. Can use SHORTER recovery (60-90s), MORE repeats (6-8 per set), and include race-simulation workouts with incomplete recovery.
 - Include warm-up (10-15 min Z1-Z2) and cool-down (5-10 min Z1).
 - For intervals, specify target pace AND duration clearly.
 `;

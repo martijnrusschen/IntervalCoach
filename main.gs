@@ -124,7 +124,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
 
   // Fetch Wellness Data first (needed for availability check)
   // Uses Whoop API for real-time data if configured, falls back to Intervals.icu
-  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  // Fetch 30 days for baseline tracking (HRV/RHR personal baselines)
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
 
   // Check for IntervalCoach placeholder in Intervals.icu calendar
@@ -142,7 +143,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Fetch upcoming week schedule and progress
     const upcomingDays = fetchUpcomingPlaceholders(7);
     const weekProgress = checkWeekProgress();
-    const weeklyPlanContext = checkWeeklyPlanAdaptation(wellness, fitnessMetrics, upcomingDays);
+
+    // Check and apply mid-week adaptation if needed (unified approach)
+    let midWeekAdaptation = null;
+    const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitnessMetrics);
+    if (adaptationCheck.needed) {
+      Logger.log(`Mid-week adaptation needed (${adaptationCheck.priority}): ${adaptationCheck.reason}`);
+      try {
+        midWeekAdaptation = generateMidWeekAdaptation(
+          weekProgress, upcomingDays, wellness, fitnessMetrics, phaseInfo, goals, adaptationCheck
+        );
+        if (midWeekAdaptation.success && midWeekAdaptation.changes.length > 0) {
+          Logger.log(`Mid-week adaptation applied: ${midWeekAdaptation.changes.length} change(s)`);
+        }
+      } catch (e) {
+        Logger.log(`Mid-week adaptation failed (non-critical): ${e.toString()}`);
+      }
+    }
 
     // Use centralized context builder - ensures all context is included
     const ctx = gatherTrainingContext({
@@ -254,7 +271,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         wellness: wellness,
         weekProgress: weekProgress,
         upcomingDays: upcomingDays,
-        weeklyPlanContext: weeklyPlanContext,
+        midWeekAdaptation: midWeekAdaptation,
         raceDayAdvice: raceDayAdvice
       });
     }
@@ -414,6 +431,37 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     phaseInfo: phaseInfo
   });
 
+  // ===== DELOAD CHECK =====
+  // Check if a recovery/deload week is needed based on recent training patterns
+  let deloadCheck = null;
+  try {
+    deloadCheck = checkDeloadNeeded(summary);
+    if (deloadCheck.needed) {
+      Logger.log(formatDeloadCheckLog(deloadCheck));
+    } else if (deloadCheck.weeksWithoutDeload >= 2) {
+      Logger.log(`Deload tracking: ${deloadCheck.weeksWithoutDeload} weeks without recovery week`);
+    }
+  } catch (e) {
+    Logger.log(`Deload check failed (non-critical): ${e.toString()}`);
+  }
+
+  // ===== TAPER TIMING =====
+  // Calculate optimal taper timing for upcoming A races (within 6 weeks)
+  let taperRecommendation = null;
+  try {
+    const primaryGoal = goals?.available && goals?.primaryGoal ? goals.primaryGoal : null;
+    if (primaryGoal && primaryGoal.date) {
+      taperRecommendation = generateTaperRecommendation(summary, primaryGoal, phaseInfo);
+      if (taperRecommendation.available) {
+        const rec = taperRecommendation.analysis.recommended;
+        Logger.log(`Taper timing: ${rec.taperType} starting ${rec.taperStartDate} for ${primaryGoal.name}`);
+        Logger.log(`  Race day projection: CTL ${rec.raceDayCTL}, TSB ${rec.raceDayTSB}`);
+      }
+    }
+  } catch (e) {
+    Logger.log(`Taper timing calculation failed (non-critical): ${e.toString()}`);
+  }
+
   // Aliases for backward compatibility
   const recentTypes = ctx.recentTypes;
   const twoWeekHistory = ctx.twoWeekHistory;
@@ -464,6 +512,46 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     const cleanup = cleanupMissedPlaceholders(weekProgress);
     if (cleanup.cleaned > 0) {
       Logger.log(`Cleaned ${cleanup.cleaned} missed placeholder(s) from calendar`);
+    }
+  }
+
+  // ===== MID-WEEK ADAPTATION =====
+  // Check if remaining week needs adjustment based on missed sessions or wellness
+  let midWeekAdaptation = null;
+  const upcomingDaysForAdaptation = fetchUpcomingPlaceholders(7);
+
+  const adaptationCheck = checkMidWeekAdaptationNeeded(
+    weekProgress,
+    upcomingDaysForAdaptation,
+    wellness,
+    summary,  // fitness metrics
+    taperRecommendation  // taper timing for race prep
+  );
+
+  if (adaptationCheck.needed) {
+    Logger.log(`Mid-week adaptation needed (${adaptationCheck.priority}): ${adaptationCheck.reason}`);
+
+    try {
+      midWeekAdaptation = generateMidWeekAdaptation(
+        weekProgress,
+        upcomingDaysForAdaptation,
+        wellness,
+        summary,
+        phaseInfo,
+        goals,
+        adaptationCheck
+      );
+
+      if (midWeekAdaptation.success && midWeekAdaptation.changes.length > 0) {
+        Logger.log(`Mid-week adaptation applied: ${midWeekAdaptation.changes.length} change(s)`);
+        for (const change of midWeekAdaptation.changes) {
+          Logger.log(`  - ${change}`);
+        }
+      } else if (midWeekAdaptation.success) {
+        Logger.log(`Mid-week adaptation: ${midWeekAdaptation.summary}`);
+      }
+    } catch (e) {
+      Logger.log(`Mid-week adaptation failed (non-critical): ${e.toString()}`);
     }
   }
 
@@ -660,7 +748,10 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     },
     powerProfile: isRun ? null : powerProfile,
     weekProgress: weekProgress,
-    upcomingDays: upcomingDays
+    upcomingDays: upcomingDays,
+    midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
+    deloadCheck: deloadCheck,  // Include deload recommendation if needed
+    taperRecommendation: taperRecommendation  // Include taper timing if within 6 weeks of race
   });
 }
 
@@ -799,7 +890,8 @@ function analyzeCompletedWorkout(activity) {
 
   // Fetch current wellness and fitness context
   // Uses Whoop API for real-time data if configured
-  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  // Fetch 30 days for baseline tracking (HRV/RHR personal baselines)
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
   const fitness = fetchFitnessMetrics();
 

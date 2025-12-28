@@ -99,16 +99,17 @@ Write all text fields in ${langName}.
  * Replaces fixed thresholds with individualized analysis
  * @param {object} today - Today's wellness data
  * @param {object} averages - 7-day averages (personal baselines)
+ * @param {object} baselineAnalysis - Optional: 30-day baseline deviation analysis
  * @returns {object} { recoveryStatus, intensityModifier, personalizedReason, confidence }
  */
-function generateAIRecoveryAssessment(today, averages) {
+function generateAIRecoveryAssessment(today, averages, baselineAnalysis) {
   if (!today) {
     return null;
   }
 
   const langName = getPromptLanguage();
 
-  // Calculate trend indicators
+  // Calculate trend indicators (vs 7-day average)
   const hrvTrend = (today.hrv && averages.hrv)
     ? ((today.hrv - averages.hrv) / averages.hrv * 100).toFixed(1)
     : null;
@@ -129,29 +130,50 @@ function generateAIRecoveryAssessment(today, averages) {
     if (today.mood) subjectiveContext += `\n- Mood: ${today.mood}/5`;
   }
 
+  // Build 30-day baseline deviation context
+  let baselineContext = '';
+  if (baselineAnalysis?.available) {
+    baselineContext = '\n\n**30-Day Baseline Deviation Analysis:**';
+    if (baselineAnalysis.hrvDeviation?.available) {
+      const hrv = baselineAnalysis.hrvDeviation;
+      baselineContext += `\n- HRV: ${hrv.current}ms vs ${hrv.baseline.toFixed(0)}ms baseline (${hrv.deviationPercent >= 0 ? '+' : ''}${hrv.deviationPercent.toFixed(1)}%, z=${hrv.zScore.toFixed(1)})`;
+      baselineContext += `\n  Status: ${hrv.status} - ${hrv.interpretation}`;
+    }
+    if (baselineAnalysis.rhrDeviation?.available) {
+      const rhr = baselineAnalysis.rhrDeviation;
+      baselineContext += `\n- RHR: ${rhr.current}bpm vs ${rhr.baseline.toFixed(0)}bpm baseline (${rhr.deviationPercent >= 0 ? '+' : ''}${rhr.deviationPercent.toFixed(1)}%, z=${rhr.zScore.toFixed(1)})`;
+      baselineContext += `\n  Status: ${rhr.status} - ${rhr.interpretation}`;
+    }
+    if (baselineAnalysis.concerns?.length > 0) {
+      baselineContext += `\n- **CONCERNS**: ${baselineAnalysis.concerns.join(', ')}`;
+    }
+    baselineContext += `\n- Overall baseline status: ${baselineAnalysis.overallStatus}`;
+  }
+
   const prompt = `You are an expert coach assessing an athlete's recovery status for today's training.
 
 **Today's Wellness Data:**
-- Recovery Score: ${today.recovery != null ? today.recovery + '%' : 'N/A'}${recoveryTrend ? ` (${recoveryTrend >= 0 ? '+' : ''}${recoveryTrend}% vs avg)` : ''}
-- HRV: ${today.hrv || 'N/A'} ms${hrvTrend ? ` (${hrvTrend >= 0 ? '+' : ''}${hrvTrend}% vs avg)` : ''}
-- Sleep: ${today.sleep ? today.sleep.toFixed(1) + 'h' : 'N/A'}${sleepTrend ? ` (${sleepTrend >= 0 ? '+' : ''}${sleepTrend}h vs avg)` : ''}
+- Recovery Score: ${today.recovery != null ? today.recovery + '%' : 'N/A'}${recoveryTrend ? ` (${recoveryTrend >= 0 ? '+' : ''}${recoveryTrend}% vs 7d avg)` : ''}
+- HRV: ${today.hrv || 'N/A'} ms${hrvTrend ? ` (${hrvTrend >= 0 ? '+' : ''}${hrvTrend}% vs 7d avg)` : ''}
+- Sleep: ${today.sleep ? today.sleep.toFixed(1) + 'h' : 'N/A'}${sleepTrend ? ` (${sleepTrend >= 0 ? '+' : ''}${sleepTrend}h vs 7d avg)` : ''}
 - Resting HR: ${today.restingHR || 'N/A'} bpm${subjectiveContext}
 
 **Personal Baselines (7-day averages):**
 - Avg Recovery: ${averages.recovery ? averages.recovery.toFixed(0) + '%' : 'N/A'}
 - Avg HRV: ${averages.hrv ? averages.hrv.toFixed(0) + ' ms' : 'N/A'}
 - Avg Sleep: ${averages.sleep ? averages.sleep.toFixed(1) + 'h' : 'N/A'}
-- Avg Resting HR: ${averages.restingHR ? averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}
+- Avg Resting HR: ${averages.restingHR ? averages.restingHR.toFixed(0) + ' bpm' : 'N/A'}${baselineContext}
 
 **Assessment Guidelines:**
-- Consider personal baselines, not population norms
-- HRV above personal average = positive sign, below = concerning
-- Recovery trends matter: improving = green, declining = yellow/red
-- Weight multiple signals: a low recovery score with high HRV may still be OK
-- Sleep debt compounds: multiple poor nights = more conservative
+- Consider BOTH 7-day trends AND 30-day baseline deviations
+- Z-score interpretation: |z| < 0.5 = normal, 0.5-1.5 = notable, > 1.5 = significant
+- HRV significantly below 30-day baseline (z < -1.5) = concerning even if 7-day avg looks OK
+- RHR significantly above 30-day baseline (z > 1.5) = potential illness/stress marker
+- Weight multiple signals: both HRV low AND RHR elevated = strong warning
+- If 30-day baseline shows "warning" status, be conservative
 
 **Determine recovery status:**
-- **Green (Primed)**: Above personal baseline, ready for hard training
+- **Green (Primed)**: Above personal baseline on HRV/RHR, ready for hard training
 - **Yellow (Recovering)**: Near baseline or mixed signals, moderate training OK
 - **Red (Strained)**: Below baseline on multiple metrics, easy day recommended
 
@@ -160,7 +182,7 @@ Write the "personalizedReason" in ${langName}.
 {
   "recoveryStatus": "Green (Primed)|Yellow (Recovering)|Red (Strained)",
   "intensityModifier": <number 0.7-1.0>,
-  "personalizedReason": "1-2 sentence explanation in ${langName} using their specific data",
+  "personalizedReason": "1-2 sentence explanation in ${langName} referencing baseline deviations",
   "confidence": "high|medium|low"
 }`;
 

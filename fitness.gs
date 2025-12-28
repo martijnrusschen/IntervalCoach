@@ -647,3 +647,423 @@ function formatWeeklyImpactSection(weeklyImpact, narrative) {
 
   return section;
 }
+
+// =========================================================
+// TAPER TIMING CALCULATION
+// =========================================================
+
+/**
+ * Simulate taper to project CTL/ATL/TSB during reduced training
+ * Models exponential decay of ATL faster than CTL, causing TSB to rise
+ *
+ * @param {number} startCTL - CTL at taper start
+ * @param {number} startATL - ATL at taper start
+ * @param {number} taperDays - Number of days to simulate
+ * @param {number} taperIntensity - TSS as fraction of normal (e.g., 0.5 = 50% volume)
+ * @param {number} normalDailyTSS - Normal daily TSS before taper
+ * @returns {Array} Day-by-day projections of CTL/ATL/TSB
+ */
+function simulateTaper(startCTL, startATL, taperDays, taperIntensity, normalDailyTSS) {
+  const CTL_CONSTANT = 42;
+  const ATL_CONSTANT = 7;
+
+  taperIntensity = taperIntensity || 0.5;  // Default 50% volume reduction
+  normalDailyTSS = normalDailyTSS || (startCTL * 1.0);  // Estimate from CTL if not provided
+
+  const taperDailyTSS = normalDailyTSS * taperIntensity;
+  const projections = [];
+
+  let ctl = startCTL;
+  let atl = startATL;
+
+  for (let day = 0; day <= taperDays; day++) {
+    const tsb = ctl - atl;
+
+    projections.push({
+      day: day,
+      ctl: Math.round(ctl * 10) / 10,
+      atl: Math.round(atl * 10) / 10,
+      tsb: Math.round(tsb * 10) / 10,
+      tss: day === 0 ? 0 : Math.round(taperDailyTSS)
+    });
+
+    // Update for next day
+    ctl = ctl + (taperDailyTSS - ctl) / CTL_CONSTANT;
+    atl = atl + (taperDailyTSS - atl) / ATL_CONSTANT;
+  }
+
+  return projections;
+}
+
+/**
+ * Calculate optimal taper start date to reach target TSB on race day
+ * Works backwards from race to find when taper should begin
+ *
+ * @param {object} currentFitness - {ctl, atl, tsb} current metrics
+ * @param {string} raceDate - Race date in YYYY-MM-DD format
+ * @param {number} targetTSB - Target TSB on race day (default 10)
+ * @param {object} options - Optional settings
+ * @returns {object} Taper timing recommendation
+ */
+function calculateOptimalTaperStart(currentFitness, raceDate, targetTSB, options) {
+  options = options || {};
+  targetTSB = targetTSB || 10;  // Optimal freshness for most athletes
+
+  const currentCTL = currentFitness.ctl || 0;
+  const currentATL = currentFitness.atl || 0;
+  const currentTSB = currentCTL - currentATL;
+
+  // Calculate days until race
+  const today = new Date();
+  const race = new Date(raceDate);
+  const daysToRace = Math.ceil((race - today) / (1000 * 60 * 60 * 24));
+
+  if (daysToRace <= 0) {
+    return {
+      needed: false,
+      reason: 'Race date has passed',
+      daysToRace: daysToRace
+    };
+  }
+
+  // Estimate normal daily TSS from current CTL
+  const normalDailyTSS = options.normalDailyTSS || (currentCTL * 1.0);
+
+  // Taper intensity options to test
+  const taperIntensities = [
+    { label: 'Light taper', intensity: 0.7, description: '70% volume' },
+    { label: 'Moderate taper', intensity: 0.5, description: '50% volume' },
+    { label: 'Aggressive taper', intensity: 0.3, description: '30% volume' }
+  ];
+
+  // Test different taper lengths (7-21 days) and intensities
+  const scenarios = [];
+
+  for (const taperOption of taperIntensities) {
+    for (let taperLength = 7; taperLength <= 21; taperLength++) {
+      // Days of normal training before taper starts
+      const normalTrainingDays = daysToRace - taperLength;
+
+      if (normalTrainingDays < 0) continue;  // Can't start taper before today
+
+      // Simulate normal training until taper
+      let ctl = currentCTL;
+      let atl = currentATL;
+
+      for (let d = 0; d < normalTrainingDays; d++) {
+        ctl = ctl + (normalDailyTSS - ctl) / 42;
+        atl = atl + (normalDailyTSS - atl) / 7;
+      }
+
+      // Simulate taper
+      const taperProjection = simulateTaper(ctl, atl, taperLength, taperOption.intensity, normalDailyTSS);
+      const raceDayMetrics = taperProjection[taperProjection.length - 1];
+
+      // Calculate taper start date
+      const taperStartDate = new Date(today);
+      taperStartDate.setDate(today.getDate() + normalTrainingDays);
+
+      scenarios.push({
+        taperType: taperOption.label,
+        taperIntensity: taperOption.intensity,
+        taperDescription: taperOption.description,
+        taperLengthDays: taperLength,
+        taperStartDate: formatDateISO(taperStartDate),
+        daysUntilTaperStart: normalTrainingDays,
+        raceDayCTL: raceDayMetrics.ctl,
+        raceDayATL: raceDayMetrics.atl,
+        raceDayTSB: raceDayMetrics.tsb,
+        targetTSBDelta: Math.abs(raceDayMetrics.tsb - targetTSB),
+        ctlLoss: Math.round((currentCTL - raceDayMetrics.ctl) * 10) / 10
+      });
+    }
+  }
+
+  // Sort by how close to target TSB
+  scenarios.sort((a, b) => a.targetTSBDelta - b.targetTSBDelta);
+
+  // Get best scenario
+  const best = scenarios[0];
+
+  // Find alternatives (best from each taper type)
+  const alternatives = [];
+  for (const taperOption of taperIntensities) {
+    const bestForType = scenarios.find(s => s.taperType === taperOption.label);
+    if (bestForType && bestForType !== best) {
+      alternatives.push(bestForType);
+    }
+  }
+
+  // Determine if already in taper window
+  const alreadyInTaperWindow = best.daysUntilTaperStart <= 0;
+  const taperStartingSoon = best.daysUntilTaperStart <= 7;
+
+  return {
+    needed: true,
+    daysToRace: daysToRace,
+    raceDate: raceDate,
+    targetTSB: targetTSB,
+    currentTSB: Math.round(currentTSB * 10) / 10,
+    currentCTL: Math.round(currentCTL * 10) / 10,
+
+    // Recommended taper
+    recommended: {
+      taperType: best.taperType,
+      taperIntensity: best.taperIntensity,
+      taperDescription: best.taperDescription,
+      taperLengthDays: best.taperLengthDays,
+      taperStartDate: best.taperStartDate,
+      daysUntilTaperStart: best.daysUntilTaperStart,
+      raceDayCTL: best.raceDayCTL,
+      raceDayTSB: best.raceDayTSB,
+      ctlLoss: best.ctlLoss
+    },
+
+    alternatives: alternatives.slice(0, 2),
+
+    // Status flags
+    alreadyInTaperWindow: alreadyInTaperWindow,
+    taperStartingSoon: taperStartingSoon,
+
+    // All scenarios for analysis
+    allScenarios: scenarios.slice(0, 10)
+  };
+}
+
+/**
+ * Generate comprehensive taper recommendation with AI insights
+ * @param {object} currentFitness - Current CTL/ATL/TSB
+ * @param {object} goal - Goal object with date and name
+ * @param {object} phaseInfo - Training phase info
+ * @returns {object} Complete taper recommendation
+ */
+function generateTaperRecommendation(currentFitness, goal, phaseInfo) {
+  if (!goal || !goal.date) {
+    return { available: false, reason: 'No goal date specified' };
+  }
+
+  // Calculate optimal taper timing
+  const taperAnalysis = calculateOptimalTaperStart(currentFitness, goal.date, 10);
+
+  if (!taperAnalysis.needed) {
+    return { available: false, reason: taperAnalysis.reason };
+  }
+
+  // Only show taper recommendations within 6 weeks of race
+  if (taperAnalysis.daysToRace > 42) {
+    return {
+      available: false,
+      reason: 'Race is more than 6 weeks away',
+      daysToRace: taperAnalysis.daysToRace
+    };
+  }
+
+  // Generate AI-enhanced recommendation
+  const aiRecommendation = generateAITaperRecommendation(taperAnalysis, goal, currentFitness, phaseInfo);
+
+  return {
+    available: true,
+    analysis: taperAnalysis,
+    aiRecommendation: aiRecommendation,
+    summary: formatTaperSummary(taperAnalysis, goal)
+  };
+}
+
+/**
+ * Generate AI-enhanced taper recommendation
+ */
+function generateAITaperRecommendation(taperAnalysis, goal, currentFitness, phaseInfo) {
+  const prompt = `You are a cycling coach planning a taper for an upcoming race.
+
+RACE:
+- Event: ${goal.name || 'A Race'}
+- Date: ${goal.date}
+- Days away: ${taperAnalysis.daysToRace}
+${goal.description ? '- Description: ' + goal.description : ''}
+
+CURRENT FITNESS:
+- CTL (Fitness): ${currentFitness.ctl?.toFixed(1) || 'Unknown'}
+- ATL (Fatigue): ${currentFitness.atl?.toFixed(1) || 'Unknown'}
+- TSB (Form): ${taperAnalysis.currentTSB}
+- Training Phase: ${phaseInfo?.phaseName || 'Unknown'}
+
+TAPER ANALYSIS:
+- Target Race Day TSB: ${taperAnalysis.targetTSB}
+- Recommended: ${taperAnalysis.recommended.taperType} (${taperAnalysis.recommended.taperDescription})
+- Taper Length: ${taperAnalysis.recommended.taperLengthDays} days
+- Start Date: ${taperAnalysis.recommended.taperStartDate}
+- Days Until Taper: ${taperAnalysis.recommended.daysUntilTaperStart}
+- Projected Race Day CTL: ${taperAnalysis.recommended.raceDayCTL}
+- Projected Race Day TSB: ${taperAnalysis.recommended.raceDayTSB}
+- Expected CTL Loss: ${taperAnalysis.recommended.ctlLoss}
+
+Provide a personalized taper recommendation in ${getPromptLanguage()}.
+
+Return JSON:
+{
+  "summary": "One sentence summary of taper plan",
+  "weekByWeekPlan": ["Week 1: ...", "Week 2: ...", "Final days: ..."],
+  "keyWorkouts": ["Last hard workout description", "Opener workout description"],
+  "warnings": ["Any concerns or adjustments needed"],
+  "confidenceLevel": "high|medium|low",
+  "expectedPerformance": "Brief note on expected race day form"
+}`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (!response) {
+      return generateFallbackTaperRecommendation(taperAnalysis, goal);
+    }
+
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return generateFallbackTaperRecommendation(taperAnalysis, goal);
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      success: true,
+      aiEnhanced: true,
+      ...parsed
+    };
+  } catch (e) {
+    Logger.log('AI taper recommendation failed: ' + e.toString());
+    return generateFallbackTaperRecommendation(taperAnalysis, goal);
+  }
+}
+
+/**
+ * Fallback taper recommendation when AI unavailable
+ */
+function generateFallbackTaperRecommendation(taperAnalysis, goal) {
+  const rec = taperAnalysis.recommended;
+
+  const weekByWeekPlan = [];
+
+  if (rec.taperLengthDays >= 14) {
+    weekByWeekPlan.push('Week 1: Reduce volume to 70%, maintain some intensity');
+    weekByWeekPlan.push('Week 2: Reduce to 50%, short sharp efforts only');
+    weekByWeekPlan.push('Final days: Easy spinning, rest day before race');
+  } else if (rec.taperLengthDays >= 7) {
+    weekByWeekPlan.push('Days 1-4: Reduce volume to 60%, keep one intensity session');
+    weekByWeekPlan.push('Days 5-7: Easy spinning, opener workout 2 days before');
+  } else {
+    weekByWeekPlan.push('Short taper: Reduce to 50% immediately');
+    weekByWeekPlan.push('Final 2 days: Rest or very easy spinning');
+  }
+
+  return {
+    success: true,
+    aiEnhanced: false,
+    summary: `Start ${rec.taperType.toLowerCase()} on ${rec.taperStartDate} to peak at TSB ${rec.raceDayTSB} on race day`,
+    weekByWeekPlan: weekByWeekPlan,
+    keyWorkouts: [
+      'Last hard workout: 3-4 days before race (short threshold or VO2max)',
+      'Opener: 1-2 days before (easy with 3-4 short hard efforts)'
+    ],
+    warnings: rec.ctlLoss > 5 ? ['CTL will drop ' + rec.ctlLoss + ' points - this is normal and expected'] : [],
+    confidenceLevel: 'medium',
+    expectedPerformance: `Race day TSB of ${rec.raceDayTSB} indicates good freshness while maintaining ${rec.raceDayCTL} CTL fitness`
+  };
+}
+
+/**
+ * Format taper summary for display
+ */
+function formatTaperSummary(taperAnalysis, goal) {
+  const rec = taperAnalysis.recommended;
+
+  let summary = '';
+
+  if (taperAnalysis.alreadyInTaperWindow) {
+    summary = `⚡ TAPER IN PROGRESS for ${goal.name || 'your race'}\n`;
+  } else if (taperAnalysis.taperStartingSoon) {
+    summary = `📅 TAPER STARTS SOON for ${goal.name || 'your race'}\n`;
+  } else {
+    summary = `🎯 TAPER PLAN for ${goal.name || 'your race'}\n`;
+  }
+
+  summary += `Race: ${taperAnalysis.raceDate} (${taperAnalysis.daysToRace} days)\n`;
+  summary += `Recommended: ${rec.taperType} - ${rec.taperLengthDays} days\n`;
+  summary += `Start taper: ${rec.taperStartDate}`;
+
+  if (rec.daysUntilTaperStart > 0) {
+    summary += ` (in ${rec.daysUntilTaperStart} days)`;
+  } else if (rec.daysUntilTaperStart === 0) {
+    summary += ' (TODAY)';
+  } else {
+    summary += ' (started)';
+  }
+
+  summary += `\n\nProjected Race Day:\n`;
+  summary += `- CTL: ${rec.raceDayCTL} (losing ${rec.ctlLoss})\n`;
+  summary += `- TSB: ${rec.raceDayTSB} (target: ${taperAnalysis.targetTSB})\n`;
+
+  return summary;
+}
+
+/**
+ * Format taper recommendation for email
+ */
+function formatTaperEmailSection(taperRec) {
+  if (!taperRec || !taperRec.available) return '';
+
+  const t = getTranslations();
+  const analysis = taperRec.analysis;
+  const ai = taperRec.aiRecommendation;
+  const rec = analysis.recommended;
+
+  let section = '\n-----------------------------------\n';
+  section += '🎯 ' + (t.taper_timing_title || 'Taper Timing') + '\n';
+  section += '-----------------------------------\n';
+
+  // Summary
+  if (ai && ai.summary) {
+    section += ai.summary + '\n\n';
+  }
+
+  // Key info
+  section += `${t.race || 'Race'}: ${analysis.raceDate} (${analysis.daysToRace} ${t.days || 'days'})\n`;
+  section += `${t.taper_start || 'Taper start'}: ${rec.taperStartDate}`;
+
+  if (rec.daysUntilTaperStart > 0) {
+    section += ` (${t.in || 'in'} ${rec.daysUntilTaperStart} ${t.days || 'days'})`;
+  } else if (rec.daysUntilTaperStart === 0) {
+    section += ` (${t.today || 'TODAY'})`;
+  }
+  section += '\n';
+
+  section += `${t.taper_type || 'Type'}: ${rec.taperType} (${rec.taperDescription})\n`;
+  section += `${t.taper_length || 'Length'}: ${rec.taperLengthDays} ${t.days || 'days'}\n`;
+
+  // Projected race day
+  section += `\n${t.race_day_projection || 'Race Day Projection'}:\n`;
+  section += `  CTL: ${analysis.currentCTL} → ${rec.raceDayCTL} (${rec.ctlLoss > 0 ? '-' : '+'}${Math.abs(rec.ctlLoss)})\n`;
+  section += `  TSB: ${analysis.currentTSB} → ${rec.raceDayTSB}\n`;
+
+  // Week by week plan
+  if (ai && ai.weekByWeekPlan && ai.weekByWeekPlan.length > 0) {
+    section += `\n${t.taper_plan || 'Plan'}:\n`;
+    for (const week of ai.weekByWeekPlan) {
+      section += `  • ${week}\n`;
+    }
+  }
+
+  // Key workouts
+  if (ai && ai.keyWorkouts && ai.keyWorkouts.length > 0) {
+    section += `\n${t.key_workouts || 'Key Workouts'}:\n`;
+    for (const workout of ai.keyWorkouts) {
+      section += `  • ${workout}\n`;
+    }
+  }
+
+  // Warnings
+  if (ai && ai.warnings && ai.warnings.length > 0) {
+    section += `\n⚠️ ${t.notes || 'Notes'}:\n`;
+    for (const warning of ai.warnings) {
+      section += `  • ${warning}\n`;
+    }
+  }
+
+  return section;
+}
