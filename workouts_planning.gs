@@ -452,19 +452,32 @@ Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each d
 // =========================================================
 
 /**
- * Create placeholder events in Intervals.icu calendar from weekly plan
- * These are simple placeholders that will be replaced by detailed workouts on the day
+ * Create workout events in Intervals.icu calendar from weekly plan
+ * For runs: pre-generates actual workout content with intervals and paces
+ * For rides: creates placeholders that will be refined on the day
  * @param {object} weeklyPlan - Weekly plan from generateAIWeeklyPlan
- * @returns {object} { created: number, skipped: number, errors: number }
+ * @param {object} context - Optional context for pre-generation { runningData, phaseInfo, summary }
+ * @returns {object} { created: number, skipped: number, errors: number, preGenerated: number }
  */
-function createWeeklyPlanEvents(weeklyPlan) {
+function createWeeklyPlanEvents(weeklyPlan, context) {
   if (!weeklyPlan || !weeklyPlan.days) {
     Logger.log("No weekly plan to create events from");
-    return { created: 0, skipped: 0, errors: 0 };
+    return { created: 0, skipped: 0, errors: 0, preGenerated: 0 };
   }
 
   const athleteId = "0";
-  const results = { created: 0, skipped: 0, errors: 0 };
+  const results = { created: 0, skipped: 0, errors: 0, preGenerated: 0 };
+
+  // Fetch running data once if not provided (for pre-generating runs)
+  let runningData = context?.runningData;
+  if (!runningData) {
+    try {
+      runningData = fetchRunningData();
+    } catch (e) {
+      Logger.log("Could not fetch running data for pre-generation: " + e.toString());
+      runningData = { available: false };
+    }
+  }
 
   Logger.log("Creating calendar events from weekly plan...");
 
@@ -496,7 +509,7 @@ function createWeeklyPlanEvents(weeklyPlan) {
       if (existingWorkout) {
         const workoutName = existingWorkout.name || '';
         const isWeeklyPlanPlaceholder = existingWorkout.description?.includes('[Weekly Plan]');
-        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/.test(workoutName);
+        const isSimplePlaceholder = /^(Ride|Run)( - \d+min)?$/i.test(workoutName);
 
         if (isWeeklyPlanPlaceholder) {
           // Previous Weekly Plan - update it
@@ -520,11 +533,32 @@ function createWeeklyPlanEvents(weeklyPlan) {
     const workoutLabel = day.workoutType || (isRun ? 'Run' : 'Ride');
     const eventName = `${workoutLabel} - ${day.duration}min`;
 
+    // For runs: pre-generate actual workout content
+    let description = `[Weekly Plan]\n\n${day.focus}\n\nTSS Target: ~${day.estimatedTSS}\nDuration: ${day.duration} min`;
+
+    if (isRun && runningData?.available) {
+      try {
+        const preGenerated = preGenerateRunWorkout(day, runningData, context);
+        if (preGenerated) {
+          description = `[Weekly Plan - Pre-Generated]\n\n${preGenerated}`;
+          results.preGenerated++;
+          Logger.log(` -> ${day.date}: Pre-generated run workout`);
+        } else {
+          description += `\n\nThis workout will be refined with detailed intervals when generated.`;
+        }
+      } catch (e) {
+        Logger.log(` -> ${day.date}: Pre-generation failed: ${e.toString()}`);
+        description += `\n\nThis workout will be refined with detailed intervals when generated.`;
+      }
+    } else if (!isRun) {
+      description += `\n\nThis workout will be refined with detailed intervals when generated.`;
+    }
+
     const payload = {
       category: "WORKOUT",
       type: day.activity,
       name: eventName,
-      description: `[Weekly Plan]\n\n${day.focus}\n\nTSS Target: ~${day.estimatedTSS}\nDuration: ${day.duration} min\n\nThis workout will be refined with detailed intervals when generated.`,
+      description: description,
       start_date_local: day.date + "T10:00:00",
       moving_time: day.duration * 60
     };
@@ -564,8 +598,84 @@ function createWeeklyPlanEvents(weeklyPlan) {
     Utilities.sleep(200);
   }
 
-  Logger.log(`Weekly plan events: ${results.created} created, ${results.skipped} skipped, ${results.errors} errors`);
+  Logger.log(`Weekly plan events: ${results.created} created, ${results.skipped} skipped, ${results.errors} errors, ${results.preGenerated} runs pre-generated`);
   return results;
+}
+
+/**
+ * Pre-generate run workout content for weekly planning
+ * Creates structured workout description with intervals and target paces
+ * @param {object} day - Day info from weekly plan { workoutType, duration, focus, estimatedTSS }
+ * @param {object} runningData - Running profile { criticalSpeed, dPrime, thresholdPace, bestEfforts }
+ * @param {object} context - Optional additional context { phaseInfo, summary }
+ * @returns {string|null} Generated workout description or null if failed
+ */
+function preGenerateRunWorkout(day, runningData, context) {
+  const langName = getPromptLanguage();
+
+  // Get primary pace for zone calculations
+  const primaryPace = runningData.criticalSpeed || runningData.thresholdPace || '5:30';
+  const dPrime = runningData.dPrime || 200;
+
+  // D' guidance for interval structure
+  let dPrimeGuidance = 'Standard recovery (90s-2min jog between efforts)';
+  if (dPrime < 150) {
+    dPrimeGuidance = 'LOW D\' - Use longer recovery (2-3min), fewer repeats (4-5 max)';
+  } else if (dPrime > 250) {
+    dPrimeGuidance = 'HIGH D\' - Can use shorter recovery (60-90s), more repeats (6-8)';
+  }
+
+  // Build best efforts context if available
+  let bestEffortsStr = '';
+  if (runningData.bestEfforts && Object.keys(runningData.bestEfforts).length > 0) {
+    const parts = [];
+    if (runningData.bestEfforts[800]) parts.push(`800m: ${runningData.bestEfforts[800].pace}/km`);
+    if (runningData.bestEfforts[1500]) parts.push(`1.5k: ${runningData.bestEfforts[1500].pace}/km`);
+    if (runningData.bestEfforts[5000]) parts.push(`5k: ${runningData.bestEfforts[5000].pace}/km`);
+    if (parts.length > 0) bestEffortsStr = `\nBest efforts: ${parts.join(' | ')}`;
+  }
+
+  const prompt = `You are an expert running coach creating a structured workout.
+
+**WORKOUT REQUEST:**
+- Type: ${day.workoutType}
+- Duration: ${day.duration} min
+- Focus: ${day.focus}
+- Target TSS: ~${day.estimatedTSS}
+
+**ATHLETE RUNNING PROFILE:**
+- Critical Speed (threshold): ${primaryPace}/km
+- D' (anaerobic capacity): ${dPrime}m - ${dPrimeGuidance}${bestEffortsStr}
+
+**RUNNING ZONES (based on CS ${primaryPace}/km):**
+- Z1 Recovery: ~${addPace(primaryPace, 75)}/km (easy jog)
+- Z2 Endurance: ~${addPace(primaryPace, 45)}/km (conversational)
+- Z3 Tempo: ~${addPace(primaryPace, 15)}/km (comfortably hard)
+- Z4 Threshold: ~${primaryPace}/km (race pace 10K-HM)
+- Z5 VO2max: ~${subtractPace(primaryPace, 15)}/km (hard, 3-6min sustainable)
+- Z6 Anaerobic: ~${subtractPace(primaryPace, 30)}/km (very hard, <2min)
+
+**INSTRUCTIONS:**
+1. Create a complete, ready-to-execute workout
+2. Include warm-up (10-15 min easy) and cool-down (5-10 min easy)
+3. Specify exact paces (min:sec/km) for each segment
+4. For intervals: specify reps, duration/distance, target pace, and recovery
+5. Match the total duration to ${day.duration} min
+6. Write in ${langName}
+7. Format clearly with sections
+
+**Output the workout description only (no JSON, no markdown code blocks):**`;
+
+  try {
+    const response = callGeminiAPIText(prompt);
+    if (response && response.length > 50) {
+      return response;
+    }
+    return null;
+  } catch (e) {
+    Logger.log("preGenerateRunWorkout error: " + e.toString());
+    return null;
+  }
 }
 
 // =========================================================
