@@ -84,8 +84,7 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 |---------|-------------|---------------|--------|
 | Custom AI models (not ChatGPT) | ✓ Proprietary models | ✓ Custom prompts + Gemini | Similar approach |
 | Workout Simulation | ✓ Simulates hundreds of workouts | ✗ Direct AI recommendation | **Add simulation** |
-| Predicted FTP | ✓ Shows future FTP based on training | ✓ AI eFTP Trajectory Analysis | Similar |
-| **AI FTP Prediction** | ✓ Live FTP forecast that updates with training | ✓ AI eFTP Trajectory Analysis | Similar - both show FTP trends |
+| AI FTP Prediction | ✓ Live FTP forecast that updates with training | ✓ AI eFTP Trajectory Analysis | Similar |
 | Impact Preview | ✓ See how changes affect future weeks | ✓ AI Workout Impact Preview | Similar - 2-week CTL/TSB projection |
 | **Real-Time Decision Feedback** | ✓ See how skipped/moved workouts affect FTP | ✓ Workout Impact Preview | Similar - shows CTL/TSB impact |
 | Workout Feel Prediction | ✓ Explains how workout will feel | ~ Partial (difficulty 1-5) | **Enhance feel prediction** |
