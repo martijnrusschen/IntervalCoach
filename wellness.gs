@@ -293,6 +293,21 @@ function createWellnessSummary(wellnessRecords) {
     else sleepStatus = "Insufficient";
   }
 
+  // ===== Z-SCORE INTENSITY MODIFIER =====
+  // Use continuous z-score based modifier when baseline data is available
+  // This replaces the discrete Red/Yellow/Green categories with smooth scaling
+  let zScoreIntensity = null;
+  if (baselineAnalysis?.zScoreIntensity?.modifier != null) {
+    zScoreIntensity = baselineAnalysis.zScoreIntensity;
+
+    // Override the discrete intensity modifier with z-score based continuous modifier
+    // Only if we have high or medium confidence (actual baseline data)
+    if (zScoreIntensity.confidence !== 'low') {
+      intensityModifier = zScoreIntensity.modifier;
+      Logger.log(`Z-Score Intensity: ${(zScoreIntensity.modifier * 100).toFixed(0)}% (${zScoreIntensity.description})`);
+    }
+  }
+
   return {
     available: true,
     today: {
@@ -329,7 +344,9 @@ function createWellnessSummary(wellnessRecords) {
     aiEnhanced: aiEnhanced,
     personalizedReason: personalizedReason,
     // Baseline deviation analysis
-    baselineAnalysis: baselineAnalysis
+    baselineAnalysis: baselineAnalysis,
+    // Z-score based continuous intensity modifier
+    zScoreIntensity: zScoreIntensity
   };
 }
 

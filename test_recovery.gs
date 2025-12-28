@@ -421,3 +421,112 @@ function testBaselineTracking() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Test Z-Score Intensity Modifier
+ * Tests continuous intensity scaling based on HRV/RHR z-scores
+ */
+function testZScoreIntensityModifier() {
+  Logger.log("=== Z-SCORE INTENSITY MODIFIER TEST ===\n");
+  requireValidConfig();
+
+  // Fetch wellness data
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
+  const summary = createWellnessSummary(wellnessRecords);
+
+  if (!summary?.available) {
+    Logger.log("ERROR: No wellness data available");
+    return;
+  }
+
+  Logger.log("=== CURRENT VALUES ===");
+  Logger.log("HRV: " + (summary.today?.hrv?.toFixed(0) || "N/A") + " ms");
+  Logger.log("RHR: " + (summary.today?.restingHR || "N/A") + " bpm");
+  Logger.log("Recovery Score: " + (summary.today?.recovery || "N/A") + "%");
+
+  // Check baseline analysis
+  const ba = summary.baselineAnalysis;
+  if (!ba?.available) {
+    Logger.log("\nNo baseline analysis available (need 30 days of data)");
+    Logger.log("\n=== TEST COMPLETE ===");
+    return;
+  }
+
+  Logger.log("\n=== BASELINE ANALYSIS ===");
+  if (ba.hrvDeviation?.available) {
+    const hrv = ba.hrvDeviation;
+    Logger.log("\nHRV Deviation:");
+    Logger.log("  Current: " + hrv.current + " ms");
+    Logger.log("  30d Baseline: " + hrv.baseline.toFixed(0) + " ms");
+    Logger.log("  Deviation: " + (hrv.deviationPercent >= 0 ? "+" : "") + hrv.deviationPercent.toFixed(1) + "%");
+    Logger.log("  Z-Score: " + hrv.zScore.toFixed(2) + "σ");
+    Logger.log("  Status: " + hrv.status);
+  }
+
+  if (ba.rhrDeviation?.available) {
+    const rhr = ba.rhrDeviation;
+    Logger.log("\nRHR Deviation:");
+    Logger.log("  Current: " + rhr.current + " bpm");
+    Logger.log("  30d Baseline: " + rhr.baseline.toFixed(0) + " bpm");
+    Logger.log("  Deviation: " + (rhr.deviationPercent >= 0 ? "+" : "") + rhr.deviationPercent.toFixed(1) + "%");
+    Logger.log("  Z-Score: " + rhr.zScore.toFixed(2) + "σ");
+    Logger.log("  Status: " + rhr.status);
+  }
+
+  // Z-Score Intensity Modifier
+  const zsi = ba.zScoreIntensity;
+  if (zsi) {
+    Logger.log("\n=== Z-SCORE INTENSITY MODIFIER ===");
+    Logger.log("Modifier: " + (zsi.modifier * 100).toFixed(0) + "%");
+    Logger.log("Confidence: " + zsi.confidence);
+    Logger.log("Description: " + zsi.description);
+
+    if (zsi.breakdown?.hrv) {
+      Logger.log("\nHRV Contribution:");
+      Logger.log("  Z-Score: " + zsi.breakdown.hrv.zScore.toFixed(2) + "σ");
+      Logger.log("  Modifier: " + (zsi.breakdown.hrv.modifier * 100).toFixed(0) + "%");
+      Logger.log("  " + zsi.breakdown.hrv.contribution);
+    }
+
+    if (zsi.breakdown?.rhr) {
+      Logger.log("\nRHR Contribution:");
+      Logger.log("  Z-Score: " + zsi.breakdown.rhr.zScore.toFixed(2) + "σ");
+      Logger.log("  Inverted Z: " + zsi.breakdown.rhr.invertedZ.toFixed(2) + "σ");
+      Logger.log("  Modifier: " + (zsi.breakdown.rhr.modifier * 100).toFixed(0) + "%");
+      Logger.log("  " + zsi.breakdown.rhr.contribution);
+    }
+  }
+
+  // Compare with discrete categories
+  Logger.log("\n=== COMPARISON: Z-Score vs Discrete ===");
+  Logger.log("Z-Score Intensity: " + (summary.intensityModifier * 100).toFixed(0) + "%");
+  Logger.log("Recovery Status: " + summary.recoveryStatus);
+
+  // Show what discrete would have been
+  const discreteModifiers = {
+    'Green': 100,
+    'Yellow': 85,
+    'Red': 75
+  };
+  let discreteWouldBe = 100;
+  if (summary.recoveryStatus.includes('Red')) discreteWouldBe = 75;
+  else if (summary.recoveryStatus.includes('Yellow')) discreteWouldBe = 85;
+  Logger.log("Discrete would be: " + discreteWouldBe + "%");
+
+  const diff = Math.round(summary.intensityModifier * 100) - discreteWouldBe;
+  if (diff !== 0) {
+    Logger.log("Difference: " + (diff > 0 ? "+" : "") + diff + "% (more precise with z-score)");
+  } else {
+    Logger.log("No difference in this case");
+  }
+
+  // Test the z-score to modifier mapping with sample values
+  Logger.log("\n=== Z-SCORE TO MODIFIER MAPPING ===");
+  const testZScores = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2];
+  testZScores.forEach(z => {
+    const mod = zScoreToModifier(z);
+    Logger.log("  z=" + (z >= 0 ? "+" : "") + z.toFixed(1) + " → " + (mod * 100).toFixed(0) + "%");
+  });
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

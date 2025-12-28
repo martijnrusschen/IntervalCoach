@@ -175,10 +175,23 @@ ${buildZoneContext(powerProfile)}
       physioIndicators = `\n- **Physiological:** ${parts.join(' | ')}`;
     }
 
+    // Build z-score intensity context if available
+    let zScoreContext = '';
+    const zsi = wellness.zScoreIntensity;
+    if (zsi && zsi.confidence !== 'low') {
+      const hrvBreakdown = zsi.breakdown?.hrv ? `HRV z=${zsi.breakdown.hrv.zScore?.toFixed(1)}σ → ${(zsi.breakdown.hrv.modifier * 100).toFixed(0)}%` : '';
+      const rhrBreakdown = zsi.breakdown?.rhr ? `RHR z=${zsi.breakdown.rhr.zScore?.toFixed(1)}σ → ${(zsi.breakdown.rhr.modifier * 100).toFixed(0)}%` : '';
+      const breakdownParts = [hrvBreakdown, rhrBreakdown].filter(x => x).join(', ');
+      zScoreContext = `
+- **Z-Score Intensity (continuous):** ${(zsi.modifier * 100).toFixed(0)}% (${zsi.confidence} confidence)
+  - ${zsi.description}
+  - Breakdown: ${breakdownParts}`;
+    }
+
     wellnessContext = `
 **1b. Recovery & Wellness Data (${w.source === 'whoop_api' ? 'Whoop API - real-time' : 'Intervals.icu'}):**
 - **Recovery Status:** ${wellness.recoveryStatus}
-- **Recommended Intensity Modifier:** ${(wellness.intensityModifier * 100).toFixed(0)}%
+- **Recommended Intensity Modifier:** ${(wellness.intensityModifier * 100).toFixed(0)}%${zScoreContext}
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus})${sleepDetails} | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv ? w.hrv.toFixed(0) : 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
@@ -188,10 +201,13 @@ ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 ${w.stress ? `- **Stress:** ${w.stress}/5` : ''}
 ${w.mood ? `- **Mood:** ${w.mood}/5` : ''}
 
-**CRITICAL RECOVERY RULES:**
-- If Recovery Status is "Red (Strained)" or HRV is significantly below baseline: STRONGLY favor Endurance/Recovery workouts. VO2max/Threshold should score very low (1-3).
-- If Recovery Status is "Yellow (Recovering)": Reduce interval intensity by 5-10%. Favor Tempo/SST over VO2max.
-- If Recovery Status is "Green (Primed)": Full intensity is appropriate. High-intensity workouts can score higher.
+**CRITICAL RECOVERY RULES (use Z-Score Intensity for precise scaling):**
+- The Z-Score Intensity Modifier provides continuous scaling based on personal baseline, not discrete categories.
+- Apply the Intensity Modifier directly to target power zones (e.g., 82% modifier → use 82% of prescribed FTP-based power).
+- If modifier < 85%: STRONGLY favor Endurance/Recovery workouts. VO2max/Threshold should score very low (1-3).
+- If modifier 85-94%: Reduce interval intensity. Favor Tempo/SST over VO2max.
+- If modifier 95-100%: Full intensity appropriate. High-intensity workouts can score higher.
+- If modifier > 100%: Athlete is exceptionally recovered - can push slightly harder if training plan allows.
 - Poor sleep (<6h) should reduce recommendation scores for high-intensity work.
 - Low deep sleep (<1.5h) indicates poor recovery quality even if total sleep is adequate.
 - Low SpO2 (<95%) or elevated skin temp may indicate illness - recommend easier workout.
@@ -398,10 +414,23 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
     const w = wellness.today;
     const avg = wellness.averages;
 
+    // Build z-score intensity context if available
+    let zScoreContext = '';
+    const zsi = wellness.zScoreIntensity;
+    if (zsi && zsi.confidence !== 'low') {
+      const hrvBreakdown = zsi.breakdown?.hrv ? `HRV z=${zsi.breakdown.hrv.zScore?.toFixed(1)}σ → ${(zsi.breakdown.hrv.modifier * 100).toFixed(0)}%` : '';
+      const rhrBreakdown = zsi.breakdown?.rhr ? `RHR z=${zsi.breakdown.rhr.zScore?.toFixed(1)}σ → ${(zsi.breakdown.rhr.modifier * 100).toFixed(0)}%` : '';
+      const breakdownParts = [hrvBreakdown, rhrBreakdown].filter(x => x).join(', ');
+      zScoreContext = `
+- **Z-Score Intensity (continuous):** ${(zsi.modifier * 100).toFixed(0)}% (${zsi.confidence} confidence)
+  - ${zsi.description}
+  - Breakdown: ${breakdownParts}`;
+    }
+
     wellnessContext = `
 **1b. Recovery & Wellness Data (from Whoop/wearable):**
 - **Recovery Status:** ${wellness.recoveryStatus}
-- **Recommended Intensity Modifier:** ${(wellness.intensityModifier * 100).toFixed(0)}%
+- **Recommended Intensity Modifier:** ${(wellness.intensityModifier * 100).toFixed(0)}%${zScoreContext}
 - **Sleep:** ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'} (${wellness.sleepStatus}) | 7-day avg: ${avg.sleep ? avg.sleep.toFixed(1) + 'h' : 'N/A'}
 - **HRV (rMSSD):** ${w.hrv || 'N/A'} ms | 7-day avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'} ms
 - **Resting HR:** ${w.restingHR || 'N/A'} bpm | 7-day avg: ${avg.restingHR ? avg.restingHR.toFixed(0) : 'N/A'} bpm
@@ -409,10 +438,12 @@ function createRunPrompt(type, summary, phaseInfo, dateStr, duration, wellness, 
 ${w.soreness ? `- **Soreness:** ${w.soreness}/5` : ''}
 ${w.fatigue ? `- **Fatigue:** ${w.fatigue}/5` : ''}
 
-**CRITICAL RECOVERY RULES:**
-- If Recovery Status is "Red (Strained)": ONLY easy/recovery runs. No intervals.
-- If Recovery Status is "Yellow (Recovering)": Reduce interval intensity. Favor tempo over VO2max.
-- If Recovery Status is "Green (Primed)": Full intensity is appropriate.
+**CRITICAL RECOVERY RULES (use Z-Score Intensity for precise scaling):**
+- The Z-Score Intensity Modifier provides continuous scaling based on personal baseline.
+- If modifier < 85%: ONLY easy/recovery runs. No intervals.
+- If modifier 85-94%: Reduce interval intensity. Favor tempo over VO2max.
+- If modifier 95-100%: Full intensity is appropriate.
+- If modifier > 100%: Athlete is exceptionally recovered - can push slightly.
 - Running is higher impact than cycling - be MORE conservative with recovery.
 `;
   }

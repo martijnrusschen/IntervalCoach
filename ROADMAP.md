@@ -73,7 +73,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~**Post-Workout → Next Day**~~ | ~~Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10%~~ | **COMPLETE** |
 | ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
 | ~~**Volume Jump Detection**~~ | ~~Flag week-to-week volume increases >15% as injury risk, suggest spreading load~~ | **COMPLETE** |
-| **Z-Score Intensity Modifier** | Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green | Coaching |
+| ~~**Z-Score Intensity Modifier**~~ | ~~Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green~~ | **COMPLETE** |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
 | **Training Load Rate Warnings** | Warn when CTL ramp rate exceeds safe thresholds for multiple weeks | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
@@ -95,6 +95,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Adaptive Phase Transitions~~ | Shift Base→Build based on fitness trajectory, not just calendar date |
 | ~~Post-Workout → Next Day~~ | Pass yesterday's workout difficulty to today's decision. Reduce intensity 10% if harder than expected |
 | ~~Volume Jump Detection~~ | Flag week-to-week volume increases >15% as injury risk |
+| ~~Z-Score Intensity Modifier~~ | Continuous intensity scaling from HRV/RHR z-scores instead of discrete categories |
 
 ---
 
@@ -674,6 +675,44 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 | LOW | Stay aware of recovery. Don't stack more intensity. |
 | DROP | Check if planned. May need to rebuild gradually if returning. |
 
+### Feature: Z-Score Intensity Modifier ✅ COMPLETE
+
+**Implementation:**
+- Added `calculateZScoreIntensityModifier()` in `tracking.gs` - converts HRV/RHR z-scores to continuous intensity modifier
+- Added `zScoreToModifier()` in `tracking.gs` - piecewise linear mapping from z-score to intensity
+- Updated `analyzeWellnessVsBaseline()` to include z-score intensity calculation
+- Updated `createWellnessSummary()` in `wellness.gs` to use z-score intensity when available
+- Updated `createPrompt()` and `createRunPrompt()` in `prompts_workout.gs` to show z-score breakdown
+- Added `testZScoreIntensityModifier()` in `test_recovery.gs`
+
+**Key features:**
+- Converts discrete Red/Yellow/Green categories to continuous 70%-105% intensity scaling
+- Uses both HRV and RHR z-scores (HRV weighted 60%, RHR 40%)
+- RHR z-score is inverted (lower is better)
+
+**Z-Score to Intensity Mapping:**
+| Z-Score | Intensity | Description |
+|---------|-----------|-------------|
+| z ≤ -2.0 | 70% | Very fatigued, high injury risk |
+| z = -1.5 | 76% | Significantly below baseline |
+| z = -1.0 | 82% | Below baseline |
+| z = -0.5 | 88% | Slightly below baseline |
+| z = 0.0 | 94% | At baseline (slightly conservative) |
+| z = +0.5 | 97% | Slightly above baseline |
+| z = +1.0 | 100% | Above baseline - full intensity |
+| z = +1.5 | 102% | Well above baseline |
+| z ≥ +2.0 | 105% | Excellent recovery (capped at 5% bonus) |
+
+**Confidence levels:**
+- High: Both HRV and RHR z-scores available
+- Medium: Only one metric available
+- Low: No baseline data (falls back to discrete categories)
+
+**Prompt integration:**
+- Shows z-score intensity with breakdown in workout prompts
+- Provides precise scaling instructions instead of color categories
+- AI can adjust power targets based on exact modifier (e.g., 82% → use 82% of prescribed FTP)
+
 ---
 
-*Last updated: 2025-12-28 (Added Volume Jump Detection feature)*
+*Last updated: 2025-12-28 (Added Z-Score Intensity Modifier feature)*

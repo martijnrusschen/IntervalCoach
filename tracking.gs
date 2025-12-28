@@ -232,7 +232,167 @@ function analyzeWellnessVsBaseline(todayWellness) {
     }
   }
 
+  // Calculate continuous intensity modifier from z-scores
+  if (analysis.available) {
+    analysis.zScoreIntensity = calculateZScoreIntensityModifier(
+      analysis.hrvDeviation?.zScore,
+      analysis.rhrDeviation?.zScore
+    );
+  }
+
   return analysis;
+}
+
+/**
+ * Calculate continuous intensity modifier from HRV and RHR z-scores
+ * Replaces discrete Red/Yellow/Green categories with continuous scaling
+ *
+ * Z-score to intensity mapping (for combined score):
+ * z = -2.0 → 0.70 (very fatigued, high injury risk)
+ * z = -1.5 → 0.75 (significantly below baseline)
+ * z = -1.0 → 0.82 (below baseline)
+ * z = -0.5 → 0.88 (slightly below baseline)
+ * z =  0.0 → 0.94 (at baseline - slightly conservative default)
+ * z =  0.5 → 0.98 (slightly above baseline)
+ * z =  1.0 → 1.00 (above baseline - full intensity)
+ * z =  1.5 → 1.02 (well above baseline - slight bonus)
+ * z =  2.0 → 1.05 (excellent recovery - capped at 5% bonus)
+ *
+ * @param {number} hrvZScore - HRV z-score (higher = better)
+ * @param {number} rhrZScore - RHR z-score (lower = better, will be inverted)
+ * @returns {object} { modifier, confidence, breakdown, description }
+ */
+function calculateZScoreIntensityModifier(hrvZScore, rhrZScore) {
+  const result = {
+    modifier: 1.0,
+    confidence: 'low',
+    breakdown: {},
+    description: '',
+    rawScores: { hrv: hrvZScore, rhr: rhrZScore }
+  };
+
+  // If no z-scores available, return default
+  if (hrvZScore == null && rhrZScore == null) {
+    result.description = 'No baseline data available';
+    return result;
+  }
+
+  // Convert z-scores to individual modifiers
+  // HRV: higher is better (use directly)
+  // RHR: lower is better (invert the sign)
+  let hrvModifier = null;
+  let rhrModifier = null;
+
+  if (hrvZScore != null) {
+    hrvModifier = zScoreToModifier(hrvZScore);
+    result.breakdown.hrv = {
+      zScore: hrvZScore,
+      modifier: hrvModifier,
+      contribution: getZScoreDescription(hrvZScore, 'hrv')
+    };
+  }
+
+  if (rhrZScore != null) {
+    // Invert RHR z-score (high RHR is bad, so negate)
+    const invertedRhrZ = -rhrZScore;
+    rhrModifier = zScoreToModifier(invertedRhrZ);
+    result.breakdown.rhr = {
+      zScore: rhrZScore,
+      invertedZ: invertedRhrZ,
+      modifier: rhrModifier,
+      contribution: getZScoreDescription(invertedRhrZ, 'rhr')
+    };
+  }
+
+  // Combine modifiers (weighted average if both available)
+  if (hrvModifier != null && rhrModifier != null) {
+    // Weight HRV slightly more as it's generally more sensitive
+    result.modifier = (hrvModifier * 0.6) + (rhrModifier * 0.4);
+    result.confidence = 'high';
+    result.description = combineDescriptions(hrvZScore, rhrZScore);
+  } else if (hrvModifier != null) {
+    result.modifier = hrvModifier;
+    result.confidence = 'medium';
+    result.description = result.breakdown.hrv.contribution;
+  } else {
+    result.modifier = rhrModifier;
+    result.confidence = 'medium';
+    result.description = result.breakdown.rhr.contribution;
+  }
+
+  // Round to 2 decimal places
+  result.modifier = Math.round(result.modifier * 100) / 100;
+
+  return result;
+}
+
+/**
+ * Convert a single z-score to intensity modifier using smooth curve
+ * Uses a modified logistic function for smooth transitions
+ */
+function zScoreToModifier(z) {
+  // Clamp z-score to reasonable range
+  z = Math.max(-3, Math.min(3, z));
+
+  // Piecewise linear with smooth transitions
+  // This gives us more control over the mapping
+  if (z <= -2) {
+    return 0.70;
+  } else if (z <= -1) {
+    // Linear from 0.70 to 0.82
+    return 0.70 + (z + 2) * 0.12;
+  } else if (z <= 0) {
+    // Linear from 0.82 to 0.94
+    return 0.82 + (z + 1) * 0.12;
+  } else if (z <= 1) {
+    // Linear from 0.94 to 1.00
+    return 0.94 + z * 0.06;
+  } else if (z <= 2) {
+    // Linear from 1.00 to 1.05 (smaller gains above baseline)
+    return 1.00 + (z - 1) * 0.05;
+  } else {
+    return 1.05; // Cap at 5% bonus
+  }
+}
+
+/**
+ * Get human-readable description for a z-score contribution
+ */
+function getZScoreDescription(z, metric) {
+  const metricName = metric === 'hrv' ? 'HRV' : 'RHR';
+
+  if (z <= -1.5) {
+    return `${metricName} significantly impaired (-${Math.abs(z).toFixed(1)}σ)`;
+  } else if (z <= -0.5) {
+    return `${metricName} below baseline (-${Math.abs(z).toFixed(1)}σ)`;
+  } else if (z <= 0.5) {
+    return `${metricName} at baseline`;
+  } else if (z <= 1.5) {
+    return `${metricName} above baseline (+${z.toFixed(1)}σ)`;
+  } else {
+    return `${metricName} excellent (+${z.toFixed(1)}σ)`;
+  }
+}
+
+/**
+ * Combine HRV and RHR descriptions into overall assessment
+ */
+function combineDescriptions(hrvZ, rhrZ) {
+  // Invert RHR for combined assessment
+  const effectiveRhrZ = -rhrZ;
+  const combinedZ = (hrvZ * 0.6) + (effectiveRhrZ * 0.4);
+
+  if (combinedZ <= -1.5) {
+    return 'Recovery significantly compromised - reduce intensity 25-30%';
+  } else if (combinedZ <= -0.5) {
+    return 'Recovery below baseline - reduce intensity 10-18%';
+  } else if (combinedZ <= 0.5) {
+    return 'Recovery at baseline - normal training appropriate';
+  } else if (combinedZ <= 1.5) {
+    return 'Recovery above baseline - full intensity OK';
+  } else {
+    return 'Excellent recovery - can push if training plan allows';
+  }
 }
 
 // =========================================================
