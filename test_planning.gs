@@ -436,8 +436,25 @@ function testDeloadDetection() {
   Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
   Logger.log("Ramp Rate: " + (fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
 
-  // Run deload check
-  const deloadCheck = checkDeloadNeeded(fitness);
+  // Fetch wellness data (includes sleep debt from Whoop)
+  const wellnessRecords = fetchWellnessDataEnhanced(7, 0);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  Logger.log("\n=== SLEEP DEBT (from Whoop) ===");
+  const sleepDebt = wellness?.today?.sleepDebtHours;
+  if (sleepDebt != null) {
+    const debtLevel = sleepDebt >= 5 ? 'SEVERE' : sleepDebt >= 3 ? 'SIGNIFICANT' : sleepDebt >= 1.5 ? 'MODERATE' : 'LOW';
+    Logger.log("Sleep Debt: " + sleepDebt.toFixed(1) + "h (" + debtLevel + ")");
+    if (sleepDebt >= 1.5) {
+      const points = sleepDebt >= 5 ? 3 : sleepDebt >= 3 ? 2 : 1;
+      Logger.log("  → Adds +" + points + " urgency to deload score");
+    }
+  } else {
+    Logger.log("Sleep Debt: N/A (Whoop data not available)");
+  }
+
+  // Run deload check (now includes wellness/sleep debt)
+  const deloadCheck = checkDeloadNeeded(fitness, wellness);
 
   Logger.log("\n=== DELOAD ANALYSIS ===");
   Logger.log(formatDeloadCheckLog(deloadCheck));
@@ -464,6 +481,14 @@ function testDeloadDetection() {
     Logger.log("  [+1] Moderate fatigue (TSB < -20)");
   }
 
+  if (sleepDebt >= 5) {
+    Logger.log("  [+3] Severe sleep debt (>= 5h)");
+  } else if (sleepDebt >= 3) {
+    Logger.log("  [+2] Significant sleep debt (>= 3h)");
+  } else if (sleepDebt >= 1.5) {
+    Logger.log("  [+1] Moderate sleep debt (>= 1.5h)");
+  }
+
   Logger.log("\n=== RESULT ===");
   if (deloadCheck.needed) {
     Logger.log("DELOAD RECOMMENDED (" + deloadCheck.urgency.toUpperCase() + ")");
@@ -473,6 +498,51 @@ function testDeloadDetection() {
     Logger.log("No deload needed at this time");
     if (deloadCheck.recommendation) {
       Logger.log(deloadCheck.recommendation);
+    }
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test sleep debt impact on deload urgency
+ * Simulates different sleep debt levels to show how it affects deload recommendations
+ */
+function testSleepDebtImpact() {
+  Logger.log("=== SLEEP DEBT IMPACT TEST ===\n");
+  requireValidConfig();
+
+  const fitness = fetchFitnessMetrics();
+
+  Logger.log("Current fitness: CTL=" + (fitness.ctl?.toFixed(0) || "N/A") +
+             ", TSB=" + (fitness.tsb?.toFixed(0) || "N/A") +
+             ", Ramp=" + (fitness.rampRate?.toFixed(1) || "N/A"));
+
+  // Test different sleep debt scenarios
+  const scenarios = [
+    { debt: 0.3, label: "Low (your current)" },
+    { debt: 1.5, label: "Moderate" },
+    { debt: 3.0, label: "Significant" },
+    { debt: 5.0, label: "Severe" }
+  ];
+
+  Logger.log("\n=== SIMULATED SCENARIOS ===");
+
+  for (const scenario of scenarios) {
+    // Create mock wellness with simulated sleep debt
+    const mockWellness = {
+      today: { sleepDebtHours: scenario.debt }
+    };
+
+    const result = checkDeloadNeeded(fitness, mockWellness);
+
+    const urgencyEmoji = result.needed ?
+      (result.urgency === 'high' ? '🔴' : result.urgency === 'medium' ? '🟠' : '🟡') : '✅';
+
+    Logger.log(`\n${urgencyEmoji} Sleep Debt: ${scenario.debt}h (${scenario.label})`);
+    Logger.log(`   Deload needed: ${result.needed ? 'YES (' + result.urgency + ')' : 'No'}`);
+    if (result.reason) {
+      Logger.log(`   Reasons: ${result.reason}`);
     }
   }
 
