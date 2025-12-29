@@ -60,7 +60,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
 | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
-| **Workout Template Library** | Curated workout database (like JOIN's 400+ workouts) | Platform |
 | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 
 ### 🟢 LOW Priority (Quick Wins)
