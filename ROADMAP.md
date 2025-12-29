@@ -70,10 +70,9 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
 | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
-| **Training Outcome Simulation** | Simulate multiple workout options before deciding | AI-First |
+| **Multi-Workout Option Comparison** | Generate 3 workout options with projected outcomes (like Aixle), let user choose | AI-First |
 | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
 | **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
 | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
@@ -82,6 +81,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description |
 |---------|-------------|
+| ~~Season Best Comparison~~ | Track season best for W', pMax, CS and show gap to AI for workout decisions |
 | ~~HRV/RHR Baseline Tracking~~ | Track 30-day rolling baselines and surface deviation % to AI and emails |
 | ~~W' Guides Interval Design~~ | Use W'/D' to adjust interval recovery times based on anaerobic capacity |
 | ~~Planned Deload Weeks~~ | Auto-detect when recovery week is needed based on 4-week TSS patterns |
