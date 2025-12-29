@@ -71,6 +71,7 @@ function testZoneProgression() {
     Logger.log("\nIdentified patterns:");
     Logger.log("  Strengths: " + progression.strengths.join(", "));
     Logger.log("  Focus Areas: " + progression.focusAreas.join(", "));
+    Logger.log("  Plateaued Zones: " + (progression.plateauedZones && progression.plateauedZones.length > 0 ? progression.plateauedZones.join(", ") : "None"));
   } else {
     Logger.log("Zone progression calculation failed");
   }

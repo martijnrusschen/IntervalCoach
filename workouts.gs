@@ -536,6 +536,7 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
 ).join('\n')}
 - Strengths: ${prog.strengths.join(', ')}
 - Focus Areas (underdeveloped): ${prog.focusAreas.join(', ')}
+${prog.plateauedZones && prog.plateauedZones.length > 0 ? `- ⚠️ PLATEAUED (need stimulus rotation): ${prog.plateauedZones.join(', ')}` : ''}
 `;
   }
 
@@ -598,6 +599,10 @@ ${workoutOptions}
 12. ZONE PROGRESSION: If zone progression data is available, consider prioritizing underdeveloped zones (focus areas).
     A zone with declining trend that hasn't been trained in 2+ weeks should be prioritized.
     Balance zone development with recovery status - don't push hard zones when fatigued.
+13. PLATEAU DETECTION: If a zone shows "plateaued" trend, it needs STIMULUS ROTATION:
+    - Change the workout structure (different interval lengths, recovery times, or rep schemes)
+    - Example: if threshold is plateaued after 2x20min efforts, try 4x10min or 3x15min instead
+    - Or try a different approach: over-unders, progressive intervals, or race-pace simulation
 
 **YOUR TASK:**
 Recommend ONE specific workout type from the list above. Consider all factors holistically.

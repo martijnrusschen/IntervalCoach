@@ -264,6 +264,7 @@ ${Object.entries(prog.progression).map(([zone, data]) =>
 ).join('\n')}
 - Strengths: ${prog.strengths.join(', ')}
 - Focus Areas: ${prog.focusAreas.join(', ')} (these zones need attention)
+${prog.plateauedZones && prog.plateauedZones.length > 0 ? `- ⚠️ PLATEAUED ZONES: ${prog.plateauedZones.join(', ')} (need different stimulus - vary interval structure)` : ''}
 `;
   }
 

@@ -231,6 +231,29 @@ function calculateZoneProgression(daysBack) {
       trend = 'declining';
     }
 
+    // Plateau detection: training is happening but level isn't improving
+    // Compare to historical data from 3-4 weeks ago
+    let plateaued = false;
+    if (recentSessions >= 2 && trend === 'improving') {
+      // Get historical level from ~3-4 weeks ago
+      const history = getZoneProgressionHistory(4);
+      const oldSnapshot = history.find(function(h) {
+        const snapshotDate = new Date(h.date);
+        const weeksAgo = (today - snapshotDate) / (1000 * 60 * 60 * 24 * 7);
+        return weeksAgo >= 3 && weeksAgo <= 5;
+      });
+
+      if (oldSnapshot && oldSnapshot.progression[category]) {
+        const oldLevel = oldSnapshot.progression[category].level;
+        const levelChange = level - oldLevel;
+        // Plateaued if: training regularly but level change is < 0.5 over 3-4 weeks
+        if (levelChange < 0.5) {
+          plateaued = true;
+          trend = 'plateaued';
+        }
+      }
+    }
+
     progression[category] = {
       level: Math.round(level * 10) / 10,
       trend: trend,
@@ -255,6 +278,11 @@ function calculateZoneProgression(daysBack) {
     .reverse()
     .map(function(entry) { return entry[0]; });
 
+  // Identify plateaued zones (need stimulus change)
+  const plateauedZones = Object.entries(progression)
+    .filter(function(entry) { return entry[1].trend === 'plateaued'; })
+    .map(function(entry) { return entry[0]; });
+
   return {
     available: true,
     calculatedAt: todayStr,
@@ -262,7 +290,8 @@ function calculateZoneProgression(daysBack) {
     activitiesAnalyzed: exposures.length,
     progression: progression,
     focusAreas: focusAreas,
-    strengths: strengths
+    strengths: strengths,
+    plateauedZones: plateauedZones
   };
 }
 

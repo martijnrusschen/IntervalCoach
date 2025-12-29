@@ -973,7 +973,8 @@ function buildZoneProgressionSection(t, progression, recommendations) {
   const trendSymbols = {
     improving: '↑',
     stable: '→',
-    declining: '↓'
+    declining: '↓',
+    plateaued: '⚡'  // Needs stimulus change
   };
 
   let section = `-----------------------------------
@@ -1000,6 +1001,9 @@ ${t.zone_progression_title || 'Zone Progression Levels'}
   // Summary
   section += `\n${t.strengths || 'Strengths'}: ${progression.strengths.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}\n`;
   section += `${t.focus_areas || 'Focus Areas'}: ${progression.focusAreas.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')}\n`;
+  if (progression.plateauedZones && progression.plateauedZones.length > 0) {
+    section += `⚡ ${t.plateaued_zones || 'Plateaued'}: ${progression.plateauedZones.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')} (vary workout structure)\n`;
+  }
 
   // AI Recommendations
   if (recommendations) {
