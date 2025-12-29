@@ -23,10 +23,7 @@ function testRecommendationFeedback() {
   const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
   const phaseInfo = calculateTrainingPhase(targetDate);
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-  const summary = createAthleteSummary(data);
+  const summary = createAthleteSummary();
 
   const powerProfile = analyzePowerProfile(fetchPowerCurve());
 
@@ -80,10 +77,7 @@ function testAIPeriodization() {
   const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
   const goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-  const summary = createAthleteSummary(data);
+  const summary = createAthleteSummary();
 
   const powerProfile = analyzePowerProfile(fetchPowerCurve());
   const recentTypes = getRecentWorkoutTypes(7);

@@ -124,10 +124,7 @@ function testDailyEmailStructure() {
   const phaseInfo = calculateTrainingPhase(targetDate);
   phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-  const summary = createAthleteSummary(data);
+  const summary = createAthleteSummary();
 
   const powerCurve = fetchPowerCurve();
   const powerProfile = analyzePowerProfile(powerCurve);

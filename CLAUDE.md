@@ -30,8 +30,8 @@ The codebase is organized into modular files by domain (Google Apps Script doesn
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `main.gs` | Entry points | `generateOptimalZwiftWorkoutsAutoByGemini()`, `fetchAndLogActivities()` |
-| `constants.gs` | Configuration constants | `SYSTEM_SETTINGS`, `TRAINING_CONSTANTS`, `WORKOUT_TYPES`, `HEADERS_FIXED` |
+| `main.gs` | Entry points | `generateOptimalZwiftWorkoutsAutoByGemini()`, `checkForCompletedWorkouts()` |
+| `constants.gs` | Configuration constants | `SYSTEM_SETTINGS`, `TRAINING_CONSTANTS`, `WORKOUT_TYPES` |
 | `translations.gs` | Localization (5 languages) | `TRANSLATIONS` (en, nl, ja, es, fr) |
 | `api.gs` | API utilities | `fetchIcuApi()`, `callGeminiAPI()`, `validateZwoXml()`, `getIcuAuthHeader()` |
 | `config.gs` | User config (gitignored) | API keys, user settings |
@@ -100,7 +100,8 @@ The codebase is organized into modular files by domain (Google Apps Script doesn
 
 **Entry Points (in main.gs):**
 - `generateOptimalZwiftWorkoutsAutoByGemini()` - Main daily workout generation
-- `fetchAndLogActivities()` - Activity sync to Google Sheets
+- `checkForCompletedWorkouts()` - Hourly post-workout AI analysis
+- `sendWeeklySummaryEmail()` - Weekly summary and planning
 
 **Test Functions (run in Apps Script editor):**
 

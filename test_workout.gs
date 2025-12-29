@@ -23,10 +23,7 @@ function testCoachingNote() {
   const phaseInfo = calculateTrainingPhase(targetDate);
   phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-  const summary = createAthleteSummary(data);
+  const summary = createAthleteSummary();
 
   const powerCurve = fetchPowerCurve();
   const powerProfile = analyzePowerProfile(powerCurve);
@@ -67,10 +64,7 @@ function testWorkoutSelection() {
   const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
   const phaseInfo = calculateTrainingPhase(targetDate);
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift();
-  const summary = createAthleteSummary(data);
+  const summary = createAthleteSummary();
 
   const recentTypes = getRecentWorkoutTypes(7);
   const eventTomorrow = hasEventTomorrow();
