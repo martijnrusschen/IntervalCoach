@@ -179,20 +179,6 @@ function sum(arr) {
 }
 
 // =========================================================
-// GOOGLE DRIVE UTILITIES
-// =========================================================
-
-/**
- * Get or create a folder in Google Drive
- * @param {string} name - Folder name
- * @returns {Folder} Google Drive folder
- */
-function getOrCreateFolder(name) {
-  const folders = DriveApp.getFoldersByName(name);
-  return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
-}
-
-// =========================================================
 // API DELAY UTILITY
 // =========================================================
 

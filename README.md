@@ -217,8 +217,6 @@ const USER_SETTINGS = {
   // Optional: Google Sheet ID for activity logging (leave "" to skip)
   SPREADSHEET_ID: "",
   SHEET_NAME: "training_log",
-
-  WORKOUT_FOLDER: "IntervalCoach_Workouts",  // Created in Google Drive
 };
 ```
 

@@ -78,9 +78,6 @@ const USER_SETTINGS = {
   SPREADSHEET_ID: "",
   SHEET_NAME: "training_log",
 
-  // Google Drive folder for .zwo files
-  WORKOUT_FOLDER: "IntervalCoach_Workouts",
-
   // Email address for daily workout summaries
   EMAIL_TO: "your-email@example.com"
 };

@@ -284,7 +284,6 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const activityType = availability.activityType; // "Ride" or "Run"
   const isRun = activityType === "Run";
 
-  const folder = getOrCreateFolder(USER_SETTINGS.WORKOUT_FOLDER);
   const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
   const data = sheet.getDataRange().getValues();
   data.shift(); // Remove header
@@ -758,44 +757,36 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   let workout;
 
   if (isRun) {
-    // For runs: save description and upload as text workout to Intervals.icu
-    const fileName = `IntervalCoach_${safeType}_${fileDateStr}.txt`;
+    // For runs: upload as text workout to Intervals.icu
+    const fileName = `IntervalCoach_${safeType}_${fileDateStr}`;
     const workoutText = result.workoutDescription || result.explanation;
-    const blob = Utilities.newBlob(workoutText, "text/plain", fileName);
-    folder.createFile(blob);
-    Logger.log(" -> Saved to Drive: " + fileName);
 
     workout = {
       type: selectedType,
       explanation: result.explanation,
       recommendationScore: result.recommendationScore,
       recommendationReason: result.recommendationReason,
-      blob: blob,
       fileName: fileName,
       workoutDescription: workoutText
     };
 
     // Upload run to Intervals.icu calendar
-    uploadRunToIntervals(fileName.replace('.txt', ''), result.workoutDescription || result.explanation, isoDateStr, availability.placeholder, availability.duration);
+    uploadRunToIntervals(fileName, workoutText, isoDateStr, availability.placeholder, availability.duration);
   } else {
-    // For rides: save ZWO and upload
-    const fileName = `IntervalCoach_${safeType}_${fileDateStr}.zwo`;
-    const blob = Utilities.newBlob(result.xml, "text/xml", fileName);
-    folder.createFile(blob);
-    Logger.log(" -> Saved to Drive: " + fileName);
+    // For rides: upload ZWO to Intervals.icu (Zwift syncs from there)
+    const fileName = `IntervalCoach_${safeType}_${fileDateStr}`;
 
     workout = {
       type: selectedType,
       explanation: result.explanation,
       recommendationScore: result.recommendationScore,
       recommendationReason: result.recommendationReason,
-      blob: blob,
       fileName: fileName,
       xml: result.xml
     };
 
     // Upload to Intervals.icu calendar (replaces placeholder)
-    uploadWorkoutToIntervals(fileName.replace('.zwo', ''), result.xml, isoDateStr, availability.placeholder);
+    uploadWorkoutToIntervals(fileName, result.xml, isoDateStr, availability.placeholder);
   }
 
   // Send unified daily email (workout type)

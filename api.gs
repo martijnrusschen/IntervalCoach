@@ -49,9 +49,6 @@ function validateConfig() {
     if (!USER_SETTINGS.PLACEHOLDER_RUN) {
       errors.push("USER_SETTINGS.PLACEHOLDER_RUN is missing");
     }
-    if (!USER_SETTINGS.WORKOUT_FOLDER) {
-      errors.push("USER_SETTINGS.WORKOUT_FOLDER is missing");
-    }
   }
 
   return { valid: errors.length === 0, errors: errors };

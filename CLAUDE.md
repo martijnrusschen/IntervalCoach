@@ -19,7 +19,7 @@ Intervals.icu (Calendar, Power/Pace Curves, Wellness)
     ↓
 IntervalCoach (fetch data → analyze → generate via Gemini → upload)
     ↓
-Google Drive (.zwo files) + Intervals.icu (workout upload) + Email
+Intervals.icu (structured workouts) + Email → Zwift (syncs from Intervals.icu)
 ```
 
 ### File Structure
