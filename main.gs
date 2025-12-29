@@ -320,16 +320,23 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Keep the placeholder for tomorrow (don't delete - user may want to train when recovered)
     Logger.log("Keeping placeholder for potential rescheduling");
 
+    // Fetch fitness metrics for coaching note context
+    const fitnessMetrics = fetchFitnessMetrics();
+
     // Send unified daily email (rest type)
     const upcomingDays = fetchUpcomingPlaceholders(7);
     const weekProgress = checkWeekProgress();
     sendDailyEmail({
       type: 'rest',
-      summary: { ctl_90: 0, tsb_current: 0 }, // Will be fetched in full flow
+      summary: {
+        ctl_90: fitnessMetrics.ctl || 0,
+        tsb_current: fitnessMetrics.tsb || 0
+      },
       phaseInfo: phaseInfo,
       wellness: wellness,
       weekProgress: weekProgress,
-      upcomingDays: upcomingDays
+      upcomingDays: upcomingDays,
+      fitness: fitnessMetrics
     });
 
     Logger.log("Workout generation skipped - rest day email sent");

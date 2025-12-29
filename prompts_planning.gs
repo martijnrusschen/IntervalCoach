@@ -164,6 +164,80 @@ Keep the tone supportive, not preachy. Be concise (max 150 words total).`;
   return callGeminiAPIText(prompt);
 }
 
+/**
+ * Generate AI-powered rest day coaching note
+ * Provides context about why rest fits in the training plan and what's ahead
+ * Works for any rest day scenario (no placeholder, recovery day, planned rest, etc.)
+ * @param {object} params - Context for generating the note
+ * @returns {string} AI-generated coaching note
+ */
+function generateRestDayCoachingNote(params) {
+  const { wellness, phaseInfo, weekProgress, upcomingDays, fitness } = params;
+  const langName = getPromptLanguage();
+
+  const w = wellness?.today || {};
+  const avg = wellness?.averages || {};
+
+  // Build upcoming workouts context
+  let upcomingContext = 'No workouts planned';
+  if (upcomingDays && upcomingDays.length > 0) {
+    const nextWorkouts = upcomingDays
+      .filter(d => d.activityType || d.hasEvent)
+      .slice(0, 3)
+      .map(d => {
+        if (d.hasEvent) return `${d.dayName}: [${d.eventCategory}] ${d.eventName || 'Event'}`;
+        return `${d.dayName}: ${d.placeholderName || d.activityType}`;
+      });
+    if (nextWorkouts.length > 0) {
+      upcomingContext = nextWorkouts.join('\n');
+    }
+  }
+
+  // Build week progress context
+  let progressContext = 'No data yet';
+  if (weekProgress && weekProgress.daysAnalyzed > 0) {
+    progressContext = `Completed: ${weekProgress.completedSessions}/${weekProgress.plannedSessions} sessions (${weekProgress.tssCompleted}/${weekProgress.tssPlanned} TSS)`;
+    if (weekProgress.missedTypes?.length > 0) {
+      progressContext += `\nMissed: ${weekProgress.missedTypes.join(', ')}`;
+    }
+  }
+
+  const prompt = `You are an experienced cycling/running coach writing a brief coaching note for a rest day.
+
+**Athlete Context:**
+- Training Phase: ${phaseInfo?.phaseName || 'Build'} (${phaseInfo?.weeksOut || '?'} weeks to goal)
+- Goal: ${phaseInfo?.goalDescription || 'General fitness'}
+- Fitness: CTL=${fitness?.ctl?.toFixed(0) || 'N/A'}, TSB=${fitness?.tsb?.toFixed(1) || 'N/A'}
+
+**Today's Status:**
+- Recovery: ${wellness?.recoveryStatus || 'Unknown'}${w.recovery != null ? ` (${w.recovery}%)` : ''}
+- Sleep: ${w.sleep ? w.sleep.toFixed(1) + 'h' : 'N/A'}
+- HRV: ${w.hrv || 'N/A'} ms (avg: ${avg.hrv ? avg.hrv.toFixed(0) : 'N/A'})
+
+**This Week's Progress:**
+${progressContext}
+
+**Coming Up:**
+${upcomingContext}
+
+**Instructions:**
+Write a short, personalized rest day coaching note (4-6 sentences) in ${langName} that:
+1. Acknowledges their current state (fresh, recovering, etc.)
+2. Explains how today's rest fits in the bigger picture (training phase, upcoming workouts)
+3. If there were missed workouts this week, briefly address how rest helps recalibrate
+4. Gives one specific recovery tip (nutrition, sleep, mobility - be specific)
+5. Ends with a forward-looking statement about what's ahead
+
+Be warm and conversational. Use "je/jij" (Dutch) or "you" (English) to address them directly. Don't be preachy about rest - be positive and strategic.`;
+
+  try {
+    return callGeminiAPIText(prompt);
+  } catch (e) {
+    Logger.log("Error generating rest day coaching note: " + e.toString());
+    return null;
+  }
+}
+
 // =========================================================
 // WEEKLY INSIGHT
 // =========================================================

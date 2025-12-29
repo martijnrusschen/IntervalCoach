@@ -307,6 +307,30 @@ ${t.rest_day_alternatives || "Light alternatives"}:
 ${restAssessment?.alternatives || `• ${t.rest_day_walk || "Easy walk (20-30 min)"}\n• ${t.rest_day_strength || "Light mobility/stretching"}`}
 `;
     }
+
+    // Generate and add rest day coaching note
+    if (params.enableCoachingNote !== false) {
+      try {
+        const coachingNote = generateRestDayCoachingNote({
+          wellness: wellness,
+          phaseInfo: phaseInfo,
+          weekProgress: weekProgress,
+          upcomingDays: upcomingDays,
+          fitness: params.fitness || { ctl: summary?.ctl_90, tsb: summary?.tsb_current }
+        });
+
+        if (coachingNote) {
+          body += `
+-----------------------------------
+${t.coach_note_title || "Coach's Note"}
+-----------------------------------
+${coachingNote}
+`;
+        }
+      } catch (e) {
+        Logger.log("Error adding rest day coaching note: " + e.toString());
+      }
+    }
   }
 
   // === SECTION 3: Week Progress ===

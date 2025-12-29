@@ -31,17 +31,74 @@ function testRestDayEmail() {
   Logger.log("Phase: " + phaseInfo.phaseName);
   Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
 
-  Logger.log("\n--- AI Rest Day Advice ---");
-  const aiAdvice = generateRestDayAdvice(wellness);
-  if (aiAdvice) {
-    Logger.log(aiAdvice);
+  // Fetch additional context for coaching note
+  const fitnessMetrics = fetchFitnessMetrics();
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  Logger.log("\n--- Upcoming Workouts ---");
+  const nextWorkouts = upcomingDays.filter(d => d.activityType || d.hasEvent).slice(0, 3);
+  if (nextWorkouts.length > 0) {
+    nextWorkouts.forEach(d => {
+      if (d.hasEvent) {
+        Logger.log("  " + d.dayName + ": [" + d.eventCategory + "] " + (d.eventName || 'Event'));
+      } else {
+        Logger.log("  " + d.dayName + ": " + (d.placeholderName || d.activityType));
+      }
+    });
   } else {
-    Logger.log("(AI advice generation failed, would use fallback translations)");
+    Logger.log("  No workouts planned");
+  }
+
+  Logger.log("\n--- AI Rest Day Coaching Note ---");
+  const coachingNote = generateRestDayCoachingNote({
+    wellness: wellness,
+    phaseInfo: phaseInfo,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    fitness: fitnessMetrics
+  });
+  if (coachingNote) {
+    Logger.log(coachingNote);
+  } else {
+    Logger.log("(Coaching note generation failed)");
   }
 
   Logger.log("\n--- Test Complete ---");
-  Logger.log("To send an actual test email, uncomment the line below:");
-  Logger.log("// sendRestDayEmail(wellness, phaseInfo);");
+  Logger.log("To send an actual rest day email, run: testSendRestDayEmail()");
+}
+
+/**
+ * Actually send a test rest day email (for testing the full flow)
+ */
+function testSendRestDayEmail() {
+  Logger.log("=== SENDING TEST REST DAY EMAIL ===");
+
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  sendDailyEmail({
+    type: 'rest',
+    summary: {
+      ctl_90: fitnessMetrics.ctl || 0,
+      tsb_current: fitnessMetrics.tsb || 0
+    },
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    fitness: fitnessMetrics
+  });
+
+  Logger.log("Rest day email sent!");
 }
 
 /**
