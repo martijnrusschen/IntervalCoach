@@ -55,7 +55,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **Subjective Markers as Constraints** | Enforce soreness/fatigue/stress 4-5 as hard constraints that block high intensity | Coaching |
 | **Event-Specific Weekly Emphasis** | Climbing goal → 5-20min power focus; TT → threshold focus; Criterium → anaerobic focus | Coaching |
-| **Sleep Quality Scoring** | Create quality score from deep sleep %, REM %, efficiency. Weight quality > quantity | Coaching |
 | **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
@@ -79,6 +78,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description |
 |---------|-------------|
+| ~~Sleep Quality Scoring~~ | Whoop provides comprehensive sleep metrics (deep sleep %, REM %, efficiency, disturbances, sleep debt) and composite `sleepPerformance` score; all passed to AI for recovery decisions |
 | ~~Zone Weakness Targeting~~ | Zone progression levels with plateau detection; AI prioritizes underdeveloped zones and rotates stimulus for plateaued zones |
 | ~~Cross-Sport Load Balance~~ | Track cumulative Z5+ time across cycling and running; cross-sport zone equivalency ensures consistent intensity measurement |
 | ~~Season Best Comparison~~ | Track season best for W', pMax, CS and show gap to AI for workout decisions |
