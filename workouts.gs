@@ -15,8 +15,9 @@
  * Looks for:
  * 1. Placeholders starting with "Ride" or "Run" (e.g., "Ride - 90min" or "Run - 45min")
  * 2. Existing generated workouts (workout types from catalog, or workouts with .zwo files)
+ *
  * @param {string} dateStr - Date in yyyy-MM-dd format
- * @returns {object} { hasPlaceholder, placeholder, duration, activityType, isExisting }
+ * @returns {object} { hasPlaceholder, placeholder, duration, activityType, isExisting, suggestedType, isWeeklyPlan }
  */
 function findIntervalCoachPlaceholder(dateStr) {
   // Use cached event fetching
@@ -90,19 +91,34 @@ function findIntervalCoachPlaceholder(dateStr) {
     // Try to extract duration from the existing workout or use default
     const duration = existingWorkout.moving_time
       ? { min: Math.round(existingWorkout.moving_time / 60 * 0.9), max: Math.round(existingWorkout.moving_time / 60 * 1.1) }
-      : (activityType === "Run" ? USER_SETTINGS.DEFAULT_DURATION_RUN : USER_SETTINGS.DEFAULT_DURATION_RIDE);
+      : parseDurationFromName(existingWorkout.name, activityType);
 
     // Find full event data (needed for id, etc.)
     const fullWorkout = eventData.events.find(e => e.id === existingWorkout.id) || existingWorkout;
 
-    Logger.log("Found existing workout to replace: " + existingWorkout.name);
+    // Check if this is a weekly plan workout and extract suggested type
+    let suggestedType = null;
+    let isWeeklyPlan = false;
+    const description = existingWorkout.description || fullWorkout.description || '';
+    if (description.includes('[Weekly Plan]')) {
+      isWeeklyPlan = true;
+      // Extract workout type from event name (format: "VO2max_Intervals - 60min")
+      const workoutTypePart = existingWorkout.name.split(' - ')[0];
+      if (workoutTypePart) {
+        suggestedType = workoutTypePart.replace(/_/g, ' ');
+      }
+    }
+
+    Logger.log("Found existing workout to replace: " + existingWorkout.name + (isWeeklyPlan ? " [Weekly Plan]" : ""));
 
     return {
       hasPlaceholder: true,
       placeholder: fullWorkout,
       duration: duration,
       activityType: activityType,
-      isExisting: true
+      isExisting: true,
+      isWeeklyPlan: isWeeklyPlan,
+      suggestedType: suggestedType
     };
   }
 

@@ -34,14 +34,27 @@ function fetchUpcomingPlaceholders(days) {
     const eventName = raceEvent ? raceEvent.name : null;
     const eventDescription = raceEvent ? raceEvent.description : null;
 
-    // Get placeholder info
+    // Get placeholder info - check simple placeholders first, then WORKOUT events
     const placeholder = eventData.placeholders.length > 0 ? eventData.placeholders[0] : null;
+    const workoutEvent = eventData.workoutEvents.length > 0 ? eventData.workoutEvents[0] : null;
+
     let activityType = null;
     let duration = null;
+    let placeholderName = null;
 
     if (placeholder) {
+      // Simple placeholder (Ride/Run) - these are detected by name prefix
       activityType = placeholder.type;
       duration = parseDurationFromName(placeholder.name, activityType);
+      placeholderName = placeholder.name;
+    } else if (workoutEvent) {
+      // WORKOUT event (weekly plan event like "VO2max_Intervals - 60min", "SweetSpot_Z4 - 60min")
+      const workoutName = workoutEvent.name || '';
+      // Determine activity type from event type or name
+      activityType = workoutEvent.type ||
+                     (workoutName.toLowerCase().includes('run') ? 'Run' : 'Ride');
+      duration = parseDurationFromName(workoutName, activityType);
+      placeholderName = workoutName;
     }
 
     upcoming.push({
@@ -53,7 +66,7 @@ function fetchUpcomingPlaceholders(days) {
       eventCategory: eventCategory,
       eventName: eventName,
       eventDescription: eventDescription,
-      placeholderName: placeholder ? placeholder.name : null
+      placeholderName: placeholderName
     });
   }
 

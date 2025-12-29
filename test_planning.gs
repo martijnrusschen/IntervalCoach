@@ -869,3 +869,74 @@ function testAdaptivePhaseTransitions() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * DIAGNOSTIC: Compare raw API events vs fetchUpcomingPlaceholders output
+ * Run this to see exactly what events exist in your calendar vs what's being detected
+ */
+function testDiagnoseUpcomingSchedule() {
+  Logger.log("=== DIAGNOSE UPCOMING SCHEDULE ===\n");
+  requireValidConfig();
+
+  const today = new Date();
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dateStr = formatDateISO(date);
+    const dayName = Utilities.formatDate(date, SYSTEM_SETTINGS.TIMEZONE, "EEEE");
+
+    Logger.log("\n--- " + dayName + " (" + dateStr + ") ---");
+
+    // Fetch raw events from API
+    const rawResult = fetchIcuApi("/athlete/0/events?oldest=" + dateStr + "&newest=" + dateStr);
+
+    if (!rawResult.success || !rawResult.data || rawResult.data.length === 0) {
+      Logger.log("  [RAW API] No events");
+    } else {
+      Logger.log("  [RAW API] " + rawResult.data.length + " event(s):");
+      for (const e of rawResult.data) {
+        Logger.log("    - Category: " + (e.category || "N/A") +
+                   " | Name: " + (e.name || "N/A") +
+                   " | Type: " + (e.type || "N/A"));
+        if (e.description) {
+          Logger.log("      Description: " + e.description.substring(0, 50) + "...");
+        }
+      }
+    }
+
+    // Use fetchEventsForDate to see how it categorizes
+    const eventData = fetchEventsForDate(dateStr);
+    Logger.log("  [fetchEventsForDate] Categorized as:");
+    Logger.log("    - raceEvent: " + (eventData.raceEvent ? eventData.raceEvent.category + " - " + eventData.raceEvent.name : "null"));
+    Logger.log("    - workoutEvents: " + eventData.workoutEvents.length + " found");
+    for (const we of eventData.workoutEvents) {
+      Logger.log("        * " + we.name + " (type: " + we.type + ")");
+    }
+    Logger.log("    - placeholders: " + eventData.placeholders.length + " found");
+    for (const ph of eventData.placeholders) {
+      Logger.log("        * " + ph.name + " (type: " + ph.type + ")");
+    }
+  }
+
+  // Now show what fetchUpcomingPlaceholders returns
+  Logger.log("\n\n=== fetchUpcomingPlaceholders OUTPUT ===");
+  const upcoming = fetchUpcomingPlaceholders(7);
+  for (const day of upcoming) {
+    let info = day.dayName + " (" + day.date + "): ";
+    if (day.hasEvent) {
+      info += "[" + day.eventCategory + "] " + (day.eventName || "");
+    } else if (day.activityType) {
+      info += day.placeholderName || day.activityType;
+      if (day.duration) info += " (" + day.duration.min + "-" + day.duration.max + " min)";
+    } else {
+      info += "-";
+    }
+    Logger.log("  " + info);
+  }
+
+  Logger.log("\n=== DIAGNOSIS COMPLETE ===");
+  Logger.log("\nIf workoutEvents exist but don't appear in the final output,");
+  Logger.log("the issue is that fetchUpcomingPlaceholders only uses 'placeholders' array,");
+  Logger.log("not 'workoutEvents' array. Weekly plan events are WORKOUT category events.");
+}
