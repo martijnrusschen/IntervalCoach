@@ -60,7 +60,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Sleep Quality Scoring** | Create quality score from deep sleep %, REM %, efficiency. Weight quality > quantity | Coaching |
 | **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
-| ~~**Illness Detection Patterns**~~ | ~~Detect illness: elevated RHR + suppressed HRV + poor sleep + elevated skin temp for 2+ days~~ | **COMPLETE** |
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
 | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
@@ -71,14 +70,8 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| ~~**Post-Workout → Next Day**~~ | ~~Pass yesterday's workout analysis to today's decision. If "harder than expected" → reduce intensity 10%~~ | **COMPLETE** |
-| ~~**W' Guides Interval Design**~~ | ~~Use W'/D' to adjust interval recovery times. Low W' → longer recovery; High W' → shorter recovery~~ | **COMPLETE** |
-| ~~**Volume Jump Detection**~~ | ~~Flag week-to-week volume increases >15% as injury risk, suggest spreading load~~ | **COMPLETE** |
-| ~~**Z-Score Intensity Modifier**~~ | ~~Convert HRV/RHR z-scores to continuous intensity modifier (z=-2 → 0.7x) instead of Red/Yellow/Green~~ | **COMPLETE** |
-| ~~**Training Load Rate Warnings**~~ | ~~Warn when CTL ramp rate exceeds safe thresholds for multiple weeks~~ | **COMPLETE** |
 | **Season Best Comparison** | Compare current peak powers to season best. 10%+ below = fatigue warning | Coaching |
 | **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
-| ~~**Recovery Debt Tracking**~~ | ~~Track multi-day sleep deficit, trigger recovery week earlier if debt accumulates~~ | **COMPLETE** |
 | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
 | **Training Outcome Simulation** | Simulate multiple workout options before deciding | AI-First |
 | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
