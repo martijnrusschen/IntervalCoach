@@ -323,7 +323,8 @@ function generateWorkoutWithFeedback(prompt, context, maxAttempts, minScore) {
     }
 
     const score = result.recommendationScore || 5;
-    Logger.log(`Generation attempt ${attempt}: Score ${score}/10`);
+    const reason = result.recommendationReason || 'No reason provided';
+    Logger.log(`Generation attempt ${attempt}: Score ${score}/10. Reason: ${reason}`);
 
     // Track best result
     if (score > bestScore) {
@@ -333,13 +334,12 @@ function generateWorkoutWithFeedback(prompt, context, maxAttempts, minScore) {
 
     // Accept if meets threshold
     if (score >= minScore) {
-      Logger.log(`Accepted workout with score ${score} (meets threshold ${minScore})`);
       return result;
     }
 
     // If not last attempt, will regenerate
     if (attempt < maxAttempts) {
-      Logger.log(`Score ${score} below threshold ${minScore}, regenerating...`);
+      Logger.log(`Score below threshold ${minScore}, regenerating...`);
     }
   }
 
