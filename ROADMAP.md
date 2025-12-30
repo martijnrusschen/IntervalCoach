@@ -33,6 +33,8 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Data-Driven Taper Timing** - Models ATL decay to calculate optimal taper start date for target TSB on race day
 - [x] **Adaptive Phase Transitions** - Shift Base→Build based on fitness trajectory, not just calendar date
 - [x] **Post-Workout → Next Day** - Pass yesterday's workout difficulty to today's decision
+- [x] **Event-Specific Weekly Emphasis** - AI tailors weekly plan based on goal event type (climbing, TT, criterium)
+- [x] **Stimulus-Aware Weekly Planning** - AI validates hard-easy alternation and avoids back-to-back intensity days
 
 ---
 
@@ -54,8 +56,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 |---------|-------------|------|
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **Subjective Markers as Constraints** | Enforce soreness/fatigue/stress 4-5 as hard constraints that block high intensity | Coaching |
-| **Event-Specific Weekly Emphasis** | Climbing goal → 5-20min power focus; TT → threshold focus; Criterium → anaerobic focus | Coaching |
-| **Stimulus-Aware Weekly Planning** | Validate weekly plan for balanced stimulus distribution (no back-to-back same stimulus) | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
 | **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
