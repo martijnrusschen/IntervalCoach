@@ -24,8 +24,11 @@ function formatDateISO(date) {
  * @param {number} feelValue - Feel value from Intervals.icu (1-5)
  * @returns {string} Human readable label
  */
-function getFeelLabel(feelValue) {
-  const feelLabels = { 1: 'Strong', 2: 'Good', 3: 'Normal', 4: 'Poor', 5: 'Weak' };
+function getFeelLabel(feelValue, lang) {
+  lang = lang || USER_SETTINGS.LANGUAGE || 'en';
+  const feelLabels = lang === 'nl'
+    ? { 1: 'sterk', 2: 'goed', 3: 'normaal', 4: 'matig', 5: 'zwak' }
+    : { 1: 'strong', 2: 'good', 3: 'normal', 4: 'poor', 5: 'weak' };
   return feelLabels[Math.round(feelValue)] || String(feelValue);
 }
 
@@ -226,6 +229,29 @@ function parseGeminiJsonResponse(response) {
  */
 function getTranslations() {
   return TRANSLATIONS[USER_SETTINGS.LANGUAGE] || TRANSLATIONS.en;
+}
+
+// =========================================================
+// WORKOUT NAMING
+// =========================================================
+
+/**
+ * Generate workout name for Intervals.icu/Strava/Zwift
+ * Format: "IntervalCoach {WorkoutType}" e.g., "IntervalCoach Sweet Spot"
+ * @param {string} workoutType - The workout type (e.g., "Sweet Spot", "VO2max")
+ * @returns {string} Formatted workout name
+ */
+function generateWorkoutName(workoutType) {
+  return `IntervalCoach ${workoutType}`;
+}
+
+/**
+ * Check if a workout name is an IntervalCoach generated workout
+ * @param {string} name - Workout name to check
+ * @returns {boolean} True if it's an IntervalCoach workout
+ */
+function isIntervalCoachWorkout(name) {
+  return name?.startsWith('IntervalCoach');
 }
 
 // =========================================================
