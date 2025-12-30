@@ -10,6 +10,19 @@
 // =========================================================
 
 /**
+ * Simple email test to verify Gmail is working
+ */
+function testSimpleEmail() {
+  Logger.log("Sending simple test email...");
+  GmailApp.sendEmail(
+    USER_SETTINGS.EMAIL_TO,
+    "[IntervalCoach] Simple Test",
+    "This is a simple test email to verify Gmail is working.\n\nIf you see this, email delivery works!"
+  );
+  Logger.log("Simple email sent to " + USER_SETTINGS.EMAIL_TO);
+}
+
+/**
  * Test unified daily email - tests all three types
  * @param {string} emailType - 'workout', 'rest', or 'status' (default: 'status')
  */

@@ -308,3 +308,87 @@ function testClosedLoopAdaptation() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Debug function to show exactly how week progress TSS is calculated
+ * Run this to see which planned workouts are being detected
+ */
+function testWeekProgressDebug() {
+  Logger.log("=== WEEK PROGRESS DEBUG ===\n");
+  requireValidConfig();
+
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday
+
+  // Calculate week boundaries (Monday to Sunday)
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const startStr = formatDateISO(monday);
+  const weekEndStr = formatDateISO(sunday);
+  const todayStr = formatDateISO(today);
+
+  Logger.log("Week: " + startStr + " to " + weekEndStr);
+  Logger.log("Today: " + todayStr + " (day " + dayOfWeek + ")\n");
+
+  // Fetch ALL events for the entire week
+  const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + weekEndStr);
+
+  Logger.log("--- All Week Events ---");
+  if (eventsResult.success && eventsResult.data) {
+    eventsResult.data.forEach((e, i) => {
+      Logger.log((i+1) + ". " + e.name);
+      Logger.log("   Category: " + e.category);
+      Logger.log("   Date: " + e.start_date_local);
+      Logger.log("   icu_training_load: " + (e.icu_training_load || 'N/A'));
+      Logger.log("   Description: " + (e.description || '').substring(0, 100));
+      const tssMatch = e.description?.match(/TSS.*?(\d+)/);
+      Logger.log("   TSS from description: " + (tssMatch ? tssMatch[1] : 'N/A'));
+    });
+  }
+
+  // Filter for planned workouts (same logic as checkWeekProgress)
+  Logger.log("\n--- Filtered Planned Workouts ---");
+  if (eventsResult.success && eventsResult.data) {
+    const plannedWorkouts = eventsResult.data.filter(e => {
+      // Our generated workouts or placeholders
+      const isOurWorkout = e.category === 'WORKOUT' &&
+        (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run|IntervalCoach)/i));
+      // Any race/event (A, B, C) - these all have planned TSS
+      const isRaceEvent = e.category === 'RACE_A' || e.category === 'RACE_B' || e.category === 'RACE_C';
+      return isOurWorkout || isRaceEvent;
+    });
+
+    Logger.log("Found " + plannedWorkouts.length + " planned workouts:");
+    let totalTSS = 0;
+    plannedWorkouts.forEach((e, i) => {
+      const tssMatch = e.description?.match(/TSS.*?(\d+)/);
+      const tss = tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 60);
+      totalTSS += tss;
+      Logger.log((i+1) + ". " + e.name + " -> TSS: " + tss);
+      Logger.log("   Source: " + (tssMatch ? "description" : (e.icu_training_load ? "icu_training_load" : "default 60")));
+    });
+    Logger.log("\nTotal Planned TSS: " + totalTSS);
+  }
+
+  // Also show actual completed
+  Logger.log("\n--- Completed Activities ---");
+  const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + todayStr);
+  if (activitiesResult.success && activitiesResult.data) {
+    const sportActivities = activitiesResult.data.filter(a =>
+      (a.type === 'Ride' || a.type === 'VirtualRide' || a.type === 'Run' || a.type === 'VirtualRun') &&
+      a.icu_training_load && a.icu_training_load > 0
+    );
+    let completedTSS = 0;
+    sportActivities.forEach((a, i) => {
+      completedTSS += a.icu_training_load || 0;
+      Logger.log((i+1) + ". " + a.name + " -> TSS: " + (a.icu_training_load || 0));
+    });
+    Logger.log("\nTotal Completed TSS: " + completedTSS);
+    Logger.log("Completed Sessions: " + sportActivities.length);
+  }
+
+  Logger.log("\n=== DEBUG COMPLETE ===");
+}

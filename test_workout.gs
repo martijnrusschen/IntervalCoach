@@ -369,12 +369,35 @@ function testPostWorkoutAnalysis() {
     Logger.log("X Error storing analysis: " + e.toString());
   }
 
-  // Test 5: Email Sending
+  // Test 5: Email Sending (with full context)
   Logger.log("\n--- Test 5: Email Sending ---");
+  Logger.log("Fetching additional context for enhanced email...");
+
+  // Fetch additional context for enhanced email
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = calculateTrainingPhase(goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE);
+  const weekProgress = checkWeekProgress();
+  const recentHistory = fetchRecentActivitySummary(14);
+
+  // Get next planned workout (skip today, look at next 5 days)
+  const upcomingDays = fetchUpcomingPlaceholders(6);
+  const nextWorkout = upcomingDays.slice(1).find(d => d.activityType || d.hasEvent);
+
+  Logger.log("  Week Progress: " + weekProgress.summary);
+  Logger.log("  Recent History: " + recentHistory.totalActivities + " activities in last 14 days");
+  Logger.log("  Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("  Next Workout: " + (nextWorkout ? (nextWorkout.placeholderName || nextWorkout.activityType || nextWorkout.eventName) + " on " + nextWorkout.dayName : "None"));
+
   Logger.log("Sending post-workout analysis email...");
 
   try {
-    sendPostWorkoutAnalysisEmail(realWorkout, analysis, wellness, fitness, powerProfile, runningData);
+    sendPostWorkoutAnalysisEmail(realWorkout, analysis, wellness, fitness, powerProfile, runningData, {
+      goals: goals,
+      phaseInfo: phaseInfo,
+      weekProgress: weekProgress,
+      recentHistory: recentHistory,
+      nextWorkout: nextWorkout
+    });
     Logger.log("OK Email sent successfully to " + USER_SETTINGS.EMAIL_TO);
   } catch (e) {
     Logger.log("X Error sending email: " + e.toString());
