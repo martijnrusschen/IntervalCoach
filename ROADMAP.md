@@ -57,7 +57,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
 | **Multi-Week Forward View** | Extend weekly plan to 2-4 week visibility | Platform |
-| **Enhanced Workout Feel Prediction** | Predict how workout will feel beyond simple 1-5 difficulty | AI-First |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
 | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 
