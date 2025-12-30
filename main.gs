@@ -290,6 +290,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   if (existingPlaceholder?.name?.startsWith('IntervalCoach_') && existingPlaceholder?.icu_training_load > 0) {
     Logger.log(`Removing existing workout (TSS: ${existingPlaceholder.icu_training_load}) before fetching metrics...`);
     deleteIntervalEvent(existingPlaceholder);
+    // Clear the placeholder so upload creates a new event instead of trying to update deleted one
+    availability.placeholder = null;
     // Small delay to ensure API reflects the deletion
     Utilities.sleep(1000);
   }
