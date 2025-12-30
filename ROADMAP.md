@@ -67,7 +67,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | Feature | Description | Type |
 |---------|-------------|------|
 | **Multi-Workout Option Comparison** | Generate 3 workout options with projected outcomes (like Aixle), let user choose | AI-First |
-| **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
 | **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
 | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
 
