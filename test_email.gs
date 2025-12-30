@@ -599,6 +599,17 @@ function previewWeeklyEmail() {
     Logger.log("Zone progression failed: " + e.toString());
   }
 
+  // 4-Week Outlook (dynamic recovery timing)
+  try {
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+    if (fourWeekOutlook) {
+      body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
+    }
+  } catch (e) {
+    Logger.log("4-week outlook failed: " + e.toString());
+  }
+
   // Goal Progress
   if (goals?.available && goals?.primaryGoal) {
     body += buildGoalProgressSection(goals, phaseInfo, fitnessMetrics, isNL);
@@ -856,6 +867,20 @@ function previewMonthlyEmail() {
       : `\nCurrent fitness: CTL ${currentMonth.fitness.ctlEnd.toFixed(0)}\n`;
   }
 
+  // ============ 4-WEEK OUTLOOK ============
+  try {
+    const fitnessMetrics = fetchFitnessMetrics();
+    const wellnessRecords = fetchWellnessData(7);
+    const wellnessSummary = createWellnessSummary(wellnessRecords);
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+    if (fourWeekOutlook) {
+      body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
+    }
+  } catch (e) {
+    Logger.log("4-week outlook failed: " + e.toString());
+  }
+
   // ============ NEXT MONTH ============
   body += '\n';
   body += isNL ? 'KOMENDE MAAND\n\n' : 'NEXT MONTH\n\n';
@@ -939,4 +964,63 @@ function previewMonthlyEmail() {
   Logger.log("\n--- EMAIL BODY ---\n");
   Logger.log(body);
   Logger.log("\n--- END PREVIEW ---");
+}
+
+/**
+ * Test creating week labels in Intervals.icu calendar
+ * Creates NOTE events with week type (Build/Recovery/Race Week)
+ */
+function testWeekLabels() {
+  Logger.log("=== TESTING WEEK LABELS ===\n");
+
+  // Gather required data
+  const fitnessMetrics = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals?.available && goals?.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  let zoneProgression = null;
+  try {
+    zoneProgression = calculateZoneProgression(42);
+  } catch (e) {
+    Logger.log("Zone progression failed: " + e.toString());
+  }
+
+  const wellnessRecords = fetchWellnessData(7);
+  const wellnessSummary = createWellnessSummary(wellnessRecords);
+  const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+
+  Logger.log("Deload check: " + JSON.stringify(deloadCheck));
+
+  // Generate outlook
+  const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+
+  if (!fourWeekOutlook) {
+    Logger.log("ERROR: Could not generate 4-week outlook");
+    return;
+  }
+
+  Logger.log("\n4-Week Outlook:");
+  fourWeekOutlook.weeks.forEach(w => {
+    Logger.log(`  Week ${w.weekNumber} (${w.weekStart}): ${w.type} - ${w.focus}`);
+  });
+
+  // Create labels
+  Logger.log("\nCreating week labels in Intervals.icu...");
+  const labelResults = createWeekLabelEvents(fourWeekOutlook);
+
+  Logger.log("\nResults:");
+  Logger.log("  Created: " + labelResults.created);
+  Logger.log("  Skipped: " + labelResults.skipped);
+
+  if (labelResults.results && labelResults.results.length > 0) {
+    Logger.log("\nPer week:");
+    labelResults.results.forEach(r => {
+      const status = r.skipped ? 'SKIPPED (exists)' : (r.success ? 'CREATED' : 'FAILED');
+      Logger.log(`  Week ${r.week} (${r.date}): ${r.type} - ${status}`);
+    });
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
 }

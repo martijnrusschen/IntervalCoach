@@ -29,13 +29,13 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Personalized Zone Boundaries** - AI adjusts zones based on power curve analysis and athlete physiology
 - [x] **Mid-Week Adaptation** - Analyzes week progress and adjusts remaining workouts when sessions are missed or wellness changes
 - [x] **HRV/RHR Baseline Tracking** - Tracks 30-day rolling baselines and surfaces deviation % to AI and emails
-- [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on 4-week TSS patterns
+- [x] **Planned Deload Weeks** - Auto-detects when recovery week is needed based on fatigue accumulation and wellness signals
 - [x] **Data-Driven Taper Timing** - Models ATL decay to calculate optimal taper start date for target TSB on race day
 - [x] **Adaptive Phase Transitions** - Shift Base→Build based on fitness trajectory, not just calendar date
 - [x] **Post-Workout → Next Day** - Pass yesterday's workout difficulty to today's decision
 - [x] **Event-Specific Weekly Emphasis** - AI tailors weekly plan based on goal event type (climbing, TT, criterium)
 - [x] **Stimulus-Aware Weekly Planning** - AI validates hard-easy alternation and avoids back-to-back intensity days
-- [x] **Multi-Week Forward View** - 4-week periodization outlook with week themes, volume targets, Intervals.icu labels
+- [x] **Multi-Week Forward View** - 4-week training outlook with dynamic recovery timing based on body signals, volume targets, Intervals.icu labels
 
 ---
 

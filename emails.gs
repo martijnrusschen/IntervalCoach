@@ -826,7 +826,7 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
     Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
   }
 
-  // Add 4-week periodization block info
+  // Add recovery timing info (dynamic based on body signals)
   try {
     const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
     if (deloadCheck) {
@@ -834,12 +834,11 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
         weeksWithoutDeload: deloadCheck.weeksWithoutDeload || 0,
         needsRecovery: deloadCheck.needed,
         urgency: deloadCheck.urgency,
-        weekInBlock: (deloadCheck.weeksWithoutDeload % 4) + 1, // Week 1-4 in current block
         isRecoveryWeek: deloadCheck.needed && deloadCheck.urgency === 'high'
       };
     }
   } catch (e) {
-    Logger.log("Periodization block check failed (non-critical): " + e.toString());
+    Logger.log("Recovery timing check failed (non-critical): " + e.toString());
   }
 
   return planContext;
