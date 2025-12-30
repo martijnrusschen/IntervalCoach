@@ -1297,172 +1297,381 @@ ${t.weeks_to_goal}: ${phaseInfo.weeksOut} ${t.weeks_unit}
 // =========================================================
 
 /**
- * Send post-workout AI analysis email
+ * Send post-workout AI analysis email with engaging format
  * @param {object} activity - Completed activity
  * @param {object} analysis - AI analysis results
  * @param {object} wellness - Current wellness data
  * @param {object} fitness - Current fitness metrics
  * @param {object} powerProfile - Power profile (null for runs)
  * @param {object} runningData - Running data (null for cycling)
+ * @param {object} context - Additional context { goals, phaseInfo, weekProgress, recentHistory }
  */
-function sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData) {
+function sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData, context) {
   const t = getTranslations();
-  const isRun = activity.type === "Run";
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+  const isRun = activity.type === "Run" || activity.type === "VirtualRun";
+  const isCycling = activity.type === "Ride" || activity.type === "VirtualRide";
+  context = context || {};
 
   // Generate subject line
   const dateStr = Utilities.formatDate(new Date(activity.start_date_local), SYSTEM_SETTINGS.TIMEZONE, "MM/dd HH:mm");
-  const subject = `[IntervalCoach] Workout Analysis: ${activity.name} (${dateStr})`;
+  const subject = `[IntervalCoach] ${activity.name} - ${analysis.effectiveness}/10 (${dateStr})`;
 
-  let body = `${t.greeting}\n\n`;
+  // Build engaging opening based on context
+  const opening = buildEngagingOpening(activity, analysis, wellness, fitness, context, isNL);
 
-  // Congratulatory message
-  if (analysis.congratsMessage) {
-    body += `===================================
-${t.workout_complete || "Workout Complete"}
-===================================
-${analysis.congratsMessage}
+  // Activity summary line
+  const duration = Math.round(activity.moving_time / 60);
+  const tss = activity.icu_training_load;
+  const intensity = activity.icu_intensity ? (activity.icu_intensity / 100).toFixed(2) : null;
+  const activityType = isCycling ? (isNL ? 'rit' : 'ride') : isRun ? (isNL ? 'loop' : 'run') : (isNL ? 'sessie' : 'session');
 
-`;
+  // Build flowing narrative - Whoop style
+  let body = opening;
+
+  // Weave in the activity details naturally
+  body += isNL
+    ? ` Deze ${activityType} van ${duration} minuten leverde ${tss} TSS op${intensity ? ` met een IF van ${intensity}` : ''}.`
+    : ` This ${duration}-minute ${activityType} delivered ${tss} TSS${intensity ? ` at IF ${intensity}` : ''}.`;
+
+  // RPE inline if available
+  if (activity.icu_rpe) {
+    body += isNL
+      ? ` Je gaf het een RPE van ${activity.icu_rpe}/10${activity.feel ? ` en voelde je ${getFeelLabel(activity.feel).toLowerCase()}` : ''}.`
+      : ` You rated it RPE ${activity.icu_rpe}/10${activity.feel ? ` and felt ${getFeelLabel(activity.feel).toLowerCase()}` : ''}.`;
   }
 
-  // Workout Summary
-  body += `===================================
-${t.workout_summary || "Workout Summary"}
-===================================
-${t.workout_type || "Type"}: ${activity.type}
-${t.duration || "Duration"}: ${Math.round(activity.moving_time / 60)} minutes
-TSS/Load: ${activity.icu_training_load}
-${t.intensity || "Intensity Factor"}: ${activity.icu_intensity ? activity.icu_intensity.toFixed(2) : 'N/A'}
-`;
+  body += `\n`;
 
-  // RPE/Feel if available
-  if (activity.icu_rpe || activity.feel) {
-    body += `\n${t.subjective_feedback || "Your Feedback"}:
-`;
-    if (activity.icu_rpe) {
-      body += `  RPE: ${activity.icu_rpe}/10`;
-    }
-    if (activity.feel) {
-      body += `${activity.icu_rpe ? ' | ' : '  '}Feel: ${getFeelLabel(activity.feel)}`;
+  // Key Insight flows naturally as next paragraph
+  body += `\n${analysis.keyInsight}\n`;
+
+  // Analysis woven into narrative (no section header)
+  body += `\n`;
+  if (analysis.effectiveness >= 8) {
+    body += isNL
+      ? `Met een effectiviteit van ${analysis.effectiveness}/10 was dit precies wat je nodig had: ${analysis.effectivenessReason.toLowerCase()}`
+      : `At ${analysis.effectiveness}/10 effectiveness, this was exactly what you needed: ${analysis.effectivenessReason.toLowerCase()}`;
+  } else if (analysis.effectiveness >= 6) {
+    body += isNL
+      ? `Effectiviteit ${analysis.effectiveness}/10 — ${analysis.effectivenessReason}`
+      : `Effectiveness ${analysis.effectiveness}/10 — ${analysis.effectivenessReason}`;
+  } else {
+    body += isNL
+      ? `De effectiviteit van ${analysis.effectiveness}/10 laat zien dat er ruimte voor verbetering is: ${analysis.effectivenessReason}`
+      : `The ${analysis.effectiveness}/10 effectiveness shows room for improvement: ${analysis.effectivenessReason}`;
+  }
+
+  // Difficulty match woven in
+  const difficultyLabel = analysis.difficultyMatch.replace(/_/g, ' ');
+  if (difficultyLabel === 'perfect') {
+    body += isNL
+      ? ` De moeilijkheidsgraad was precies goed afgestemd op je conditie.`
+      : ` The difficulty was perfectly matched to your current fitness.`;
+  } else if (difficultyLabel.includes('too hard')) {
+    body += isNL
+      ? ` De workout was wat aan de zware kant — ${analysis.difficultyReason}`
+      : ` The workout leaned hard — ${analysis.difficultyReason}`;
+  } else if (difficultyLabel.includes('too easy')) {
+    body += isNL
+      ? ` Je had waarschijnlijk meer in de tank — ${analysis.difficultyReason}`
+      : ` You likely had more in the tank — ${analysis.difficultyReason}`;
+  }
+
+  // Stimulus as flowing sentence (translate quality terms for Dutch)
+  const stimulusType = analysis.workoutStimulus.toLowerCase();
+  let stimulusQuality = analysis.stimulusQuality.toLowerCase();
+  if (isNL) {
+    // Translate common quality terms
+    const qualityTranslations = {
+      'excellent': 'uitstekend', 'good': 'goed', 'adequate': 'voldoende',
+      'poor': 'matig', 'insufficient': 'onvoldoende', 'optimal': 'optimaal'
+    };
+    stimulusQuality = qualityTranslations[stimulusQuality] || stimulusQuality;
+  }
+  body += isNL
+    ? ` De ${stimulusType} stimulus was ${stimulusQuality}.\n`
+    : ` The ${stimulusType} stimulus was ${stimulusQuality}.\n`;
+
+  // Highlights woven in naturally (no header)
+  if (analysis.performanceHighlights && analysis.performanceHighlights.length > 0) {
+    body += `\n`;
+    if (analysis.performanceHighlights.length === 1) {
+      body += isNL
+        ? `Opvallend: ${analysis.performanceHighlights[0]}`
+        : `Notable: ${analysis.performanceHighlights[0]}`;
+    } else {
+      // Join highlights with proper sentence endings
+      const highlights = analysis.performanceHighlights.map(h =>
+        h.endsWith('.') ? h.slice(0, -1) : h
+      );
+      body += highlights.join('. ') + '.';
     }
     body += `\n`;
   }
 
-  // AI Analysis
-  body += `
-===================================
-${t.ai_analysis || "AI Analysis"}
-===================================
-${t.effectiveness || "Effectiveness"}: ${analysis.effectiveness}/10
-${analysis.effectivenessReason}
-
-${t.difficulty || "Difficulty"}: ${analysis.difficultyMatch.replace(/_/g, ' ')}
-${analysis.difficultyReason}
-
-${t.workout_stimulus || "Workout Stimulus"}: ${analysis.workoutStimulus.toUpperCase()} (${analysis.stimulusQuality})
-`;
-
-  // Key Insight
-  body += `
------------------------------------
-${t.key_insight || "Key Insight"}
------------------------------------
-${analysis.keyInsight}
-`;
-
-  // Performance Highlights
-  if (analysis.performanceHighlights && analysis.performanceHighlights.length > 0) {
-    body += `
------------------------------------
-${t.highlights || "Highlights"}
------------------------------------
-`;
-    analysis.performanceHighlights.forEach(highlight => {
-      body += `• ${highlight}\n`;
-    });
+  // Historical Comparison - inline, no header
+  if (context.recentHistory && context.recentHistory.available) {
+    body += buildHistoricalComparison(activity, context.recentHistory, isCycling, isRun, isNL);
   }
 
-  // Recovery Impact
-  if (analysis.recoveryImpact) {
-    body += `
------------------------------------
-${t.recovery_impact || "Recovery Impact"}
------------------------------------
-${t.severity || "Severity"}: ${analysis.recoveryImpact.severity}
-${t.estimated_recovery || "Est. Recovery"}: ${analysis.recoveryImpact.estimatedRecoveryHours} hours
-${t.next_workout || "Next Workout"}: ${analysis.recoveryImpact.nextWorkoutAdjustment.replace(/_/g, ' ')}
-`;
-  }
+  // Week Progress + Looking Ahead combined (has its own header)
+  body += buildProgressAndOutlookSection(context.weekProgress, analysis, fitness, context, isNL);
 
-  // Training Adjustments
-  if (analysis.trainingAdjustments && analysis.trainingAdjustments.needed) {
-    body += `
------------------------------------
-${t.training_adjustments || "Training Adjustments"}
------------------------------------
-`;
-    if (analysis.trainingAdjustments.ftpCalibration && analysis.trainingAdjustments.ftpCalibration !== 'none') {
-      body += `FTP Calibration: ${analysis.trainingAdjustments.ftpCalibration.replace(/_/g, ' ')}\n`;
-    }
-    if (analysis.trainingAdjustments.futureIntensity) {
-      body += `Future Intensity: ${analysis.trainingAdjustments.futureIntensity.replace(/_/g, ' ')}\n`;
-    }
-    body += `\n${analysis.trainingAdjustments.reasoning}\n`;
-  }
+  // Compact Stats at bottom - single line divider
+  body += `\n--\n`;
+  body += `CTL ${fitness.ctl ? fitness.ctl.toFixed(1) : '-'} | ATL ${fitness.atl ? fitness.atl.toFixed(1) : '-'} | TSB ${fitness.tsb ? fitness.tsb.toFixed(1) : '-'}`;
 
-  // Current Fitness State
-  body += `
------------------------------------
-${t.current_fitness || "Current Fitness"}
------------------------------------
-CTL: ${fitness.ctl ? fitness.ctl.toFixed(1) : 'N/A'}
-ATL: ${fitness.atl ? fitness.atl.toFixed(1) : 'N/A'}
-TSB: ${fitness.tsb ? fitness.tsb.toFixed(1) : 'N/A'}
-${t.ramp_rate || "Ramp Rate"}: ${fitness.rampRate ? fitness.rampRate.toFixed(2) : 'N/A'} TSS/week
-`;
-
-  // Power/Running Profile
   if (!isRun && powerProfile && powerProfile.available) {
     const currentEftp = powerProfile.currentEftp || powerProfile.eFTP;
-    body += `
------------------------------------
-${t.power_profile_title || "Power Profile"}
------------------------------------
-eFTP: ${currentEftp}W
-Peak Powers: 5s=${powerProfile.peak5s}W | 1min=${powerProfile.peak1min}W | 5min=${powerProfile.peak5min}W
-`;
+    body += ` | eFTP ${currentEftp}W`;
   } else if (isRun && runningData && runningData.available) {
-    body += `
------------------------------------
-${t.running_profile || "Running Profile"}
------------------------------------
-Critical Speed: ${runningData.criticalSpeed || 'N/A'}/km
-D': ${runningData.dPrime ? runningData.dPrime.toFixed(0) + 'm' : 'N/A'}
-Threshold Pace: ${runningData.thresholdPace || 'N/A'}/km
-`;
+    body += isNL ? ` | CS ${runningData.criticalSpeed || '-'}/km` : ` | CS ${runningData.criticalSpeed || '-'}/km`;
   }
 
-  // Wellness
-  if (wellness && wellness.available) {
-    body += `
------------------------------------
-${t.recovery_title}
------------------------------------
-${t.recovery_status}: ${wellness.recoveryStatus}
-${t.sleep}: ${wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'}
-${t.hrv}: ${wellness.today.hrv || 'N/A'} ms
-${t.resting_hr}: ${wellness.today.restingHR || 'N/A'} bpm
-`;
+  body += `\n\n- IntervalCoach\n`;
+
+  try {
+    Logger.log("Email subject: " + subject);
+    Logger.log("Email body length: " + body.length + " chars");
+    GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
+    Logger.log("Post-workout analysis email sent successfully.");
+  } catch (e) {
+    Logger.log("ERROR sending email: " + e.toString());
+    Logger.log("Email body preview: " + body.substring(0, 500));
+    throw e;
+  }
+}
+
+/**
+ * Build engaging opening based on workout context
+ */
+function buildEngagingOpening(activity, analysis, wellness, fitness, context, isNL) {
+  const effectiveness = analysis.effectiveness || 5;
+  const recoveryStatus = wellness?.recoveryStatus?.toLowerCase() || 'unknown';
+  const tsb = fitness?.tsb || 0;
+
+  let opening = "";
+
+  // Recovery + performance combo
+  if (recoveryStatus === 'green' || recoveryStatus.includes('primed')) {
+    if (effectiveness >= 8) {
+      opening = isNL
+        ? "Je kwam uitgerust aan de start en hebt dat uitstekend benut."
+        : "You brought a fresh system into this session and made it count—excellent execution.";
+    } else if (effectiveness >= 6) {
+      opening = isNL
+        ? "Goed herstel vandaag en dat heb je goed gebruikt—solide sessie."
+        : "Good recovery today and you used it well—solid session in the books.";
+    } else {
+      opening = isNL
+        ? "Je kwam fris aan, maar de workout viel wat tegen—laten we kijken waarom."
+        : "You came in fresh but the workout didn't quite land as planned—let's look at why.";
+    }
+  } else if (recoveryStatus === 'yellow' || recoveryStatus.includes('amber')) {
+    if (effectiveness >= 7) {
+      opening = isNL
+        ? "Ondanks matig herstel heb je een kwalitatieve sessie neergezet—slim getraind."
+        : "Despite moderate recovery, you delivered a quality session—smart pacing paid off.";
+    } else {
+      opening = isNL
+        ? "Je lichaam gaf vermoeidheidssignalen af en dat was merkbaar in de workout."
+        : "Your body was showing some fatigue signals, and the workout reflected that—good awareness.";
+    }
+  } else if (recoveryStatus === 'red') {
+    if (effectiveness >= 6) {
+      opening = isNL
+        ? "Lastige dag om te trainen, maar je hebt er toch iets productiefs van gemaakt."
+        : "Tough day to train, but you managed to get something productive done—respect for showing up.";
+    } else {
+      opening = isNL
+        ? "Herstel was niet optimaal en dat was merkbaar—morgen is er weer een dag."
+        : "Recovery was compromised and it showed in the session—tomorrow is another day.";
+    }
+  } else {
+    if (effectiveness >= 8) {
+      opening = isNL
+        ? "Sterke sessie vandaag—dit is het werk dat fitness bouwt."
+        : "Strong session today—this is the kind of work that builds fitness.";
+    } else if (effectiveness >= 6) {
+      opening = isNL
+        ? "Solide werk vandaag—weer een bouwsteen voor je conditie."
+        : "Solid work today—another brick in the wall of your fitness foundation.";
+    } else {
+      opening = isNL
+        ? "Sessie voltooid—laten we kijken wat we hiervan kunnen leren."
+        : "Session complete—let's see what we can learn from this one.";
+    }
   }
 
-  body += `
------------------------------------
-${t.keep_training || "Keep up the great work!"}
-- IntervalCoach
-`;
+  // Add TSB context if interesting
+  if (tsb < -20) {
+    opening += isNL
+      ? " Je draagt behoorlijk wat vermoeidheid met je mee, dus elke kwaliteitssessie telt extra."
+      : " You're carrying significant fatigue right now, so every quality session counts extra.";
+  } else if (tsb > 10) {
+    opening += isNL
+      ? " Je bent goed uitgerust en dat was merkbaar."
+      : " You're well-rested and it showed in your output.";
+  }
 
-  GmailApp.sendEmail(USER_SETTINGS.EMAIL_TO, subject, body, { name: "IntervalCoach" });
-  Logger.log("Post-workout analysis email sent successfully.");
+  // Add phase context if available
+  if (context.phaseInfo && context.phaseInfo.weeksOut && context.phaseInfo.weeksOut <= 4) {
+    opening += isNL
+      ? ` Met nog ${context.phaseInfo.weeksOut} weken tot je doel, werkt elke sessie toe naar je piek.`
+      : ` With ${context.phaseInfo.weeksOut} weeks to your goal, every session is dialing in your peak.`;
+  }
+
+  return opening;
+}
+
+/**
+ * Build historical comparison - inline text
+ */
+function buildHistoricalComparison(activity, history, isCycling, isRun, isNL) {
+  const tss = activity.icu_training_load || 0;
+  const duration = Math.round((activity.moving_time || 0) / 60);
+
+  let avgTSS, avgDuration, count;
+  if (isCycling && history.cyclingCount > 0) {
+    avgTSS = history.cyclingAvgTSS;
+    avgDuration = history.cyclingAvgDuration;
+    count = history.cyclingCount;
+  } else if (isRun && history.runningCount > 0) {
+    avgTSS = history.runningAvgTSS;
+    avgDuration = history.runningAvgDuration;
+    count = history.runningCount;
+  } else {
+    avgTSS = history.avgTSS;
+    avgDuration = history.avgDuration;
+    count = history.totalActivities;
+  }
+
+  if (count === 0 || !avgTSS) return "";
+
+  const tssDiff = tss - avgTSS;
+  const durationDiff = duration - avgDuration;
+  const actType = isCycling ? (isNL ? 'ritten' : 'rides') : isRun ? (isNL ? 'loops' : 'runs') : (isNL ? 'sessies' : 'sessions');
+
+  let text = `\n`;
+  if (Math.abs(tssDiff) <= 5) {
+    text += isNL
+      ? `Vergeleken met je laatste ${count} ${actType}: vergelijkbare belasting (${tss} vs gem. ${avgTSS} TSS)`
+      : `Compared to your last ${count} ${actType}: similar load (${tss} vs avg ${avgTSS} TSS)`;
+  } else if (tssDiff > 0) {
+    text += isNL
+      ? `Vergeleken met je laatste ${count} ${actType}: ${Math.abs(tssDiff)} TSS zwaarder dan gemiddeld`
+      : `Compared to your last ${count} ${actType}: ${Math.abs(tssDiff)} TSS heavier than average`;
+  } else {
+    text += isNL
+      ? `Vergeleken met je laatste ${count} ${actType}: ${Math.abs(tssDiff)} TSS lichter dan gemiddeld`
+      : `Compared to your last ${count} ${actType}: ${Math.abs(tssDiff)} TSS lighter than average`;
+  }
+
+  if (Math.abs(durationDiff) > 10) {
+    text += isNL
+      ? (durationDiff > 0 ? `, ${Math.abs(durationDiff)} min langer` : `, ${Math.abs(durationDiff)} min korter`)
+      : (durationDiff > 0 ? `, ${Math.abs(durationDiff)} min longer` : `, ${Math.abs(durationDiff)} min shorter`);
+  }
+
+  text += `.\n`;
+  return text;
+}
+
+/**
+ * Build combined progress and outlook section - flowing text (no header)
+ */
+function buildProgressAndOutlookSection(weekProgress, analysis, fitness, context, isNL) {
+  let section = `\n`;
+
+  // Week progress as flowing text
+  if (weekProgress && weekProgress.totalPlannedSessions > 0) {
+    const completed = weekProgress.completedSessions;
+    const planned = weekProgress.totalPlannedSessions;
+    const tssCompleted = weekProgress.tssCompleted;
+    const tssPlanned = weekProgress.totalTssPlanned;
+    const tssPercent = tssPlanned > 0 ? Math.round((tssCompleted / tssPlanned) * 100) : 0;
+
+    if (completed >= planned) {
+      section += isNL
+        ? `Je weekdoel is bereikt met ${completed}/${planned} sessies (${tssCompleted}/${tssPlanned} TSS).`
+        : `Your week target is complete: ${completed}/${planned} sessions (${tssCompleted}/${tssPlanned} TSS).`;
+    } else {
+      section += isNL
+        ? `Deze week: ${completed}/${planned} sessies gedaan (${tssCompleted}/${tssPlanned} TSS, ${tssPercent}%).`
+        : `This week: ${completed}/${planned} sessions done (${tssCompleted}/${tssPlanned} TSS, ${tssPercent}%).`;
+    }
+  }
+
+  // Next workout reference - creates connection to training plan
+  const nextWorkout = context.nextWorkout;
+  if (nextWorkout) {
+    const nextName = nextWorkout.placeholderName || nextWorkout.activityType || nextWorkout.eventName;
+    let nextDay = nextWorkout.dayName;
+    const nextDuration = nextWorkout.duration?.min || nextWorkout.duration;
+    // Don't show duration if it's already in the name
+    const hasDurationInName = nextName && nextName.match(/\d+\s*min/i);
+
+    // Translate day names for Dutch
+    if (isNL && nextDay) {
+      const dayTranslations = {
+        'Monday': 'maandag', 'Tuesday': 'dinsdag', 'Wednesday': 'woensdag',
+        'Thursday': 'donderdag', 'Friday': 'vrijdag', 'Saturday': 'zaterdag', 'Sunday': 'zondag'
+      };
+      nextDay = dayTranslations[nextDay] || nextDay;
+    }
+
+    if (nextName) {
+      section += isNL
+        ? ` Volgende: ${nextName}${nextDuration && !hasDurationInName ? ` (${nextDuration}min)` : ''} op ${nextDay}.`
+        : ` Next up: ${nextName}${nextDuration && !hasDurationInName ? ` (${nextDuration}min)` : ''} on ${nextDay}.`;
+    }
+  }
+
+  // Recovery advice woven in
+  if (analysis.recoveryImpact) {
+    const hours = analysis.recoveryImpact.estimatedRecoveryHours || 24;
+    const severity = analysis.recoveryImpact.severity || 'moderate';
+
+    if (severity === 'low' || hours <= 12) {
+      section += isNL
+        ? ` Lichte belasting — je kunt morgen gewoon trainen.`
+        : ` Light load — you're good to go tomorrow.`;
+    } else if (severity === 'moderate' || hours <= 24) {
+      section += isNL
+        ? ` Reken op ~${hours}u herstel voordat je weer gas geeft.`
+        : ` Allow ~${hours}h before your next hard effort.`;
+    } else {
+      section += isNL
+        ? ` Stevige sessie — morgen rustig aan doen.`
+        : ` Solid session — take it easy tomorrow.`;
+    }
+  }
+
+  // TSB insight woven in if notable
+  const tsb = fitness?.tsb || 0;
+  if (tsb < -20) {
+    section += isNL
+      ? ` (TSB ${tsb.toFixed(0)} — vermoeidheid stapelt zich op)`
+      : ` (TSB ${tsb.toFixed(0)} — fatigue building)`;
+  }
+
+  section += `\n`;
+
+  // Goal context as closing thought if relevant
+  if (context.phaseInfo && context.goals?.available && context.goals?.primaryGoal) {
+    const goal = context.goals.primaryGoal;
+    const weeksOut = context.phaseInfo.weeksOut;
+
+    if (weeksOut && weeksOut <= 12) {
+      section += isNL
+        ? `\nNog ${weeksOut} weken tot ${goal.name}. ${context.phaseInfo.phaseName}.\n`
+        : `\n${weeksOut} weeks to ${goal.name}. ${context.phaseInfo.phaseName}.\n`;
+    }
+  }
+
+  return section;
 }
 
 // =========================================================
