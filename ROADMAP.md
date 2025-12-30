@@ -35,6 +35,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 - [x] **Post-Workout → Next Day** - Pass yesterday's workout difficulty to today's decision
 - [x] **Event-Specific Weekly Emphasis** - AI tailors weekly plan based on goal event type (climbing, TT, criterium)
 - [x] **Stimulus-Aware Weekly Planning** - AI validates hard-easy alternation and avoids back-to-back intensity days
+- [x] **Multi-Week Forward View** - 4-week periodization outlook with week themes, volume targets, Intervals.icu labels
 
 ---
 
@@ -56,7 +57,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 |---------|-------------|------|
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
-| **Multi-Week Forward View** | Macro-level 4-week periodization view: week themes (Build/Recovery), volume targets, phase progression, key workouts around events | Coaching |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
 | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
 
