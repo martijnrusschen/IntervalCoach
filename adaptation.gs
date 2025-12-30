@@ -538,12 +538,19 @@ function checkWeekProgress() {
   const startStr = formatDateISO(weekStart);
   const todayStr = formatDateISO(today);
 
+  // Calculate week end (Sunday)
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const weekEndStr = formatDateISO(weekEnd);
+
   const result = {
-    plannedSessions: 0,
+    plannedSessions: 0,        // Planned sessions for past days (for missed detection)
+    totalPlannedSessions: 0,   // Total planned sessions for entire week
     completedSessions: 0,
     missedSessions: 0,
     extraSessions: 0,
-    tssPlanned: 0,
+    tssPlanned: 0,             // TSS planned for past days
+    totalTssPlanned: 0,        // Total TSS planned for entire week
     tssCompleted: 0,
     adherenceRate: 100,
     completedTypes: [],
@@ -564,8 +571,29 @@ function checkWeekProgress() {
 
     const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + yesterdayStr);
 
+    // Fetch ALL events for the entire week (Monday to Sunday) for total planned count
+    const allWeekEventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + weekEndStr);
+
     // Fetch activities for the ENTIRE week so far (including today) for total TSS count
     const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + todayStr);
+
+    // Calculate total planned sessions and TSS for the entire week
+    // Include: Our workouts + all races (A/B/C events) that have planned TSS
+    if (allWeekEventsResult.success && allWeekEventsResult.data) {
+      const plannedWorkouts = allWeekEventsResult.data.filter(e => {
+        // Our generated workouts or placeholders
+        const isOurWorkout = e.category === 'WORKOUT' &&
+          (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run|IntervalCoach)/i));
+        // Any race/event (A, B, C) - these all have planned TSS
+        const isRaceEvent = e.category === 'RACE_A' || e.category === 'RACE_B' || e.category === 'RACE_C';
+        return isOurWorkout || isRaceEvent;
+      });
+      result.totalPlannedSessions = plannedWorkouts.length;
+      result.totalTssPlanned = plannedWorkouts.reduce((sum, e) => {
+        const tssMatch = e.description?.match(/TSS.*?(\d+)/);
+        return sum + (tssMatch ? parseInt(tssMatch[1]) : (e.icu_training_load || 60));
+      }, 0);
+    }
 
     // Calculate total completed TSS for the week (including today)
     if (activitiesResult.success && activitiesResult.data) {
@@ -578,9 +606,11 @@ function checkWeekProgress() {
 
     // Early return if it's Monday (no days to analyze for missed workouts)
     if (result.daysAnalyzed === 0) {
-      result.summary = result.completedSessions > 0
-        ? `${result.completedSessions} session(s) completed today | TSS: ${Math.round(result.tssCompleted)}`
-        : "It's Monday - starting fresh week";
+      result.summary = result.totalPlannedSessions > 0
+        ? `${result.completedSessions}/${result.totalPlannedSessions} sessions | TSS: ${Math.round(result.tssCompleted)}/${result.totalTssPlanned}`
+        : (result.completedSessions > 0
+          ? `${result.completedSessions} session(s) completed | TSS: ${Math.round(result.tssCompleted)}`
+          : "Starting fresh week");
       return result;
     }
 
@@ -602,7 +632,7 @@ function checkWeekProgress() {
       const plannedEvent = (eventsResult.data || []).find(e =>
         e.start_date_local?.startsWith(dayStr) &&
         e.category === 'WORKOUT' &&
-        (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
+        (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run|IntervalCoach)/i))
       );
 
       // Find completed activity for this day (only Ride/Run count as training)
@@ -683,37 +713,41 @@ function checkWeekProgress() {
       result.adherenceRate = Math.round(((result.matchedSessions || 0) / result.plannedSessions) * 100);
     }
 
-    // Build summary
+    // Build summary using total week planned (not just past days)
+    const weekSummary = result.totalPlannedSessions > 0
+      ? `${result.completedSessions}/${result.totalPlannedSessions} sessions | TSS: ${Math.round(result.tssCompleted)}/${result.totalTssPlanned}`
+      : `${result.completedSessions} sessions | TSS: ${Math.round(result.tssCompleted)}`;
+
     if (result.missedSessions > 0) {
       const missedDays = result.missedWorkouts.map(m => m.day).join(', ');
-      result.summary = `Behind plan: ${result.completedSessions}/${result.plannedSessions} sessions (missed: ${missedDays}). TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+      result.summary = `Behind plan (missed: ${missedDays}). ${weekSummary}`;
 
       // Build adaptation advice based on what was missed
       result.adaptationAdvice = buildAdaptationAdvice(result.missedWorkouts, result.tssPlanned - result.tssCompleted);
     } else if (result.extraSessions > 0) {
       // Determine how far ahead: slightly, moderately, or way ahead
-      const tssRatio = result.tssPlanned > 0 ? result.tssCompleted / result.tssPlanned : 1;
+      const tssRatio = result.totalTssPlanned > 0 ? result.tssCompleted / result.totalTssPlanned : 1;
 
       if (result.extraSessions >= 3 || tssRatio > 1.5) {
         // Way ahead: 3+ extra sessions OR >150% TSS
         result.aheadLevel = 'way_ahead';
-        result.summary = `Way ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.summary = `Way ahead of plan (${result.extraSessions} extra). ${weekSummary}`;
         result.adaptationAdvice = 'Significantly ahead of plan. Consider a recovery day or very easy session to avoid overtraining.';
       } else if (result.extraSessions >= 2 || tssRatio > 1.3) {
         // Moderately ahead: 2 extra OR 130-150% TSS
         result.aheadLevel = 'moderately_ahead';
-        result.summary = `Moderately ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.summary = `Moderately ahead (${result.extraSessions} extra). ${weekSummary}`;
         result.adaptationAdvice = 'Ahead of plan. Consider slightly easier intensity for remaining workouts.';
       } else {
         // Slightly ahead: 1 extra AND <130% TSS - continue as planned
         result.aheadLevel = 'slightly_ahead';
-        result.summary = `Slightly ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.summary = `Slightly ahead (${result.extraSessions} extra). ${weekSummary}`;
         result.adaptationAdvice = 'Slightly ahead but within normal range. Continue with planned workouts.';
       }
-    } else if (result.plannedSessions === 0) {
-      result.summary = `No workouts planned so far. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
+    } else if (result.totalPlannedSessions === 0) {
+      result.summary = weekSummary;
     } else {
-      result.summary = `On track: ${result.completedSessions}/${result.plannedSessions} sessions. TSS: ${result.tssCompleted}/${result.tssPlanned}`;
+      result.summary = `On track. ${weekSummary}`;
       result.adaptationAdvice = 'Stick with the planned workouts for the remainder of the week.';
     }
 
