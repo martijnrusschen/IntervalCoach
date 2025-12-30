@@ -287,7 +287,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   // If there's an existing IntervalCoach workout with TSS, delete it first
   // This ensures fitness metrics aren't affected by the planned TSS
   const existingPlaceholder = availability.placeholder;
-  if (existingPlaceholder?.name?.startsWith('IntervalCoach_') && existingPlaceholder?.icu_training_load > 0) {
+  if (isIntervalCoachWorkout(existingPlaceholder?.name) && existingPlaceholder?.icu_training_load > 0) {
     Logger.log(`Removing existing workout (TSS: ${existingPlaceholder.icu_training_load}) before fetching metrics...`);
     deleteIntervalEvent(existingPlaceholder);
     // Clear the placeholder so upload creates a new event instead of trying to update deleted one
@@ -759,14 +759,15 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     return;
   }
 
-  const safeType = selectedType.replace(/[^a-zA-Z0-9]/g, "");
   const isoDateStr = formatDateISO(today);
+
+  // Generate clean workout name (e.g., "IntervalCoach Sweet Spot")
+  const displayName = generateWorkoutName(selectedType);
 
   let workout;
 
   if (isRun) {
     // For runs: upload as text workout to Intervals.icu
-    const fileName = `IntervalCoach_${safeType}_${fileDateStr}`;
     const workoutText = result.workoutDescription || result.explanation;
 
     workout = {
@@ -774,27 +775,26 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       explanation: result.explanation,
       recommendationScore: result.recommendationScore,
       recommendationReason: result.recommendationReason,
-      fileName: fileName,
+      fileName: displayName,
       workoutDescription: workoutText
     };
 
     // Upload run to Intervals.icu calendar
-    uploadRunToIntervals(fileName, workoutText, isoDateStr, availability.placeholder, availability.duration);
+    uploadRunToIntervals(displayName, workoutText, isoDateStr, availability.placeholder, availability.duration);
   } else {
     // For rides: upload ZWO to Intervals.icu (Zwift syncs from there)
-    const fileName = `IntervalCoach_${safeType}_${fileDateStr}`;
 
     workout = {
       type: selectedType,
       explanation: result.explanation,
       recommendationScore: result.recommendationScore,
       recommendationReason: result.recommendationReason,
-      fileName: fileName,
+      fileName: displayName,
       xml: result.xml
     };
 
     // Upload to Intervals.icu calendar (replaces placeholder)
-    uploadWorkoutToIntervals(fileName, result.xml, isoDateStr, availability.placeholder);
+    uploadWorkoutToIntervals(displayName, result.xml, isoDateStr, availability.placeholder);
   }
 
   // Send unified daily email (workout type)
@@ -956,8 +956,24 @@ function analyzeCompletedWorkout(activity) {
   Logger.log(`  Difficulty Match: ${analysis.difficultyMatch}`);
   Logger.log(`  Key Insight: ${analysis.keyInsight}`);
 
-  // Send email with analysis
-  sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData);
+  // Fetch additional context for enhanced email
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = calculateTrainingPhase(goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE);
+  const weekProgress = checkWeekProgress();
+  const recentHistory = fetchRecentActivitySummary(14); // Last 14 days
+
+  // Get next planned workout (skip today, look at next 5 days)
+  const upcomingDays = fetchUpcomingPlaceholders(6);
+  const nextWorkout = upcomingDays.slice(1).find(d => d.activityType || d.hasEvent);
+
+  // Send email with analysis and context
+  sendPostWorkoutAnalysisEmail(activity, analysis, wellness, fitness, powerProfile, runningData, {
+    goals: goals,
+    phaseInfo: phaseInfo,
+    weekProgress: weekProgress,
+    recentHistory: recentHistory,
+    nextWorkout: nextWorkout
+  });
 
   // Store analysis for next day's adaptive context
   storeWorkoutAnalysis(activity, analysis);
