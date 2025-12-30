@@ -380,10 +380,11 @@ function getRecentWorkoutTypes(daysBack = 7) {
 
   if (eventsResult.success && Array.isArray(eventsResult.data)) {
     eventsResult.data.forEach(function(e) {
-      if (e.name?.startsWith("IntervalCoach_")) {
-        const match = e.name.match(/IntervalCoach_([A-Za-z]+)_/);
+      if (isIntervalCoachWorkout(e.name)) {
+        // Match both old format (IntervalCoach_Type_Date) and new format (IntervalCoach Type)
+        const match = e.name.match(/IntervalCoach[_ ]([A-Za-z_]+)/);
         if (match) {
-          const type = match[1];
+          const type = match[1].replace(/_/g, ' ').trim().split(' ')[0]; // Get first word of type
           result.all.push(type);
           if (type.startsWith("Run")) {
             result.runs.push(type);

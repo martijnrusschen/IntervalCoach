@@ -750,10 +750,9 @@ function analyzeWeeklyPlanExecution(weeksBack) {
 
         // Extract workout type from name
         let workoutType = 'Unknown';
-        if (e.name?.includes('IntervalCoach_')) {
-          // IntervalCoach generated: IntervalCoach_SweetSpot_20251224
-          const parts = e.name.split('_');
-          workoutType = parts[1] || 'Unknown';
+        if (isIntervalCoachWorkout(e.name)) {
+          // New format: "IntervalCoach Sweet Spot" or old format: "IntervalCoach_SweetSpot_20251224"
+          workoutType = e.name.replace(/^IntervalCoach[_ ]?/, '').replace(/_\d{8}$/, '').replace(/_/g, ' ').trim() || 'Unknown';
         } else if (isWeeklyPlan) {
           const typeMatch = e.name?.match(/^([A-Za-z_]+)/);
           workoutType = typeMatch ? typeMatch[1] : 'Unknown';
