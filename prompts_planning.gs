@@ -359,44 +359,71 @@ function generateMonthlyInsight(currentMonth, previousMonth, phaseInfo, goals) {
   const eftpChange = (currentMonth.fitness.eftpEnd && previousMonth.fitness.eftpEnd)
     ? currentMonth.fitness.eftpEnd - previousMonth.fitness.eftpEnd : null;
 
-  const prompt = `You are a friendly, expert cycling and running coach reviewing an athlete's monthly training progress for ${currentMonth.monthName} ${currentMonth.monthYear}.
+  // Calculate consistency and training pattern
+  const avgWeeklyTss = currentMonth.totals.avgWeeklyTss;
+  const tssVariance = currentMonth.weeklyData.map(w => Math.abs(w.totalTss - avgWeeklyTss));
+  const avgVariance = tssVariance.reduce((a, b) => a + b, 0) / tssVariance.length;
+  const consistencyScore = avgVariance < 30 ? 'very consistent' : avgVariance < 60 ? 'moderately consistent' : 'variable';
 
-THIS MONTH (${currentMonth.monthName}):
-- Total Activities: ${currentMonth.totals.activities}
+  // CTL trend analysis
+  const ctlTrend = currentMonth.weeklyData.map(w => w.ctl);
+  const ctlDirection = ctlTrend[ctlTrend.length - 1] > ctlTrend[0] ? 'upward' : ctlTrend[ctlTrend.length - 1] < ctlTrend[0] ? 'downward' : 'flat';
+
+  const prompt = `You are a friendly, expert cycling and running coach writing a comprehensive monthly progress review for your athlete. This is ${currentMonth.monthName} ${currentMonth.monthYear}.
+
+THIS MONTH'S TRAINING:
+- Total Activities: ${currentMonth.totals.activities} sessions
+- Total Time: ${Math.round(currentMonth.totals.time / 60)} minutes (${(currentMonth.totals.time / 3600).toFixed(1)} hours)
 - Total TSS: ${currentMonth.totals.tss.toFixed(0)}
-- Average Weekly TSS: ${currentMonth.totals.avgWeeklyTss.toFixed(0)}
-- CTL at end of month: ${currentMonth.fitness.ctlEnd.toFixed(1)}
-- eFTP: ${currentMonth.fitness.eftpEnd || 'N/A'}W
-- Consistency: ${currentMonth.consistency.weeksWithTraining}/${currentMonth.weeks} weeks trained
+- Average Weekly TSS: ${avgWeeklyTss.toFixed(0)}
+- Training Pattern: ${consistencyScore}
+- Weeks with Training: ${currentMonth.consistency.weeksWithTraining}/${currentMonth.weeks}
 
-PREVIOUS MONTH (${previousMonth.monthName}) - FOR COMPARISON:
-- Total Activities: ${previousMonth.totals.activities}
-- Total TSS: ${previousMonth.totals.tss.toFixed(0)}
-- CTL at end of month: ${previousMonth.fitness.ctlEnd.toFixed(1)}
-- eFTP: ${previousMonth.fitness.eftpEnd || 'N/A'}W
+WEEKLY BREAKDOWN:
+${currentMonth.weeklyData.map((w, i) => `Week ${i + 1}: ${w.totalTss.toFixed(0)} TSS, ${w.activities} activities, CTL ${w.ctl.toFixed(0)}`).join('\n')}
 
-MONTH-OVER-MONTH CHANGES:
-- Activities: ${activityChange >= 0 ? '+' : ''}${activityChange}
-- TSS: ${tssChange >= 0 ? '+' : ''}${tssChange.toFixed(0)}
-- CTL: ${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)}
-${eftpChange != null ? '- eFTP: ' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W' : ''}
+FITNESS PROGRESSION:
+- CTL Start of Month: ${currentMonth.fitness.ctlStart.toFixed(1)}
+- CTL End of Month: ${currentMonth.fitness.ctlEnd.toFixed(1)} (${ctlDirection} trend)
+- CTL Change: ${ctlChange >= 0 ? '+' : ''}${ctlChange.toFixed(1)}
+- eFTP: ${currentMonth.fitness.eftpEnd || 'N/A'}W${eftpChange != null ? ' (' + (eftpChange >= 0 ? '+' : '') + eftpChange + 'W vs last month)' : ''}
 
-WEEKLY BREAKDOWN THIS MONTH (TSS per week):
-${currentMonth.weeklyData.map((w, i) => `Week ${i + 1}: ${w.totalTss.toFixed(0)} TSS, CTL ${w.ctl.toFixed(0)}`).join('\n')}
+COMPARISON TO PREVIOUS MONTH (${previousMonth.monthName}):
+- Activities: ${previousMonth.totals.activities} (${activityChange >= 0 ? '+' : ''}${activityChange} change)
+- TSS: ${previousMonth.totals.tss.toFixed(0)} (${tssChange >= 0 ? '+' : ''}${tssChange.toFixed(0)} change)
+- CTL: ${previousMonth.fitness.ctlEnd.toFixed(1)}
 
-TRAINING PHASE: ${phaseInfo.phaseName}
-GOAL: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' (' + goals.primaryGoal.date + ')' : 'General fitness'}
-WEEKS TO GOAL: ${phaseInfo.weeksOut}
+TRAINING CONTEXT:
+- Current Phase: ${phaseInfo.phaseName}
+- Goal: ${goals?.available && goals?.primaryGoal ? goals.primaryGoal.name + ' on ' + goals.primaryGoal.date : 'General fitness'}
+- Weeks to Goal: ${phaseInfo.weeksOut}
+- Phase Focus: ${phaseInfo.focus || 'Build fitness'}
 
-Write a personalized monthly progress summary (3-4 sentences) in ${langName}.
+Write a personalized monthly coaching letter (8-12 sentences, 3-4 paragraphs) in ${langName}.
 
-Include:
-1. Overall assessment of this month compared to last month
-2. Comment on fitness progression (CTL trend, eFTP changes)
-3. One key observation or recommendation
-4. Brief encouragement based on progress toward their goal
+Your letter should feel like a thorough monthly review from a personal coach. Include:
 
-Keep it conversational, insightful, and motivating. Do NOT wrap your response in quotes.`;
+PARAGRAPH 1 - Month in Review:
+- Open with acknowledgment of this month's effort and commitment
+- Comment on training volume and consistency compared to last month
+- Note any significant patterns (consistent weeks vs variable)
+
+PARAGRAPH 2 - Fitness Analysis:
+- Discuss the CTL trend throughout the month (week by week progression)
+- Explain what the fitness changes mean in practical terms
+- If eFTP changed, explain its significance
+- If fitness declined, explain whether this is concerning or expected
+
+PARAGRAPH 3 - Goal Progress & Phase Guidance:
+- Connect this month's training to their goal (${phaseInfo.weeksOut} weeks out)
+- Explain what this month meant for their preparation
+- Give phase-specific guidance for next month based on where they are
+
+PARAGRAPH 4 - Forward Look:
+- One key focus area for next month
+- Motivating close that's genuine, not generic
+
+Write in a warm, conversational tone. Use "you" and "your" to make it personal. Do not use bullet points, headers, or emoji. Just write natural paragraphs that flow together.`;
 
   try {
     const response = callGeminiAPIText(prompt);

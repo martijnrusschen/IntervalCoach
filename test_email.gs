@@ -356,3 +356,495 @@ function testWorkoutImpactPreview() {
 
   Logger.log("\n=== END WORKOUT IMPACT PREVIEW TEST ===");
 }
+
+// =========================================================
+// EMAIL PREVIEW TESTS (NO SENDING, NO AI GENERATION)
+// =========================================================
+
+/**
+ * Preview daily email content without sending
+ * Uses mock data to show email structure quickly
+ */
+function previewDailyEmail() {
+  Logger.log("=== DAILY EMAIL PREVIEW ===\n");
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+  const t = getTranslations();
+
+  // Fetch real data
+  const fitnessMetrics = fetchFitnessMetrics();
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = calculateTrainingPhase(goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE);
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  // Mock workout data (skip AI generation)
+  const mockWorkout = {
+    type: 'Sweet Spot',
+    explanation: 'Building aerobic capacity with sustainable intensity.',
+    recommendationReason: 'Recovery is good and you have not done SS recently.'
+  };
+
+  const mockSelection = {
+    reason: isNL
+      ? 'Goed herstel en je hebt de afgelopen dagen geen sweet spot gedaan.'
+      : 'Good recovery and you haven\'t done sweet spot recently.',
+    varietyNote: isNL ? 'Variatie in trainingstype.' : 'Adding variety to your training.',
+    zoneNote: ''
+  };
+
+  // Build email params
+  const params = {
+    type: 'workout',
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    workout: mockWorkout,
+    workoutSelection: mockSelection,
+    powerProfile: { available: false },
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays
+  };
+
+  // Build email body manually (same logic as sendDailyEmail)
+  const today = new Date();
+  const dateStr = Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd");
+  const subject = `${t.subject_prefix}${mockWorkout.type} (${dateStr})`;
+
+  const tsb = fitnessMetrics.tsb || 0;
+  const recoveryStatus = wellness?.recoveryStatus || 'Unknown';
+
+  let body = buildDailyOpening('workout', recoveryStatus, tsb, wellness, phaseInfo, isNL);
+  body += '\n';
+  body += isNL ? `Vandaag: ${mockWorkout.type}\n\n` : `Today: ${mockWorkout.type}\n\n`;
+  body += mockSelection.reason;
+  if (mockSelection.varietyNote) body += ` ${mockSelection.varietyNote}`;
+  body += '\n';
+
+  // Week progress
+  if (weekProgress && weekProgress.daysAnalyzed > 0) {
+    const wp = weekProgress;
+    body += '\n';
+    body += isNL
+      ? `Deze week: ${wp.completedSessions}/${wp.plannedSessions} sessies`
+      : `This week: ${wp.completedSessions}/${wp.plannedSessions} sessions`;
+    body += ` (${wp.tssCompleted}${wp.tssPlanned > 0 ? '/' + wp.tssPlanned : ''} TSS)\n`;
+  }
+
+  // Schedule
+  if (upcomingDays && upcomingDays.length > 0) {
+    body += '\n';
+    body += isNL ? 'Schema:\n' : 'Schedule:\n';
+    const todayStr = formatDateISO(today);
+
+    // Dutch day abbreviations
+    const dutchDayAbbrev = {
+      'Monday': 'ma', 'Tuesday': 'di', 'Wednesday': 'wo', 'Thursday': 'do',
+      'Friday': 'vr', 'Saturday': 'za', 'Sunday': 'zo'
+    };
+
+    for (const day of upcomingDays) {
+      const isToday = day.date === todayStr;
+      const prefix = isToday ? '> ' : '  ';
+      let status = day.hasEvent ? `[${day.eventCategory}]` : day.activityType || '-';
+      const dayAbbrev = isNL ? (dutchDayAbbrev[day.dayName] || day.dayName.substring(0, 2).toLowerCase()) : day.dayName.substring(0, 3);
+      body += `${prefix}${dayAbbrev}: ${status}${isToday ? (isNL ? ' (vandaag)' : ' (today)') : ''}\n`;
+    }
+  }
+
+  body += '\n- IntervalCoach\n';
+
+  Logger.log("Subject: " + subject);
+  Logger.log("\n--- EMAIL BODY ---\n");
+  Logger.log(body);
+  Logger.log("\n--- END PREVIEW ---");
+}
+
+/**
+ * Preview weekly email content without sending
+ * Uses real data but skips AI weekly plan generation
+ */
+function previewWeeklyEmail() {
+  Logger.log("=== WEEKLY EMAIL PREVIEW ===\n");
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+  const t = getTranslations();
+  const today = new Date();
+
+  // Fetch real data
+  const weekData = fetchWeeklyActivities(7);
+  const prevWeekData = fetchWeeklyActivities(14, 7);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const prevWeekDate = new Date();
+  prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+  const prevFitnessMetrics = fetchFitnessMetrics(prevWeekDate);
+  const wellnessRecords = fetchWellnessData(7);
+  const wellnessSummary = createWellnessSummary(wellnessRecords);
+  const prevWellnessRecords = fetchWellnessData(14, 7);
+  const prevWellnessSummary = createWellnessSummary(prevWellnessRecords);
+
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals?.available && goals?.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  const subject = t.weekly_subject + " (" + Utilities.formatDate(today, SYSTEM_SETTINGS.TIMEZONE, "MM/dd") + ")";
+
+  let body = `${t.weekly_greeting}\n\n`;
+
+  // Dynamic multi-paragraph insight (skip API call for speed)
+  const ctlChange = fitnessMetrics.ctl - (prevFitnessMetrics.ctl || 0);
+  const tssChange = weekData.totalTss - (prevWeekData.totalTss || 0);
+  const currAvg = wellnessSummary?.available ? wellnessSummary.averages : {};
+
+  let insight = '';
+  if (isNL) {
+    // Opening - week acknowledgment
+    if (tssChange > 50) {
+      insight += `Een flinke trainingsweek met ${weekData.totalTss.toFixed(0)} TSS, ${Math.abs(tssChange).toFixed(0)} meer dan vorige week. `;
+    } else if (tssChange < -50) {
+      insight += `Een rustigere week met ${weekData.totalTss.toFixed(0)} TSS. `;
+      insight += `Soms is minder meer - herstel is ook training. `;
+    } else {
+      insight += `Een consistente week met ${weekData.totalTss.toFixed(0)} TSS, vergelijkbaar met vorige week. `;
+    }
+
+    // Fitness trend
+    if (ctlChange > 1) {
+      insight += `Je fitness groeit: CTL steeg met ${ctlChange.toFixed(1)} naar ${fitnessMetrics.ctl.toFixed(0)}. `;
+    } else if (ctlChange < -1) {
+      insight += `Je fitness daalde licht (CTL ${fitnessMetrics.ctl.toFixed(0)}), wat normaal kan zijn na een rustperiode. `;
+    } else {
+      insight += `Je fitnessniveau blijft stabiel rond CTL ${fitnessMetrics.ctl.toFixed(0)}. `;
+    }
+
+    // Recovery/wellness
+    if (wellnessSummary?.available) {
+      if (wellnessSummary.recoveryStatus?.toLowerCase().includes('green')) {
+        insight += `Je herstel is goed - je lichaam is klaar voor intensieve training.\n\n`;
+      } else if (wellnessSummary.recoveryStatus?.toLowerCase().includes('yellow')) {
+        insight += `Je herstel vraagt aandacht - luister naar je lichaam deze week.\n\n`;
+      } else {
+        insight += `\n\n`;
+      }
+    } else {
+      insight += '\n\n';
+    }
+
+    // Goal connection
+    if (phaseInfo.weeksOut > 0) {
+      insight += `Met ${phaseInfo.weeksOut} weken tot je doel bouw je gestaag verder. `;
+      insight += `Focus deze week op ${phaseInfo.focus || 'consistentie en kwaliteit'}.`;
+    }
+  } else {
+    // English version
+    if (tssChange > 50) {
+      insight += `A solid training week with ${weekData.totalTss.toFixed(0)} TSS, ${Math.abs(tssChange).toFixed(0)} more than last week. `;
+    } else if (tssChange < -50) {
+      insight += `A lighter week with ${weekData.totalTss.toFixed(0)} TSS. `;
+      insight += `Sometimes less is more - recovery is also training. `;
+    } else {
+      insight += `A consistent week with ${weekData.totalTss.toFixed(0)} TSS, similar to last week. `;
+    }
+
+    if (ctlChange > 1) {
+      insight += `Your fitness is growing: CTL increased by ${ctlChange.toFixed(1)} to ${fitnessMetrics.ctl.toFixed(0)}. `;
+    } else if (ctlChange < -1) {
+      insight += `Your fitness dipped slightly (CTL ${fitnessMetrics.ctl.toFixed(0)}), which can be normal after a rest period. `;
+    } else {
+      insight += `Your fitness level remains stable around CTL ${fitnessMetrics.ctl.toFixed(0)}. `;
+    }
+
+    if (wellnessSummary?.available) {
+      if (wellnessSummary.recoveryStatus?.toLowerCase().includes('green')) {
+        insight += `Your recovery is good - your body is ready for intense training.\n\n`;
+      } else if (wellnessSummary.recoveryStatus?.toLowerCase().includes('yellow')) {
+        insight += `Your recovery needs attention - listen to your body this week.\n\n`;
+      } else {
+        insight += '\n\n';
+      }
+    } else {
+      insight += '\n\n';
+    }
+
+    if (phaseInfo.weeksOut > 0) {
+      insight += `With ${phaseInfo.weeksOut} weeks to your goal, you're building steadily. `;
+      insight += `Focus this week on ${phaseInfo.focus || 'consistency and quality'}.`;
+    }
+  }
+
+  body += insight + '\n\n';
+
+  // Week in Review - expanded
+  body += buildWeekInReviewSection(t, weekData, prevWeekData, fitnessMetrics, prevFitnessMetrics, wellnessSummary, prevWellnessSummary, isNL);
+
+  // Training Highlights
+  body += buildWeeklyHighlightsSection(weekData, isNL);
+
+  // Fitness Status
+  body += buildFitnessStatusSection(fitnessMetrics, wellnessSummary, phaseInfo, isNL);
+
+  // Goal Progress
+  if (goals?.available && goals?.primaryGoal) {
+    body += buildGoalProgressSection(goals, phaseInfo, fitnessMetrics, isNL);
+  }
+
+  // Mock weekly plan (skip AI generation)
+  const mockPlan = {
+    days: [
+      { dayName: 'Monday', workoutType: 'Sweet Spot', duration: 60, estimatedTSS: 55, description: 'Aerobe basis versterken' },
+      { dayName: 'Tuesday', activity: 'Rest', duration: 0, estimatedTSS: 0 },
+      { dayName: 'Wednesday', workoutType: 'Endurance', duration: 75, estimatedTSS: 45, description: 'Rustige duurtraining' },
+      { dayName: 'Thursday', workoutType: 'VO2max', duration: 60, estimatedTSS: 65, description: '5x4min @ 110% FTP' },
+      { dayName: 'Friday', activity: 'Rest', duration: 0, estimatedTSS: 0 },
+      { dayName: 'Saturday', workoutType: 'Threshold', duration: 60, estimatedTSS: 60, description: '2x20min @ FTP' },
+      { dayName: 'Sunday', workoutType: 'Endurance', duration: 90, estimatedTSS: 50, description: 'Lange duurrit' }
+    ],
+    totalPlannedTSS: 275,
+    keyWorkouts: ['Thursday VO2max - belangrijkste workout voor VO2max ontwikkeling'],
+    intensityDistribution: { high: 2, medium: 2, low: 1, rest: 2 },
+    weeklyFocus: 'Aerobe basis en VO2max ontwikkeling'
+  };
+
+  body += buildExpandedWeekPlanSection(t, mockPlan, { created: 0 }, null, phaseInfo, isNL);
+  body += '\n- IntervalCoach\n';
+
+  Logger.log("Subject: " + subject);
+  Logger.log("\n--- EMAIL BODY ---\n");
+  Logger.log(body);
+  Logger.log("\n--- END PREVIEW ---");
+}
+
+/**
+ * Preview monthly email content without sending - expanded format
+ */
+function previewMonthlyEmail() {
+  Logger.log("=== MONTHLY EMAIL PREVIEW ===\n");
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+  const t = getTranslations();
+
+  const currentMonth = fetchMonthlyProgressData(0);
+  const previousMonth = fetchMonthlyProgressData(1);
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals?.available && goals?.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  const subject = t.monthly_subject + " (" + currentMonth.monthName + " " + currentMonth.monthYear + ")";
+
+  let body = `${t.monthly_greeting}\n\n`;
+
+  // Dynamic multi-paragraph insight based on actual data (no AI call for preview speed)
+  const ctlDiff = currentMonth.fitness.ctlEnd - previousMonth.fitness.ctlEnd;
+  const tssDiff = currentMonth.totals.tss - previousMonth.totals.tss;
+  const activityDiff = currentMonth.totals.activities - previousMonth.totals.activities;
+  const avgWeeklyTss = currentMonth.totals.avgWeeklyTss;
+
+  let insight = '';
+
+  // Paragraph 1 - Month in Review
+  if (isNL) {
+    if (ctlDiff > 3) {
+      insight += `Een sterke maand achter de rug. Met ${currentMonth.totals.activities} sessies en ${currentMonth.totals.tss.toFixed(0)} totaal TSS heb je flink getraind. `;
+      insight += activityDiff > 0 ? `Dat zijn ${activityDiff} sessies meer dan vorige maand. ` : '';
+      insight += `Je consistentie was goed met ${currentMonth.consistency.weeksWithTraining} van de ${currentMonth.weeks} weken actief.\n\n`;
+    } else if (ctlDiff > -2) {
+      insight += `Een stabiele maand met ${currentMonth.totals.activities} sessies over ${currentMonth.consistency.weeksWithTraining} weken. `;
+      insight += `Het trainingsvolume van ${currentMonth.totals.tss.toFixed(0)} TSS is vergelijkbaar met vorige maand. `;
+      insight += `Dit soort consistentie is waardevol voor het behouden van je fitnessniveau.\n\n`;
+    } else {
+      insight += `Een rustigere trainingsmaand. Met ${currentMonth.totals.activities} sessies en ${currentMonth.totals.tss.toFixed(0)} TSS was het volume lager dan ${previousMonth.monthName}. `;
+      insight += activityDiff > 0 ? `Je deed wel meer sessies, maar met minder intensiteit. ` : '';
+      insight += `Dit kan bewust zijn geweest of door omstandigheden.\n\n`;
+    }
+
+    // Paragraph 2 - Fitness Analysis
+    insight += `Je fitness (CTL) ging van ${currentMonth.fitness.ctlStart.toFixed(0)} naar ${currentMonth.fitness.ctlEnd.toFixed(0)} deze maand. `;
+    if (ctlDiff > 5) {
+      insight += `Een mooie stijging die laat zien dat de training aanslaat. `;
+    } else if (ctlDiff > 0) {
+      insight += `Een geleidelijke verbetering die past bij een duurzame opbouw. `;
+    } else if (ctlDiff > -3) {
+      insight += `Praktisch stabiel, wat prima kan zijn in een onderhoudsfase. `;
+    } else {
+      insight += `Een daling die kan passen bij een herstelperiode of drukke periode buiten de sport. `;
+    }
+    insight += `Per week zag het er zo uit: `;
+    insight += currentMonth.weeklyData.map((w, i) => `week ${i + 1} CTL ${w.ctl.toFixed(0)}`).join(', ') + '.\n\n';
+
+    // Paragraph 3 - Goal Context
+    if (phaseInfo.weeksOut > 0) {
+      insight += `Met nog ${phaseInfo.weeksOut} weken tot je doel zit je in de ${phaseInfo.phaseName} fase. `;
+      if (phaseInfo.weeksOut > 12) {
+        insight += `Je hebt nog ruim de tijd om systematisch op te bouwen. Focus op consistentie boven alles.`;
+      } else if (phaseInfo.weeksOut > 6) {
+        insight += `De specifieke voorbereiding kan nu beginnen. Bouw voort op je aerobe basis met gerichte intervals.`;
+      } else {
+        insight += `De eindfase is aangebroken. Kwaliteit boven kwantiteit wordt nu het devies.`;
+      }
+      insight += '\n\n';
+    }
+
+    // Paragraph 4 - Forward Look
+    insight += `Komende maand: focus op ${avgWeeklyTss < 150 ? 'het verhogen van je trainingsvolume' : avgWeeklyTss < 300 ? 'het toevoegen van meer kwaliteitssessies' : 'goed herstel tussen de zware blokken'}. `;
+    insight += `Met de juiste balans tussen belasting en rust bouw je verder aan je vorm.`;
+  } else {
+    // English version - similar structure
+    if (ctlDiff > 3) {
+      insight += `A strong month behind you. With ${currentMonth.totals.activities} sessions and ${currentMonth.totals.tss.toFixed(0)} total TSS, you trained well. `;
+      insight += activityDiff > 0 ? `That's ${activityDiff} more sessions than last month. ` : '';
+      insight += `Your consistency was good with ${currentMonth.consistency.weeksWithTraining} of ${currentMonth.weeks} weeks active.\n\n`;
+    } else if (ctlDiff > -2) {
+      insight += `A stable month with ${currentMonth.totals.activities} sessions over ${currentMonth.consistency.weeksWithTraining} weeks. `;
+      insight += `The training volume of ${currentMonth.totals.tss.toFixed(0)} TSS is similar to last month. `;
+      insight += `This kind of consistency is valuable for maintaining your fitness level.\n\n`;
+    } else {
+      insight += `A lighter training month. With ${currentMonth.totals.activities} sessions and ${currentMonth.totals.tss.toFixed(0)} TSS, volume was lower than ${previousMonth.monthName}. `;
+      insight += activityDiff > 0 ? `You did more sessions but at lower intensity. ` : '';
+      insight += `This may have been intentional or due to circumstances.\n\n`;
+    }
+
+    insight += `Your fitness (CTL) went from ${currentMonth.fitness.ctlStart.toFixed(0)} to ${currentMonth.fitness.ctlEnd.toFixed(0)} this month. `;
+    if (ctlDiff > 5) {
+      insight += `A nice increase showing the training is working. `;
+    } else if (ctlDiff > 0) {
+      insight += `A gradual improvement fitting a sustainable build. `;
+    } else if (ctlDiff > -3) {
+      insight += `Practically stable, which can be fine in a maintenance phase. `;
+    } else {
+      insight += `A decline that may fit a recovery period or busy time outside sport. `;
+    }
+    insight += `Week by week it looked like: `;
+    insight += currentMonth.weeklyData.map((w, i) => `week ${i + 1} CTL ${w.ctl.toFixed(0)}`).join(', ') + '.\n\n';
+
+    if (phaseInfo.weeksOut > 0) {
+      insight += `With ${phaseInfo.weeksOut} weeks to your goal, you're in the ${phaseInfo.phaseName} phase. `;
+      if (phaseInfo.weeksOut > 12) {
+        insight += `You have plenty of time to build systematically. Focus on consistency above all.`;
+      } else if (phaseInfo.weeksOut > 6) {
+        insight += `Specific preparation can begin now. Build on your aerobic base with targeted intervals.`;
+      } else {
+        insight += `The final phase has arrived. Quality over quantity is now the motto.`;
+      }
+      insight += '\n\n';
+    }
+
+    insight += `Next month: focus on ${avgWeeklyTss < 150 ? 'increasing your training volume' : avgWeeklyTss < 300 ? 'adding more quality sessions' : 'good recovery between hard blocks'}. `;
+    insight += `With the right balance between load and rest, you'll continue building your form.`;
+  }
+
+  body += insight + '\n\n';
+
+  // Month header
+  body += `${currentMonth.monthName} ${currentMonth.monthYear}\n`;
+  body += `${currentMonth.periodStart} - ${currentMonth.periodEnd}\n\n`;
+
+  // ============ TRAINING VOLUME ============
+  body += isNL ? 'TRAININGSVOLUME\n\n' : 'TRAINING VOLUME\n\n';
+
+  const activityChange = currentMonth.totals.activities - previousMonth.totals.activities;
+  const tssChange = currentMonth.totals.tss - previousMonth.totals.tss;
+  const timeChange = currentMonth.totals.time - previousMonth.totals.time;
+
+  const formatDiff = function(val, suffix) {
+    if (val == null || val === 0) return '';
+    const sign = val > 0 ? '+' : '';
+    return ` (${sign}${Math.round(val)}${suffix || ''})`;
+  };
+
+  body += isNL ? 'Deze maand vs vorige maand:\n' : 'This month vs previous:\n';
+  body += `- ${currentMonth.totals.activities} ${isNL ? 'sessies' : 'sessions'}${formatDiff(activityChange)}\n`;
+  body += `- ${currentMonth.totals.tss.toFixed(0)} ${isNL ? 'totaal' : 'total'} TSS${formatDiff(tssChange)}\n`;
+  body += `- ${formatDuration(currentMonth.totals.time)} ${isNL ? 'totaal' : 'total'}${formatDiff(Math.round(timeChange / 60), 'min')}\n`;
+  body += `- ${isNL ? 'Gem.' : 'Avg'} ${currentMonth.totals.avgWeeklyTss.toFixed(0)} TSS/${isNL ? 'week' : 'week'}\n`;
+  body += `- ${isNL ? 'Gem.' : 'Avg'} ${formatDuration(currentMonth.totals.avgWeeklyTime)}/${isNL ? 'week' : 'week'}\n`;
+
+  // Weekly breakdown
+  body += '\n';
+  body += isNL ? 'Per week:\n' : 'By week:\n';
+  for (let i = 0; i < currentMonth.weeklyData.length; i++) {
+    const w = currentMonth.weeklyData[i];
+    body += `  W${i + 1}: ${w.totalTss.toFixed(0)} TSS, ${w.activities} ${isNL ? 'sessies' : 'sessions'}\n`;
+  }
+
+  // ============ FITNESS PROGRESSION ============
+  body += '\n';
+  body += isNL ? 'FITNESS PROGRESSIE\n\n' : 'FITNESS PROGRESSION\n\n';
+
+  const ctlChange = currentMonth.fitness.ctlEnd - previousMonth.fitness.ctlEnd;
+  const ctlDirection = ctlChange > 2 ? (isNL ? 'gestegen' : 'increased')
+                     : ctlChange < -2 ? (isNL ? 'gedaald' : 'decreased')
+                     : (isNL ? 'stabiel' : 'stable');
+
+  body += `CTL: ${currentMonth.fitness.ctlStart.toFixed(1)} -> ${currentMonth.fitness.ctlEnd.toFixed(1)} (${ctlDirection}${formatDiff(ctlChange)})\n`;
+  body += isNL ? 'CTL per week: ' : 'CTL by week: ';
+  body += currentMonth.weeklyData.map((w, i) => `W${i + 1}:${w.ctl.toFixed(0)}`).join(' | ') + '\n';
+
+  if (currentMonth.fitness.eftpStart && currentMonth.fitness.eftpEnd) {
+    const eftpChange = currentMonth.fitness.eftpEnd - previousMonth.fitness.eftpEnd;
+    body += `\neFTP: ${currentMonth.fitness.eftpStart}W -> ${currentMonth.fitness.eftpEnd}W${formatDiff(eftpChange, 'W')}\n`;
+  }
+
+  // Interpretation
+  body += '\n';
+  if (ctlChange > 5) {
+    body += isNL ? 'Sterke fitness opbouw deze maand. Goed werk!\n' : 'Strong fitness build this month. Good work!\n';
+  } else if (ctlChange > 0) {
+    body += isNL ? 'Geleidelijke fitness opbouw. Blijf consistent.\n' : 'Gradual fitness build. Stay consistent.\n';
+  } else if (ctlChange > -3) {
+    body += isNL ? 'Fitness stabiel gehouden.\n' : 'Fitness maintained.\n';
+  } else {
+    body += isNL ? 'Fitness gedaald. Controleer of dit gepland was.\n' : 'Fitness decreased. Check if planned.\n';
+  }
+
+  // ============ CONSISTENCY ============
+  body += '\n';
+  body += isNL ? 'CONSISTENTIE\n\n' : 'CONSISTENCY\n\n';
+
+  const consistency = currentMonth.consistency.consistencyPercent;
+  body += `${currentMonth.consistency.weeksWithTraining}/${currentMonth.weeks} ${isNL ? 'weken met training' : 'weeks with training'} (${consistency}%)\n`;
+  if (consistency >= 75) {
+    body += isNL ? 'Goede consistentie.\n' : 'Good consistency.\n';
+  } else {
+    body += isNL ? 'Probeer regelmatiger te trainen.\n' : 'Try to train more regularly.\n';
+  }
+
+  // ============ GOAL STATUS ============
+  if (goals?.available && goals?.primaryGoal) {
+    body += '\n';
+    body += isNL ? 'DOEL STATUS\n\n' : 'GOAL STATUS\n\n';
+
+    const goal = goals.primaryGoal;
+    body += `${goal.name}\n`;
+    body += `${goal.date}\n\n`;
+    body += isNL
+      ? `Fase: ${phaseInfo.phaseName}\n`
+      : `Phase: ${phaseInfo.phaseName}\n`;
+    body += isNL
+      ? `Nog ${phaseInfo.weeksOut} weken tot het evenement\n`
+      : `${phaseInfo.weeksOut} weeks until event\n`;
+    body += isNL
+      ? `\nHuidige fitness: CTL ${currentMonth.fitness.ctlEnd.toFixed(0)}\n`
+      : `\nCurrent fitness: CTL ${currentMonth.fitness.ctlEnd.toFixed(0)}\n`;
+  }
+
+  // ============ LOOKING AHEAD ============
+  body += '\n';
+  body += isNL ? 'VOORUITBLIK\n\n' : 'LOOKING AHEAD\n\n';
+  body += isNL
+    ? 'Focus komende maand op consistentie en geleidelijke opbouw.\n'
+    : 'Focus next month on consistency and gradual building.\n';
+
+  body += '\n- IntervalCoach\n';
+
+  Logger.log("Subject: " + subject);
+  Logger.log("\n--- EMAIL BODY ---\n");
+  Logger.log(body);
+  Logger.log("\n--- END PREVIEW ---");
+}

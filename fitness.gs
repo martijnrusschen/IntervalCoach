@@ -978,11 +978,11 @@ function formatTaperSummary(taperAnalysis, goal) {
   let summary = '';
 
   if (taperAnalysis.alreadyInTaperWindow) {
-    summary = `⚡ TAPER IN PROGRESS for ${goal.name || 'your race'}\n`;
+    summary = `TAPER IN PROGRESS for ${goal.name || 'your race'}\n`;
   } else if (taperAnalysis.taperStartingSoon) {
-    summary = `📅 TAPER STARTS SOON for ${goal.name || 'your race'}\n`;
+    summary = `TAPER STARTS SOON for ${goal.name || 'your race'}\n`;
   } else {
-    summary = `🎯 TAPER PLAN for ${goal.name || 'your race'}\n`;
+    summary = `TAPER PLAN for ${goal.name || 'your race'}\n`;
   }
 
   summary += `Race: ${taperAnalysis.raceDate} (${taperAnalysis.daysToRace} days)\n`;
@@ -1011,60 +1011,53 @@ function formatTaperEmailSection(taperRec) {
   if (!taperRec || !taperRec.available) return '';
 
   const t = getTranslations();
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
   const analysis = taperRec.analysis;
   const ai = taperRec.aiRecommendation;
   const rec = analysis.recommended;
 
-  let section = '\n-----------------------------------\n';
-  section += '🎯 ' + (t.taper_timing_title || 'Taper Timing') + '\n';
-  section += '-----------------------------------\n';
+  let section = '\n';
 
-  // Summary
+  // Summary as conversational opening
   if (ai && ai.summary) {
     section += ai.summary + '\n\n';
+  } else {
+    section += isNL
+      ? `Taper planning voor ${analysis.raceDate} (nog ${analysis.daysToRace} dagen).\n\n`
+      : `Taper planning for ${analysis.raceDate} (${analysis.daysToRace} days out).\n\n`;
   }
 
-  // Key info
-  section += `${t.race || 'Race'}: ${analysis.raceDate} (${analysis.daysToRace} ${t.days || 'days'})\n`;
-  section += `${t.taper_start || 'Taper start'}: ${rec.taperStartDate}`;
-
+  // Key info as inline text
+  section += isNL ? `Start: ${rec.taperStartDate}` : `Start: ${rec.taperStartDate}`;
   if (rec.daysUntilTaperStart > 0) {
-    section += ` (${t.in || 'in'} ${rec.daysUntilTaperStart} ${t.days || 'days'})`;
+    section += isNL ? ` (over ${rec.daysUntilTaperStart} dagen)` : ` (in ${rec.daysUntilTaperStart} days)`;
   } else if (rec.daysUntilTaperStart === 0) {
-    section += ` (${t.today || 'TODAY'})`;
+    section += isNL ? ' (vandaag)' : ' (today)';
   }
-  section += '\n';
-
-  section += `${t.taper_type || 'Type'}: ${rec.taperType} (${rec.taperDescription})\n`;
-  section += `${t.taper_length || 'Length'}: ${rec.taperLengthDays} ${t.days || 'days'}\n`;
+  section += `. ${rec.taperType} (${rec.taperDescription}), ${rec.taperLengthDays} ${isNL ? 'dagen' : 'days'}.\n`;
 
   // Projected race day
-  section += `\n${t.race_day_projection || 'Race Day Projection'}:\n`;
-  section += `  CTL: ${analysis.currentCTL} → ${rec.raceDayCTL} (${rec.ctlLoss > 0 ? '-' : '+'}${Math.abs(rec.ctlLoss)})\n`;
-  section += `  TSB: ${analysis.currentTSB} → ${rec.raceDayTSB}\n`;
+  section += isNL
+    ? `Projectie wedstrijddag: CTL ${analysis.currentCTL} naar ${rec.raceDayCTL}, TSB ${analysis.currentTSB} naar ${rec.raceDayTSB}.\n`
+    : `Race day projection: CTL ${analysis.currentCTL} to ${rec.raceDayCTL}, TSB ${analysis.currentTSB} to ${rec.raceDayTSB}.\n`;
 
-  // Week by week plan
+  // Week by week plan as compact list
   if (ai && ai.weekByWeekPlan && ai.weekByWeekPlan.length > 0) {
-    section += `\n${t.taper_plan || 'Plan'}:\n`;
-    for (const week of ai.weekByWeekPlan) {
-      section += `  • ${week}\n`;
-    }
+    section += '\n' + (isNL ? 'Plan: ' : 'Plan: ');
+    section += ai.weekByWeekPlan.slice(0, 3).join(' | ') + '\n';
   }
 
-  // Key workouts
+  // Key workouts inline
   if (ai && ai.keyWorkouts && ai.keyWorkouts.length > 0) {
-    section += `\n${t.key_workouts || 'Key Workouts'}:\n`;
-    for (const workout of ai.keyWorkouts) {
-      section += `  • ${workout}\n`;
-    }
+    section += isNL ? 'Key workouts: ' : 'Key workouts: ';
+    section += ai.keyWorkouts.slice(0, 2).join(', ') + '\n';
   }
 
-  // Warnings
+  // Warnings inline
   if (ai && ai.warnings && ai.warnings.length > 0) {
-    section += `\n⚠️ ${t.notes || 'Notes'}:\n`;
-    for (const warning of ai.warnings) {
-      section += `  • ${warning}\n`;
-    }
+    section += '\n' + (isNL ? 'Let op: ' : 'Note: ');
+    section += ai.warnings.slice(0, 2).join('. ') + '\n';
   }
 
   return section;
