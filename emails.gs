@@ -628,6 +628,14 @@ function sendWeeklySummaryEmail() {
     Logger.log("Zone progression failed (non-critical): " + e.toString());
   }
 
+  // Check deload status for 4-week outlook
+  let deloadCheck = null;
+  try {
+    deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+  } catch (e) {
+    Logger.log("Deload check failed (non-critical): " + e.toString());
+  }
+
   // ===== GENERATE WEEKLY PLAN =====
   const recentTypes = getRecentWorkoutTypes(7);
   const tomorrow = new Date(today);
@@ -683,6 +691,22 @@ function sendWeeklySummaryEmail() {
   if (weeklyPlan) {
     const calendarResults = createWeeklyPlanEvents(weeklyPlan);
     body += buildExpandedWeekPlanSection(t, weeklyPlan, calendarResults, loadAdvice, phaseInfo, isNL);
+  }
+
+  // Four-Week Outlook
+  try {
+    const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+    if (fourWeekOutlook) {
+      body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
+
+      // Create week labels in Intervals.icu calendar
+      const labelResults = createWeekLabelEvents(fourWeekOutlook);
+      if (labelResults.created > 0) {
+        Logger.log(`Created ${labelResults.created} week label events in Intervals.icu`);
+      }
+    }
+  } catch (e) {
+    Logger.log("Four-week outlook failed (non-critical): " + e.toString());
   }
 
   // Footer
@@ -800,6 +824,22 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
     }
   } catch (e) {
     Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
+  }
+
+  // Add 4-week periodization block info
+  try {
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    if (deloadCheck) {
+      planContext.periodizationBlock = {
+        weeksWithoutDeload: deloadCheck.weeksWithoutDeload || 0,
+        needsRecovery: deloadCheck.needed,
+        urgency: deloadCheck.urgency,
+        weekInBlock: (deloadCheck.weeksWithoutDeload % 4) + 1, // Week 1-4 in current block
+        isRecoveryWeek: deloadCheck.needed && deloadCheck.urgency === 'high'
+      };
+    }
+  } catch (e) {
+    Logger.log("Periodization block check failed (non-critical): " + e.toString());
   }
 
   return planContext;
@@ -1977,6 +2017,25 @@ function sendMonthlyProgressEmail() {
         ? `- Specifieke voorbereiding begint deze maand\n`
         : `- Specific preparation begins this month\n`;
     }
+  }
+
+  // Four-Week Outlook
+  try {
+    const fitnessMetrics = fetchFitnessMetrics();
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, null);
+    const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+
+    if (fourWeekOutlook) {
+      body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
+
+      // Create week labels in Intervals.icu calendar
+      const labelResults = createWeekLabelEvents(fourWeekOutlook);
+      if (labelResults.created > 0) {
+        Logger.log(`Created ${labelResults.created} week label events in Intervals.icu`);
+      }
+    }
+  } catch (e) {
+    Logger.log("Four-week outlook failed (non-critical): " + e.toString());
   }
 
   body += '\n- IntervalCoach\n';

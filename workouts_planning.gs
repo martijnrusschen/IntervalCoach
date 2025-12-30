@@ -328,6 +328,23 @@ ${prog.plateauedZones && prog.plateauedZones.length > 0 ? `- ⚠️ PLATEAUED ZO
     ).join('\n');
   }
 
+  // Build periodization block context
+  let periodizationContext = '';
+  if (context.periodizationBlock) {
+    const pb = context.periodizationBlock;
+    const weekType = pb.isRecoveryWeek ? 'RECOVERY' : 'BUILD';
+    const nextWeekType = pb.weekInBlock >= 3 && !pb.isRecoveryWeek ? 'Recovery week next' : 'Build continues';
+
+    periodizationContext = `
+**PERIODIZATION BLOCK (4-week mesocycle):**
+- Week in Block: ${pb.weekInBlock}/4 (${weekType})
+- Weeks Without Recovery: ${pb.weeksWithoutDeload}
+- Status: ${nextWeekType}
+${pb.isRecoveryWeek ? '- THIS IS A RECOVERY WEEK: Reduce volume to 60%, max 1 intensity session' : ''}
+${pb.weekInBlock === 3 && !pb.isRecoveryWeek ? '- PREPARE FOR DELOAD: Next week should be recovery. Push hard this week.' : ''}
+`;
+  }
+
   // Build goals context
   let goalsContext = '';
   if (context.goals?.available) {
@@ -383,7 +400,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
 - eFTP: ${context.eftp || 'N/A'}W
 - CTL Trend: ${context.ctlTrend || 'stable'}
-${goalsContext}${taperContext}
+${goalsContext}${taperContext}${periodizationContext}
 **RECOVERY STATUS:**
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
@@ -418,6 +435,7 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 14. TAPER: If in taper period, reduce volume significantly. Keep intensity short and sharp. Last hard workout 3-4 days before race.
 15. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
 16. SPORT BALANCE: Aim for roughly 2:1 ratio of cycling to running (e.g., 3 rides + 1-2 runs, or 2 rides + 1 run)
+17. PERIODIZATION: Follow the 4-week mesocycle pattern. If week 3-4 of block, push harder. If recovery week, reduce to 60% volume.
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
@@ -1281,4 +1299,297 @@ function createWeeklyPlanPlaceholder(date, activityType, name, description) {
   }
 
   return result;
+}
+
+// =========================================================
+// FOUR-WEEK OUTLOOK
+// =========================================================
+
+/**
+ * Generate a 4-week periodization outlook
+ * Shows macro-level planning: week themes, volume targets, phase progression
+ * @param {object} fitnessMetrics - Current fitness (CTL, ATL, TSB, rampRate)
+ * @param {object} phaseInfo - Training phase info
+ * @param {object} zoneProgression - Zone progression data
+ * @param {object} deloadCheck - Deload status from checkDeloadNeeded()
+ * @returns {object} Four-week outlook with week-by-week breakdown
+ */
+function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck) {
+  const today = new Date();
+  const weeks = [];
+
+  // Get current week's Monday
+  const currentMonday = new Date(today);
+  const dayOfWeek = currentMonday.getDay();
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  currentMonday.setDate(currentMonday.getDate() + diff);
+
+  // Calculate base weekly TSS target from current CTL
+  const ctl = fitnessMetrics?.ctl || 20;
+  const baseWeeklyTSS = Math.round(ctl * 7);
+
+  // Determine periodization pattern based on weeks without deload
+  const weeksWithoutDeload = deloadCheck?.weeksWithoutDeload || 0;
+  const needsRecoveryThisBlock = weeksWithoutDeload >= 2;
+
+  // Get focus areas from zone progression
+  const focusAreas = zoneProgression?.focusAreas || [];
+  const focusLabels = {
+    endurance: 'Endurance',
+    tempo: 'Tempo',
+    threshold: 'Threshold',
+    vo2max: 'VO2max',
+    anaerobic: 'Anaerobic'
+  };
+
+  // Phase-specific focus
+  const phaseFocus = {
+    'Base': ['Endurance volume', 'Aerobic base'],
+    'Build': ['Threshold development', 'VO2max introduction'],
+    'Peak': ['Race-specific efforts', 'Sharpening'],
+    'Taper': ['Freshness', 'Openers only'],
+    'Recovery': ['Easy spinning', 'Active recovery']
+  };
+
+  const currentPhaseFocusList = phaseFocus[phaseInfo?.phaseName] || phaseFocus['Build'];
+
+  // Generate 4 weeks
+  for (let w = 0; w < 4; w++) {
+    const weekStart = new Date(currentMonday);
+    weekStart.setDate(currentMonday.getDate() + (w * 7));
+    const weekStartStr = formatDateISO(weekStart);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const weekEndStr = formatDateISO(weekEnd);
+
+    // Fetch events for this week
+    const events = [];
+    for (let d = 0; d < 7; d++) {
+      const checkDate = new Date(weekStart);
+      checkDate.setDate(weekStart.getDate() + d);
+      const dateStr = formatDateISO(checkDate);
+      const eventData = fetchEventsForDate(dateStr);
+
+      if (eventData.raceEvent) {
+        events.push({
+          date: dateStr,
+          category: eventData.raceEvent.category,
+          name: eventData.raceEvent.name
+        });
+      }
+    }
+
+    // Determine week type
+    let weekType = 'Build';
+    let tssMultiplier = 1.0;
+    let weekFocus = '';
+
+    // Check for A/B race this week
+    const hasARace = events.some(e => e.category === 'A');
+    const hasBRace = events.some(e => e.category === 'B');
+
+    if (hasARace) {
+      weekType = 'Race Week';
+      tssMultiplier = 0.5;
+      weekFocus = 'Freshness & race prep';
+    } else if (hasBRace) {
+      weekType = 'Race Week';
+      tssMultiplier = 0.7;
+      weekFocus = 'Taper & race prep';
+    } else if (phaseInfo?.phaseName === 'Taper') {
+      weekType = 'Taper';
+      tssMultiplier = 0.6 - (w * 0.1); // Progressive taper
+      weekFocus = 'Maintain sharpness, reduce volume';
+    } else if (needsRecoveryThisBlock && w === 3) {
+      // Recovery week at end of 4-week block
+      weekType = 'Recovery';
+      tssMultiplier = 0.6;
+      weekFocus = 'Consolidate gains, active recovery';
+    } else if (w === 0 && weeksWithoutDeload >= 3 && deloadCheck?.needed) {
+      // Immediate recovery if urgently needed
+      weekType = 'Recovery';
+      tssMultiplier = 0.6;
+      weekFocus = 'Recovery week - reduce load';
+    } else {
+      // Build week with progressive overload
+      weekType = 'Build';
+      tssMultiplier = 1.0 + (w * 0.05); // 5% increase per week
+
+      // Vary focus across weeks
+      if (focusAreas.length > 0) {
+        const focusIdx = w % focusAreas.length;
+        weekFocus = focusLabels[focusAreas[focusIdx]] || currentPhaseFocusList[w % currentPhaseFocusList.length];
+      } else {
+        weekFocus = currentPhaseFocusList[w % currentPhaseFocusList.length];
+      }
+    }
+
+    // Calculate TSS target
+    const tssTarget = Math.round(baseWeeklyTSS * tssMultiplier);
+
+    // Determine intensity sessions for the week
+    let intensitySessions = 2;
+    if (weekType === 'Recovery') intensitySessions = 1;
+    if (weekType === 'Race Week') intensitySessions = 1;
+    if (weekType === 'Taper') intensitySessions = 1;
+
+    weeks.push({
+      weekNumber: w + 1,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      type: weekType,
+      tssTarget: tssTarget,
+      focus: weekFocus,
+      intensitySessions: intensitySessions,
+      events: events
+    });
+  }
+
+  // Determine periodization pattern
+  const weekTypes = weeks.map(w => w.type);
+  const buildWeeks = weekTypes.filter(t => t === 'Build').length;
+  const recoveryWeeks = weekTypes.filter(t => t === 'Recovery').length;
+  const periodization = recoveryWeeks > 0 ? `${buildWeeks}:${recoveryWeeks}` : 'Progressive';
+
+  // Generate summary
+  let summary = '';
+  const weeksOut = phaseInfo?.weeksOut || 12;
+  const phaseName = phaseInfo?.phaseName || 'Build';
+
+  if (phaseName === 'Taper') {
+    summary = `Tapering toward your goal event. Reducing volume while maintaining intensity.`;
+  } else if (weeks.some(w => w.type === 'Race Week')) {
+    const raceWeek = weeks.find(w => w.type === 'Race Week');
+    const raceEvent = raceWeek.events.find(e => e.category === 'A' || e.category === 'B');
+    summary = `Race week coming up: ${raceEvent?.name || 'Event'}. Building then tapering.`;
+  } else if (phaseName === 'Base') {
+    summary = `Base phase: ${periodization} periodization. Focus on aerobic development and consistency.`;
+  } else {
+    summary = `${phaseName} phase: ${periodization} periodization. ${weeksOut} weeks to goal.`;
+  }
+
+  return {
+    generatedAt: formatDateISO(today),
+    periodization: periodization,
+    currentPhase: phaseName,
+    weeksToGoal: weeksOut,
+    weeks: weeks,
+    summary: summary
+  };
+}
+
+/**
+ * Format four-week outlook for email display
+ * @param {object} outlook - Output from generateFourWeekOutlook()
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string} Formatted section for email
+ */
+function formatFourWeekOutlookSection(outlook, isNL) {
+  if (!outlook || !outlook.weeks) return '';
+
+  let section = isNL ? '\nKOMENDE 4 WEKEN\n\n' : '\nNEXT 4 WEEKS\n\n';
+
+  // Summary
+  section += outlook.summary + '\n\n';
+
+  // Week-by-week breakdown
+  for (const week of outlook.weeks) {
+    const weekLabel = isNL ? `Week ${week.weekNumber}` : `Week ${week.weekNumber}`;
+    const dateRange = `${week.weekStart.substring(5)} - ${week.weekEnd.substring(5)}`;
+
+    // Week type indicator
+    let typeIndicator = '';
+    if (week.type === 'Recovery') {
+      typeIndicator = isNL ? ' [Herstel]' : ' [Recovery]';
+    } else if (week.type === 'Race Week') {
+      typeIndicator = isNL ? ' [Wedstrijd]' : ' [Race]';
+    } else if (week.type === 'Taper') {
+      typeIndicator = ' [Taper]';
+    }
+
+    section += `${weekLabel} (${dateRange})${typeIndicator}\n`;
+    section += isNL
+      ? `  Type: ${week.type} | TSS doel: ${week.tssTarget} | Focus: ${week.focus}\n`
+      : `  Type: ${week.type} | TSS target: ${week.tssTarget} | Focus: ${week.focus}\n`;
+
+    // Events this week
+    if (week.events.length > 0) {
+      const eventList = week.events.map(e => `${e.category}: ${e.name}`).join(', ');
+      section += isNL ? `  Events: ${eventList}\n` : `  Events: ${eventList}\n`;
+    }
+
+    section += '\n';
+  }
+
+  return section;
+}
+
+/**
+ * Create week label notes in Intervals.icu calendar
+ * Creates NOTE events at the start of each week showing the week theme
+ * @param {object} outlook - Output from generateFourWeekOutlook()
+ * @returns {object} Result with created events
+ */
+function createWeekLabelEvents(outlook) {
+  if (!outlook || !outlook.weeks) {
+    return { success: false, error: 'No outlook data' };
+  }
+
+  const results = [];
+
+  for (const week of outlook.weeks) {
+    // Skip week 1 (current week) - only label future weeks
+    if (week.weekNumber === 1) continue;
+
+    // Create a NOTE event on Monday of each week
+    const weekLabel = `[Week Plan] ${week.type}`;
+    let description = `TSS Target: ${week.tssTarget}\nFocus: ${week.focus}`;
+
+    if (week.events.length > 0) {
+      description += `\nEvents: ${week.events.map(e => e.name).join(', ')}`;
+    }
+
+    description += `\n\nPeriodization: ${outlook.periodization}`;
+
+    const event = {
+      category: 'NOTE',
+      start_date_local: week.weekStart,
+      name: weekLabel,
+      description: description
+    };
+
+    // Check if label already exists for this week
+    const existingEvents = fetchEventsForDate(week.weekStart);
+    const hasLabel = existingEvents.notes?.some(n => n.name?.startsWith('[Week Plan]'));
+
+    if (!hasLabel) {
+      const result = fetchIcuApi('/athlete/0/events', {
+        method: 'POST',
+        payload: JSON.stringify(event)
+      });
+
+      results.push({
+        week: week.weekNumber,
+        date: week.weekStart,
+        success: result.success,
+        type: week.type
+      });
+    } else {
+      results.push({
+        week: week.weekNumber,
+        date: week.weekStart,
+        success: true,
+        skipped: true,
+        type: week.type
+      });
+    }
+  }
+
+  return {
+    success: true,
+    created: results.filter(r => r.success && !r.skipped).length,
+    skipped: results.filter(r => r.skipped).length,
+    results: results
+  };
 }
