@@ -463,7 +463,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   // Check for sustained high ramp rate over multiple weeks
   let rampRateWarning = null;
   try {
-    rampRateWarning = checkRampRateWarning(fitnessMetrics);
+    rampRateWarning = checkRampRateWarning(summary);
     if (rampRateWarning.warning) {
       Logger.log(`Ramp Rate Warning (${rampRateWarning.level}): ${rampRateWarning.consecutiveWeeks} weeks at elevated rate`);
       Logger.log(`  Weekly rates: ${rampRateWarning.weeklyRates.map(w => `${w.label}: ${w.rate}`).join(', ')}`);

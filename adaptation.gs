@@ -811,8 +811,9 @@ function checkDeloadNeeded(fitnessMetrics, wellness) {
     sleepDebt: null  // Track sleep debt for display
   };
 
-  const currentCTL = fitnessMetrics?.ctl || 0;
-  const currentTSB = fitnessMetrics?.tsb || 0;
+  // Support both field naming conventions (ctl vs ctl_90, tsb vs tsb_current)
+  const currentCTL = fitnessMetrics?.ctl || fitnessMetrics?.ctl_90 || 0;
+  const currentTSB = fitnessMetrics?.tsb || fitnessMetrics?.tsb_current || 0;
   const currentRampRate = fitnessMetrics?.rampRate || 0;
 
   // Fetch last 4 weeks of activities
