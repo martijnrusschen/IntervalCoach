@@ -552,6 +552,7 @@ function checkWeekProgress() {
     dayByDay: [], // Day-by-day breakdown for the week so far
     summary: '',
     adaptationAdvice: '', // Guidance on how to adapt remaining week
+    aheadLevel: null, // null, 'slightly_ahead', 'moderately_ahead', 'way_ahead'
     daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday
   };
 
@@ -676,8 +677,25 @@ function checkWeekProgress() {
       // Build adaptation advice based on what was missed
       result.adaptationAdvice = buildAdaptationAdvice(result.missedWorkouts, result.tssPlanned - result.tssCompleted);
     } else if (result.extraSessions > 0) {
-      result.summary = `Ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
-      result.adaptationAdvice = 'Consider easier remaining workouts to avoid overtraining this week.';
+      // Determine how far ahead: slightly, moderately, or way ahead
+      const tssRatio = result.tssPlanned > 0 ? result.tssCompleted / result.tssPlanned : 1;
+
+      if (result.extraSessions >= 3 || tssRatio > 1.5) {
+        // Way ahead: 3+ extra sessions OR >150% TSS
+        result.aheadLevel = 'way_ahead';
+        result.summary = `Way ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Significantly ahead of plan. Consider a recovery day or very easy session to avoid overtraining.';
+      } else if (result.extraSessions >= 2 || tssRatio > 1.3) {
+        // Moderately ahead: 2 extra OR 130-150% TSS
+        result.aheadLevel = 'moderately_ahead';
+        result.summary = `Moderately ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Ahead of plan. Consider slightly easier intensity for remaining workouts.';
+      } else {
+        // Slightly ahead: 1 extra AND <130% TSS - continue as planned
+        result.aheadLevel = 'slightly_ahead';
+        result.summary = `Slightly ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Slightly ahead but within normal range. Continue with planned workouts.';
+      }
     } else if (result.plannedSessions === 0) {
       result.summary = `No workouts planned so far. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
     } else {
