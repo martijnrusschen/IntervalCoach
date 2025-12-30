@@ -856,22 +856,30 @@ function checkDeloadNeeded(fitnessMetrics, wellness) {
   const avgWeeklyTSS = weeklyData.reduce((sum, w) => sum + w.totalTSS, 0) / 4;
   const targetWeeklyTSS = currentCTL * 7; // Expected TSS to maintain current CTL
 
-  // Deload threshold: 70% of average = recovery week
-  const deloadThreshold = avgWeeklyTSS * 0.70;
+  // Use the higher of: target TSS or minimum 100 TSS as "real training" threshold
+  // This prevents low CTL athletes from triggering false "sustained load" warnings
+  const minTrainingTSS = Math.max(targetWeeklyTSS, 100);
 
-  // Count consecutive weeks without deload (TSS > 70% of average)
+  // Deload threshold: 70% of target or 70 TSS minimum
+  const deloadThreshold = Math.max(minTrainingTSS * 0.70, 70);
+
+  // Count consecutive weeks of actual high load (TSS > target)
+  // Only weeks above target count as "sustained load"
   let consecutiveHighWeeks = 0;
   let hadRecentDeload = false;
 
   for (let i = weeklyData.length - 1; i >= 0; i--) {
     const week = weeklyData[i];
-    if (week.totalTSS < deloadThreshold && week.totalTSS > 0) {
+    // A week is "recovery" if below deload threshold
+    if (week.totalTSS < deloadThreshold) {
       hadRecentDeload = true;
       result.weeksWithoutDeload = consecutiveHighWeeks;
       break;
-    } else if (week.totalTSS > 0) {
+    } else if (week.totalTSS >= minTrainingTSS) {
+      // Only count as "high load" if actually above target
       consecutiveHighWeeks++;
     }
+    // Weeks between deload threshold and target don't count as "sustained load"
   }
 
   if (!hadRecentDeload) {
