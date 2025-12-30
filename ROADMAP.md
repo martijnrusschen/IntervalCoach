@@ -66,7 +66,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Progressive Overload Verification** | Verify key workouts show progressive overload week-over-week | Coaching |
 | **Workout Prediction Mode** | Show how choices change with recovery ("If recovery hits 65%, Friday shifts to Threshold") | AI-First |
 | **Multi-Workout Option Comparison** | Generate 3 workout options with projected outcomes (like Aixle), let user choose | AI-First |
 | **Workout Difficulty Ratings** | Granular difficulty levels beyond intensity 1-5 | Platform |
