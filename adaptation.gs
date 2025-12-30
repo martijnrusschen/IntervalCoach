@@ -1006,7 +1006,8 @@ function formatDeloadCheckLog(deloadCheck) {
 // =========================================================
 
 /**
- * Check for volume jump between weeks
+ * Check for volume jump between calendar weeks
+ * Compares last complete week (prev Mon-Sun) vs week before that
  * Flags week-to-week TSS increases >15% as injury risk
  *
  * @returns {object} { detected, percentChange, thisWeekTSS, lastWeekTSS, risk, recommendation }
@@ -1022,12 +1023,41 @@ function checkVolumeJump() {
   };
 
   try {
-    // Fetch this week's and last week's activities
-    const thisWeek = fetchWeeklyActivities(7);
-    const lastWeek = fetchWeeklyActivities(7, 7);
+    // Calculate calendar week boundaries
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday
 
-    result.thisWeekTSS = Math.round(thisWeek.totalTss);
-    result.lastWeekTSS = Math.round(lastWeek.totalTss);
+    // Find the most recent Monday (start of current week)
+    const currentWeekStart = new Date(today);
+    currentWeekStart.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Previous week: Monday to Sunday before current week
+    const prevWeekEnd = new Date(currentWeekStart);
+    prevWeekEnd.setDate(currentWeekStart.getDate() - 1); // Sunday
+    const prevWeekStart = new Date(prevWeekEnd);
+    prevWeekStart.setDate(prevWeekEnd.getDate() - 6); // Monday
+
+    // Week before that
+    const olderWeekEnd = new Date(prevWeekStart);
+    olderWeekEnd.setDate(prevWeekStart.getDate() - 1); // Sunday before
+    const olderWeekStart = new Date(olderWeekEnd);
+    olderWeekStart.setDate(olderWeekEnd.getDate() - 6); // Monday before
+
+    // Fetch activities for both complete weeks
+    const prevWeekResult = fetchIcuApi(`/athlete/0/activities?oldest=${formatDateISO(prevWeekStart)}&newest=${formatDateISO(prevWeekEnd)}`);
+    const olderWeekResult = fetchIcuApi(`/athlete/0/activities?oldest=${formatDateISO(olderWeekStart)}&newest=${formatDateISO(olderWeekEnd)}`);
+
+    if (!prevWeekResult.success || !olderWeekResult.success) {
+      return result;
+    }
+
+    // Sum TSS for each week
+    const prevWeekActivities = prevWeekResult.data || [];
+    const olderWeekActivities = olderWeekResult.data || [];
+
+    result.thisWeekTSS = Math.round(prevWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0));
+    result.lastWeekTSS = Math.round(olderWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0));
 
     // Calculate percentage change
     if (result.lastWeekTSS > 0) {
