@@ -631,7 +631,7 @@ function sendWeeklySummaryEmail() {
   // Check deload status for 4-week outlook
   let deloadCheck = null;
   try {
-    deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
   } catch (e) {
     Logger.log("Deload check failed (non-critical): " + e.toString());
   }
@@ -828,7 +828,7 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
 
   // Add recovery timing info (dynamic based on body signals)
   try {
-    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
     if (deloadCheck) {
       planContext.periodizationBlock = {
         weeksWithoutDeload: deloadCheck.weeksWithoutDeload || 0,
@@ -2021,7 +2021,7 @@ function sendMonthlyProgressEmail() {
   // Four-Week Outlook
   try {
     const fitnessMetrics = fetchFitnessMetrics();
-    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, null);
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics, null);
     const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
 
     if (fourWeekOutlook) {

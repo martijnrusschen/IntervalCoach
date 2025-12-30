@@ -601,7 +601,7 @@ function previewWeeklyEmail() {
 
   // 4-Week Outlook (dynamic recovery timing)
   try {
-    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
     const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
     if (fourWeekOutlook) {
       body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
@@ -872,7 +872,7 @@ function previewMonthlyEmail() {
     const fitnessMetrics = fetchFitnessMetrics();
     const wellnessRecords = fetchWellnessData(7);
     const wellnessSummary = createWellnessSummary(wellnessRecords);
-    const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
     const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
     if (fourWeekOutlook) {
       body += formatFourWeekOutlookSection(fourWeekOutlook, isNL);
@@ -989,7 +989,7 @@ function testWeekLabels() {
 
   const wellnessRecords = fetchWellnessData(7);
   const wellnessSummary = createWellnessSummary(wellnessRecords);
-  const deloadCheck = checkDeloadNeeded(fitnessMetrics.ctl, fitnessMetrics.tsb, fitnessMetrics.rampRate, wellnessSummary);
+  const deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
 
   Logger.log("Deload check: " + JSON.stringify(deloadCheck));
 
