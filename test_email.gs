@@ -588,6 +588,17 @@ function previewWeeklyEmail() {
   // Fitness Status
   body += buildFitnessStatusSection(fitnessMetrics, wellnessSummary, phaseInfo, isNL);
 
+  // Zone Progression
+  let zoneProgression = null;
+  try {
+    zoneProgression = calculateZoneProgression(42);
+    if (zoneProgression?.available) {
+      body += buildZoneProgressionSection(zoneProgression, isNL, false);
+    }
+  } catch (e) {
+    Logger.log("Zone progression failed: " + e.toString());
+  }
+
   // Goal Progress
   if (goals?.available && goals?.primaryGoal) {
     body += buildGoalProgressSection(goals, phaseInfo, fitnessMetrics, isNL);
@@ -815,6 +826,17 @@ function previewMonthlyEmail() {
     body += isNL ? 'Probeer regelmatiger te trainen.\n' : 'Try to train more regularly.\n';
   }
 
+  // ============ ZONE PROGRESSION ============
+  let zoneProgression = null;
+  try {
+    zoneProgression = calculateZoneProgression(42);
+    if (zoneProgression?.available) {
+      body += buildZoneProgressionSection(zoneProgression, isNL, true); // true = monthly detail
+    }
+  } catch (e) {
+    Logger.log("Zone progression failed: " + e.toString());
+  }
+
   // ============ GOAL STATUS ============
   if (goals?.available && goals?.primaryGoal) {
     body += '\n';
@@ -834,12 +856,82 @@ function previewMonthlyEmail() {
       : `\nCurrent fitness: CTL ${currentMonth.fitness.ctlEnd.toFixed(0)}\n`;
   }
 
-  // ============ LOOKING AHEAD ============
+  // ============ NEXT MONTH ============
   body += '\n';
-  body += isNL ? 'VOORUITBLIK\n\n' : 'LOOKING AHEAD\n\n';
+  body += isNL ? 'KOMENDE MAAND\n\n' : 'NEXT MONTH\n\n';
+
+  const currentCtl = currentMonth.fitness.ctlEnd;
+
+  // Volume targets
+  if (isNL) {
+    body += 'Volume doelen:\n';
+    if (avgWeeklyTss < 150) {
+      const targetTss = Math.round(avgWeeklyTss * 1.15);
+      body += `- Weekdoel: ${targetTss} TSS/week (15% verhoging mogelijk)\n`;
+    } else {
+      const targetTss = Math.round(avgWeeklyTss * 1.05);
+      body += `- Weekdoel: ${targetTss} TSS/week (5% verhoging)\n`;
+    }
+  } else {
+    body += 'Volume targets:\n';
+    if (avgWeeklyTss < 150) {
+      const targetTss = Math.round(avgWeeklyTss * 1.15);
+      body += `- Weekly target: ${targetTss} TSS/week (15% increase possible)\n`;
+    } else {
+      const targetTss = Math.round(avgWeeklyTss * 1.05);
+      body += `- Weekly target: ${targetTss} TSS/week (5% increase)\n`;
+    }
+  }
+
+  // CTL projection
+  body += '\n';
+  const projectedCtlGain = avgWeeklyTss > 200 ? 3 : avgWeeklyTss > 100 ? 2 : 1;
+  const projectedCtl = Math.round(currentCtl + projectedCtlGain * 4);
   body += isNL
-    ? 'Focus komende maand op consistentie en geleidelijke opbouw.\n'
-    : 'Focus next month on consistency and gradual building.\n';
+    ? `Fitness projectie: CTL ${currentCtl.toFixed(0)} -> ~${projectedCtl} (bij consistent trainen)\n`
+    : `Fitness projection: CTL ${currentCtl.toFixed(0)} -> ~${projectedCtl} (with consistent training)\n`;
+
+  // Zone focus
+  if (zoneProgression?.available && zoneProgression.focusAreas?.length > 0) {
+    body += '\n';
+    const zoneNamesNL = { endurance: 'duurvermogen', tempo: 'tempo', threshold: 'drempel', vo2max: 'VO2max', anaerobic: 'anaeroob' };
+    const zoneNamesEN = { endurance: 'endurance', tempo: 'tempo', threshold: 'threshold', vo2max: 'VO2max', anaerobic: 'anaerobic' };
+    const zoneNames = isNL ? zoneNamesNL : zoneNamesEN;
+
+    body += isNL ? 'Zone focus:\n' : 'Zone focus:\n';
+    body += isNL
+      ? `- Prioriteit: ${zoneProgression.focusAreas.map(z => zoneNames[z]).join(', ')}\n`
+      : `- Priority: ${zoneProgression.focusAreas.map(z => zoneNames[z]).join(', ')}\n`;
+  }
+
+  // Phase guidance
+  body += '\n';
+  const phaseName = phaseInfo.phaseName.toLowerCase();
+  if (isNL) {
+    body += 'Fase advies:\n';
+    if (phaseName.includes('base')) {
+      body += '- Bouw volume geleidelijk op (max 10% per week)\n';
+      body += '- Houd 80% van de training in Z2\n';
+    } else if (phaseName.includes('build')) {
+      body += '- Behoud volume, verhoog intensiteit\n';
+      body += '- 2-3 key workouts per week\n';
+    } else {
+      body += '- Focus op consistentie\n';
+      body += '- Varieer trainingsvormen\n';
+    }
+  } else {
+    body += 'Phase guidance:\n';
+    if (phaseName.includes('base')) {
+      body += '- Build volume gradually (max 10% per week)\n';
+      body += '- Keep 80% of training in Z2\n';
+    } else if (phaseName.includes('build')) {
+      body += '- Maintain volume, increase intensity\n';
+      body += '- 2-3 key workouts per week\n';
+    } else {
+      body += '- Focus on consistency\n';
+      body += '- Vary training types\n';
+    }
+  }
 
   body += '\n- IntervalCoach\n';
 

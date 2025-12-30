@@ -620,6 +620,14 @@ function sendWeeklySummaryEmail() {
   const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
   const upcoming = fetchUpcomingPlaceholders(7);
 
+  // Fetch zone progression
+  let zoneProgression = null;
+  try {
+    zoneProgression = calculateZoneProgression(42); // 6 weeks of data
+  } catch (e) {
+    Logger.log("Zone progression failed (non-critical): " + e.toString());
+  }
+
   // ===== GENERATE WEEKLY PLAN =====
   const recentTypes = getRecentWorkoutTypes(7);
   const tomorrow = new Date(today);
@@ -660,6 +668,11 @@ function sendWeeklySummaryEmail() {
 
   // Fitness & Recovery Status
   body += buildFitnessStatusSection(fitnessMetrics, wellnessSummary, phaseInfo, isNL);
+
+  // Zone Progression
+  if (zoneProgression?.available) {
+    body += buildZoneProgressionSection(zoneProgression, isNL, false);
+  }
 
   // Goal Progress
   if (goals?.available && goals?.primaryGoal) {
@@ -1355,6 +1368,110 @@ function buildGoalProgressSection(goals, phaseInfo, fitnessMetrics, isNL) {
 }
 
 /**
+ * Build zone progression section for weekly/monthly emails
+ * @param {object} zoneProgression - Zone progression data from calculateZoneProgression
+ * @param {boolean} isNL - Dutch language flag
+ * @param {boolean} isMonthly - Whether this is for monthly email (more detail)
+ * @returns {string} Formatted section
+ */
+function buildZoneProgressionSection(zoneProgression, isNL, isMonthly) {
+  if (!zoneProgression || !zoneProgression.available) {
+    return '';
+  }
+
+  let section = isNL ? 'ZONE ONTWIKKELING\n\n' : 'ZONE DEVELOPMENT\n\n';
+
+  const prog = zoneProgression.progression;
+  const zoneNames = {
+    endurance: isNL ? 'Duurvermogen' : 'Endurance',
+    tempo: 'Tempo',
+    threshold: isNL ? 'Drempel' : 'Threshold',
+    vo2max: 'VO2max',
+    anaerobic: isNL ? 'Anaeroob' : 'Anaerobic'
+  };
+
+  const trendNames = {
+    improving: isNL ? 'verbeterend' : 'improving',
+    stable: isNL ? 'stabiel' : 'stable',
+    declining: isNL ? 'dalend' : 'declining',
+    plateaued: isNL ? 'plateau' : 'plateaued'
+  };
+
+  // Visual level bar (simplified)
+  const levelBar = function(level) {
+    const filled = Math.round(level);
+    const empty = 10 - filled;
+    return '[' + '='.repeat(filled) + '-'.repeat(empty) + '] ' + level.toFixed(1);
+  };
+
+  // Opening narrative
+  if (isNL) {
+    if (zoneProgression.strengths?.length > 0) {
+      section += `Je sterkste zones zijn ${zoneProgression.strengths.map(z => zoneNames[z]).join(' en ')}. `;
+    }
+    if (zoneProgression.focusAreas?.length > 0) {
+      section += `Aandachtspunten: ${zoneProgression.focusAreas.map(z => zoneNames[z]).join(' en ')}.\n\n`;
+    }
+  } else {
+    if (zoneProgression.strengths?.length > 0) {
+      section += `Your strongest zones are ${zoneProgression.strengths.map(z => zoneNames[z]).join(' and ')}. `;
+    }
+    if (zoneProgression.focusAreas?.length > 0) {
+      section += `Focus areas: ${zoneProgression.focusAreas.map(z => zoneNames[z]).join(' and ')}.\n\n`;
+    }
+  }
+
+  // Zone breakdown
+  for (const [zone, data] of Object.entries(prog)) {
+    const name = zoneNames[zone];
+    const trend = trendNames[data.trend] || data.trend;
+
+    if (isMonthly) {
+      // More detail for monthly
+      section += `${name}: ${levelBar(data.level)} (${trend})\n`;
+      section += isNL
+        ? `  ${data.sessions} sessies, ${data.totalMinutes} min totaal`
+        : `  ${data.sessions} sessions, ${data.totalMinutes} min total`;
+      if (data.lastTrained) {
+        const daysSince = Math.floor((new Date() - new Date(data.lastTrained)) / (1000 * 60 * 60 * 24));
+        section += isNL ? `, laatst ${daysSince}d geleden` : `, last ${daysSince}d ago`;
+      }
+      section += '\n';
+    } else {
+      // Compact for weekly
+      section += `${name}: ${data.level.toFixed(1)}/10 (${trend})`;
+      if (data.trend === 'declining' && data.lastTrained) {
+        const daysSince = Math.floor((new Date() - new Date(data.lastTrained)) / (1000 * 60 * 60 * 24));
+        section += isNL ? ` - ${daysSince}d niet getraind` : ` - ${daysSince}d since training`;
+      }
+      section += '\n';
+    }
+  }
+
+  // Recommendations based on trends
+  section += '\n';
+  const declining = Object.entries(prog).filter(([_, d]) => d.trend === 'declining');
+  const plateaued = Object.entries(prog).filter(([_, d]) => d.trend === 'plateaued');
+
+  if (declining.length > 0) {
+    const zones = declining.map(([z, _]) => zoneNames[z]).join(', ');
+    section += isNL
+      ? `Let op: ${zones} ${declining.length === 1 ? 'daalt' : 'dalen'} - overweeg een sessie in deze zone.\n`
+      : `Note: ${zones} ${declining.length === 1 ? 'is declining' : 'are declining'} - consider a session in this zone.\n`;
+  }
+
+  if (plateaued.length > 0) {
+    const zones = plateaued.map(([z, _]) => zoneNames[z]).join(', ');
+    section += isNL
+      ? `${zones} ${plateaued.length === 1 ? 'zit' : 'zitten'} op een plateau - varieer de training voor doorbraak.\n`
+      : `${zones} ${plateaued.length === 1 ? 'has' : 'have'} plateaued - vary training for breakthrough.\n`;
+  }
+
+  section += '\n';
+  return section;
+}
+
+/**
  * Build expanded week plan section with rationale
  */
 function buildExpandedWeekPlanSection(t, weeklyPlan, calendarResults, loadAdvice, phaseInfo, isNL) {
@@ -1726,30 +1843,11 @@ function sendMonthlyProgressEmail() {
 
   // ============ ZONE PROGRESSION ============
   if (zoneProgression && zoneProgression.available) {
-    body += '\n';
-    body += isNL ? 'ZONE PROGRESSIE\n\n' : 'ZONE PROGRESSION\n\n';
+    body += buildZoneProgressionSection(zoneProgression, isNL, true); // true = monthly (more detail)
 
-    // Zone levels summary
-    for (const [zone, data] of Object.entries(zoneProgression.progression)) {
-      const zoneName = zone.charAt(0).toUpperCase() + zone.slice(1);
-      const trendWord = data.trend === 'improving' ? (isNL ? 'verbeterend' : 'improving')
-                      : data.trend === 'declining' ? (isNL ? 'dalend' : 'declining')
-                      : (isNL ? 'stabiel' : 'stable');
-      body += `- ${zoneName}: niveau ${data.level.toFixed(1)} (${trendWord})\n`;
-    }
-
-    // Strengths and focus areas
-    if (zoneProgression.strengths?.length > 0) {
-      body += '\n';
-      body += isNL ? `Sterke zones: ${zoneProgression.strengths.join(', ')}\n` : `Strong zones: ${zoneProgression.strengths.join(', ')}\n`;
-    }
-    if (zoneProgression.focusAreas?.length > 0) {
-      body += isNL ? `Aandachtspunten: ${zoneProgression.focusAreas.join(', ')}\n` : `Focus areas: ${zoneProgression.focusAreas.join(', ')}\n`;
-    }
-
-    // AI recommendations
+    // AI recommendations if available
     if (zoneRecommendations?.summary) {
-      body += `\n${zoneRecommendations.summary}\n`;
+      body += zoneRecommendations.summary + '\n\n';
     }
   }
 
@@ -1796,30 +1894,153 @@ function sendMonthlyProgressEmail() {
     }
   }
 
-  // ============ LOOKING AHEAD ============
+  // ============ LOOKING AHEAD - NEXT MONTH ============
   body += '\n';
-  body += isNL ? 'VOORUITBLIK\n\n' : 'LOOKING AHEAD\n\n';
+  body += isNL ? 'KOMENDE MAAND\n\n' : 'NEXT MONTH\n\n';
 
-  // Recommendations for next month based on current data
   const avgWeeklyTss = currentMonth.totals.avgWeeklyTss;
   const ctlGain = currentMonth.fitness.ctlChange;
+  const currentCtl = currentMonth.fitness.ctlEnd;
 
-  if (ctlGain > 0 && avgWeeklyTss > 200) {
-    body += isNL
-      ? 'Je bouwt goed op. Volgende maand kun je dit tempo aanhouden of licht verhogen.\n'
-      : 'You\'re building well. Next month you can maintain or slightly increase this pace.\n';
-  } else if (ctlGain > 0) {
-    body += isNL
-      ? 'Goede progressie. Overweeg om het volume geleidelijk te verhogen.\n'
-      : 'Good progress. Consider gradually increasing volume.\n';
-  } else if (ctlGain > -3) {
-    body += isNL
-      ? 'Fitness stabiel. Overweeg meer trainingsbelasting als je wilt opbouwen.\n'
-      : 'Fitness stable. Consider more training load if you want to build.\n';
+  // Volume targets
+  if (isNL) {
+    body += 'Volume doelen:\n';
+    if (ctlGain > 0 && avgWeeklyTss > 200) {
+      const targetTss = Math.round(avgWeeklyTss * 1.05);
+      body += `- Weekdoel: ${targetTss} TSS/week (5% verhoging)\n`;
+      body += `- Maanddoel: ${targetTss * 4} TSS totaal\n`;
+    } else if (avgWeeklyTss < 150) {
+      const targetTss = Math.round(avgWeeklyTss * 1.15);
+      body += `- Weekdoel: ${targetTss} TSS/week (15% verhoging mogelijk)\n`;
+      body += `- Focus op meer trainingsdagen\n`;
+    } else {
+      const targetTss = Math.round(avgWeeklyTss * 1.0);
+      body += `- Weekdoel: ${targetTss} TSS/week (behouden)\n`;
+      body += `- Focus op kwaliteit boven kwantiteit\n`;
+    }
   } else {
+    body += 'Volume targets:\n';
+    if (ctlGain > 0 && avgWeeklyTss > 200) {
+      const targetTss = Math.round(avgWeeklyTss * 1.05);
+      body += `- Weekly target: ${targetTss} TSS/week (5% increase)\n`;
+      body += `- Monthly target: ${targetTss * 4} TSS total\n`;
+    } else if (avgWeeklyTss < 150) {
+      const targetTss = Math.round(avgWeeklyTss * 1.15);
+      body += `- Weekly target: ${targetTss} TSS/week (15% increase possible)\n`;
+      body += `- Focus on more training days\n`;
+    } else {
+      const targetTss = Math.round(avgWeeklyTss * 1.0);
+      body += `- Weekly target: ${targetTss} TSS/week (maintain)\n`;
+      body += `- Focus on quality over quantity\n`;
+    }
+  }
+
+  // CTL projection
+  body += '\n';
+  const projectedCtlGain = avgWeeklyTss > 200 ? 3 : avgWeeklyTss > 100 ? 2 : 1;
+  const projectedCtl = Math.round(currentCtl + projectedCtlGain * 4);
+  body += isNL
+    ? `Fitness projectie: CTL ${currentCtl.toFixed(0)} -> ~${projectedCtl} (bij consistent trainen)\n`
+    : `Fitness projection: CTL ${currentCtl.toFixed(0)} -> ~${projectedCtl} (with consistent training)\n`;
+
+  // Zone focus recommendations
+  body += '\n';
+  if (zoneProgression?.available) {
+    const focusZones = zoneProgression.focusAreas || [];
+    const zoneNamesNL = { endurance: 'duurvermogen', tempo: 'tempo', threshold: 'drempel', vo2max: 'VO2max', anaerobic: 'anaeroob' };
+    const zoneNamesEN = { endurance: 'endurance', tempo: 'tempo', threshold: 'threshold', vo2max: 'VO2max', anaerobic: 'anaerobic' };
+
+    if (focusZones.length > 0) {
+      const zoneNames = isNL ? zoneNamesNL : zoneNamesEN;
+      body += isNL ? 'Zone focus:\n' : 'Zone focus:\n';
+      body += isNL
+        ? `- Prioriteit: ${focusZones.map(z => zoneNames[z]).join(', ')}\n`
+        : `- Priority: ${focusZones.map(z => zoneNames[z]).join(', ')}\n`;
+
+      // Specific recommendations per focus zone
+      for (const zone of focusZones.slice(0, 2)) {
+        if (zone === 'endurance') {
+          body += isNL
+            ? `- Duurvermogen: 1-2 langere Z2 ritten per week\n`
+            : `- Endurance: 1-2 longer Z2 rides per week\n`;
+        } else if (zone === 'threshold') {
+          body += isNL
+            ? `- Drempel: 1x per week Sweet Spot of FTP intervals\n`
+            : `- Threshold: 1x per week Sweet Spot or FTP intervals\n`;
+        } else if (zone === 'vo2max') {
+          body += isNL
+            ? `- VO2max: 1x per week korte, harde intervals (3-5min)\n`
+            : `- VO2max: 1x per week short, hard intervals (3-5min)\n`;
+        } else if (zone === 'tempo') {
+          body += isNL
+            ? `- Tempo: meer Z3 werk in langere ritten\n`
+            : `- Tempo: more Z3 work in longer rides\n`;
+        }
+      }
+    }
+  }
+
+  // Phase-specific monthly guidance
+  body += '\n';
+  const phaseName = phaseInfo.phaseName.toLowerCase();
+  if (isNL) {
+    body += 'Fase advies:\n';
+    if (phaseName.includes('base')) {
+      body += '- Bouw volume geleidelijk op (max 10% per week)\n';
+      body += '- Houd 80% van de training in Z2\n';
+      body += '- 1-2 korte tempo/SS sessies per week is voldoende\n';
+    } else if (phaseName.includes('build')) {
+      body += '- Behoud volume, verhoog intensiteit\n';
+      body += '- 2-3 key workouts per week\n';
+      body += '- Zorg voor voldoende herstel tussen harde sessies\n';
+    } else if (phaseName.includes('peak') || phaseName.includes('taper')) {
+      body += '- Verminder volume met 30-40%\n';
+      body += '- Behoud 1-2 scherpe sessies per week\n';
+      body += '- Prioriteit: slaap en herstel\n';
+    } else {
+      body += '- Focus op consistentie\n';
+      body += '- Varieer trainingsvormen\n';
+      body += '- Luister naar je lichaam\n';
+    }
+  } else {
+    body += 'Phase guidance:\n';
+    if (phaseName.includes('base')) {
+      body += '- Build volume gradually (max 10% per week)\n';
+      body += '- Keep 80% of training in Z2\n';
+      body += '- 1-2 short tempo/SS sessions per week is enough\n';
+    } else if (phaseName.includes('build')) {
+      body += '- Maintain volume, increase intensity\n';
+      body += '- 2-3 key workouts per week\n';
+      body += '- Ensure adequate recovery between hard sessions\n';
+    } else if (phaseName.includes('peak') || phaseName.includes('taper')) {
+      body += '- Reduce volume by 30-40%\n';
+      body += '- Maintain 1-2 sharp sessions per week\n';
+      body += '- Priority: sleep and recovery\n';
+    } else {
+      body += '- Focus on consistency\n';
+      body += '- Vary training types\n';
+      body += '- Listen to your body\n';
+    }
+  }
+
+  // Monthly milestones
+  if (goals?.available && goals?.primaryGoal && phaseInfo.weeksOut > 0) {
+    body += '\n';
+    body += isNL ? 'Mijlpalen:\n' : 'Milestones:\n';
+    const weeksNextMonth = Math.min(4, phaseInfo.weeksOut);
     body += isNL
-      ? 'Focus komende maand op consistentie en geleidelijke opbouw.\n'
-      : 'Focus next month on consistency and gradual building.\n';
+      ? `- Nog ${phaseInfo.weeksOut} weken tot ${goals.primaryGoal.name}\n`
+      : `- ${phaseInfo.weeksOut} weeks until ${goals.primaryGoal.name}\n`;
+
+    if (phaseInfo.weeksOut <= 4) {
+      body += isNL
+        ? `- Dit is de laatste maand voor je evenement!\n`
+        : `- This is the final month before your event!\n`;
+    } else if (phaseInfo.weeksOut <= 8) {
+      body += isNL
+        ? `- Specifieke voorbereiding begint deze maand\n`
+        : `- Specific preparation begins this month\n`;
+    }
   }
 
   body += '\n- IntervalCoach\n';
