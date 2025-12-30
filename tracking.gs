@@ -1127,3 +1127,92 @@ function checkIllnessPattern(options = {}) {
 
   return result;
 }
+
+// =========================================================
+// RECENT ACTIVITY SUMMARY
+// =========================================================
+
+/**
+ * Fetch recent activity summary for historical comparison
+ * @param {number} days - Number of days to look back (default 14)
+ * @returns {object} Summary of recent activities with averages and counts
+ */
+function fetchRecentActivitySummary(days) {
+  days = days || 14;
+
+  const result = {
+    available: false,
+    days: days,
+    totalActivities: 0,
+    cyclingCount: 0,
+    runningCount: 0,
+    avgTSS: 0,
+    avgDuration: 0,
+    avgIntensity: 0,
+    totalTSS: 0,
+    cyclingAvgTSS: 0,
+    runningAvgTSS: 0,
+    cyclingAvgDuration: 0,
+    runningAvgDuration: 0
+  };
+
+  try {
+    const today = new Date();
+    const oldest = new Date(today);
+    oldest.setDate(today.getDate() - days);
+
+    const oldestStr = formatDateISO(oldest);
+    const newestStr = formatDateISO(today);
+
+    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + oldestStr + "&newest=" + newestStr);
+
+    if (!activitiesResult.success || !activitiesResult.data) {
+      return result;
+    }
+
+    const activities = activitiesResult.data.filter(a =>
+      isSportActivity(a) && a.icu_training_load && a.icu_training_load > 0
+    );
+
+    if (activities.length === 0) {
+      return result;
+    }
+
+    result.available = true;
+    result.totalActivities = activities.length;
+
+    // Separate cycling and running
+    const cycling = activities.filter(a => isCyclingActivity(a));
+    const running = activities.filter(a => isRunningActivity(a));
+
+    result.cyclingCount = cycling.length;
+    result.runningCount = running.length;
+
+    // Calculate averages
+    const allTSS = activities.map(a => a.icu_training_load || 0);
+    const allDurations = activities.map(a => Math.round((a.moving_time || 0) / 60));
+    const allIntensity = activities.filter(a => a.icu_intensity).map(a => a.icu_intensity);
+
+    result.totalTSS = sum(allTSS);
+    result.avgTSS = Math.round(average(allTSS));
+    result.avgDuration = Math.round(average(allDurations));
+    result.avgIntensity = allIntensity.length > 0 ? average(allIntensity).toFixed(2) : null;
+
+    // Cycling averages
+    if (cycling.length > 0) {
+      result.cyclingAvgTSS = Math.round(average(cycling.map(a => a.icu_training_load || 0)));
+      result.cyclingAvgDuration = Math.round(average(cycling.map(a => Math.round((a.moving_time || 0) / 60))));
+    }
+
+    // Running averages
+    if (running.length > 0) {
+      result.runningAvgTSS = Math.round(average(running.map(a => a.icu_training_load || 0)));
+      result.runningAvgDuration = Math.round(average(running.map(a => Math.round((a.moving_time || 0) / 60))));
+    }
+
+  } catch (e) {
+    Logger.log("Error fetching recent activity summary: " + e.toString());
+  }
+
+  return result;
+}
