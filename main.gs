@@ -284,6 +284,16 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const activityType = availability.activityType; // "Ride" or "Run"
   const isRun = activityType === "Run";
 
+  // If there's an existing IntervalCoach workout with TSS, delete it first
+  // This ensures fitness metrics aren't affected by the planned TSS
+  const existingPlaceholder = availability.placeholder;
+  if (existingPlaceholder?.name?.startsWith('IntervalCoach_') && existingPlaceholder?.icu_training_load > 0) {
+    Logger.log(`Removing existing workout (TSS: ${existingPlaceholder.icu_training_load}) before fetching metrics...`);
+    deleteIntervalEvent(existingPlaceholder);
+    // Small delay to ensure API reflects the deletion
+    Utilities.sleep(1000);
+  }
+
   // Create Athlete Summary (fetches directly from Intervals.icu API)
   const summary = createAthleteSummary();
 

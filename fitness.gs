@@ -32,6 +32,8 @@ function fetchFitnessMetrics(targetDate) {
     if (ctl != null && atl != null) {
       tsb = ctl - atl;
     }
+    // Debug: Log raw API values to diagnose TSB fluctuation
+    Logger.log(`Fitness API (${dateStr}): CTL=${ctl?.toFixed(2)}, ATL=${atl?.toFixed(2)}, TSB=${tsb?.toFixed(2)}`);
   }
 
   // Calculate ramp rate (CTL change per week)

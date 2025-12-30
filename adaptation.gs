@@ -553,25 +553,36 @@ function checkWeekProgress() {
     summary: '',
     adaptationAdvice: '', // Guidance on how to adapt remaining week
     aheadLevel: null, // null, 'slightly_ahead', 'moderately_ahead', 'way_ahead'
-    daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday
+    daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday (for planned vs completed analysis)
   };
 
-  // Only analyze if we're past Monday
-  if (result.daysAnalyzed === 0) {
-    result.summary = "It's Monday - starting fresh week";
-    return result;
-  }
-
   try {
-    // Fetch events (planned workouts) for this week up to yesterday
+    // Fetch events (planned workouts) for this week up to yesterday (for missed workout detection)
     const yesterdayDate = new Date(today);
     yesterdayDate.setDate(today.getDate() - 1);
     const yesterdayStr = formatDateISO(yesterdayDate);
 
     const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + yesterdayStr);
 
-    // Fetch activities (completed workouts) for same period
-    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + yesterdayStr);
+    // Fetch activities for the ENTIRE week so far (including today) for total TSS count
+    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + todayStr);
+
+    // Calculate total completed TSS for the week (including today)
+    if (activitiesResult.success && activitiesResult.data) {
+      const weekActivities = activitiesResult.data.filter(a =>
+        isSportActivity(a) && a.icu_training_load && a.icu_training_load > 0
+      );
+      result.tssCompleted = weekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0);
+      result.completedSessions = weekActivities.length;
+    }
+
+    // Early return if it's Monday (no days to analyze for missed workouts)
+    if (result.daysAnalyzed === 0) {
+      result.summary = result.completedSessions > 0
+        ? `${result.completedSessions} session(s) completed today | TSS: ${Math.round(result.tssCompleted)}`
+        : "It's Monday - starting fresh week";
+      return result;
+    }
 
     if (!eventsResult.success || !activitiesResult.success) {
       result.summary = "Unable to check week progress (API error)";
@@ -635,14 +646,15 @@ function checkWeekProgress() {
           duration: Math.round((completedActivity.moving_time || 0) / 60),
           name: completedActivity.name
         };
-        result.completedSessions++;
-        result.tssCompleted += dayInfo.completed.tss;
+        // Note: completedSessions and tssCompleted are calculated earlier for the entire week (including today)
+        // Here we just track the day-by-day breakdown for missed/extra detection
         result.completedTypes.push(completedActivity.type);
       }
 
-      // Determine status
+      // Determine status and track matched sessions
       if (dayInfo.planned && dayInfo.completed) {
         dayInfo.status = 'completed';
+        result.matchedSessions = (result.matchedSessions || 0) + 1;
       } else if (dayInfo.planned && !dayInfo.completed) {
         dayInfo.status = 'missed';
         result.missedSessions++;
@@ -658,15 +670,17 @@ function checkWeekProgress() {
         });
       } else if (!dayInfo.planned && dayInfo.completed) {
         dayInfo.status = 'extra';
-        result.extraSessions++;
       }
 
       result.dayByDay.push(dayInfo);
     }
 
-    // Calculate adherence
+    // Calculate extra sessions: activities not matching a planned day
+    result.extraSessions = result.completedSessions - (result.matchedSessions || 0);
+
+    // Calculate adherence (based on planned sessions vs matched)
     if (result.plannedSessions > 0) {
-      result.adherenceRate = Math.round((result.completedSessions / result.plannedSessions) * 100);
+      result.adherenceRate = Math.round(((result.matchedSessions || 0) / result.plannedSessions) * 100);
     }
 
     // Build summary
