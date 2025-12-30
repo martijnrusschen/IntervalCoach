@@ -73,11 +73,6 @@ const USER_SETTINGS = {
   DEFAULT_DURATION_RIDE: { min: 60, max: 90 },   // minutes
   DEFAULT_DURATION_RUN: { min: 30, max: 45 },    // minutes
 
-  // Google Sheets logging (optional - create a sheet and copy its ID)
-  // Leave empty string "" if you don't want logging
-  SPREADSHEET_ID: "",
-  SHEET_NAME: "training_log",
-
   // Email address for daily workout summaries
   EMAIL_TO: "your-email@example.com"
 };

@@ -213,10 +213,6 @@ const USER_SETTINGS = {
   // Default workout duration range (when not specified)
   DEFAULT_DURATION_RIDE: { min: 60, max: 90 },
   DEFAULT_DURATION_RUN: { min: 30, max: 45 },
-
-  // Optional: Google Sheet ID for activity logging (leave "" to skip)
-  SPREADSHEET_ID: "",
-  SHEET_NAME: "training_log",
 };
 ```
 
@@ -304,28 +300,22 @@ Once everything works, set up automatic triggers:
 
 1. In Apps Script, click **Triggers** (clock icon in left sidebar)
 2. Click **+ Add Trigger** (bottom right)
-3. Create these two triggers:
+3. Create these triggers:
 
-**Trigger 1: Sync Activities**
-- Function: `fetchAndLogActivities`
-- Event source: Time-driven
-- Type: Day timer
-- Time: 2:00 AM - 3:00 AM
-
-**Trigger 2: Generate Workouts**
+**Trigger 1: Generate Workouts**
 - Function: `generateOptimalZwiftWorkoutsAutoByGemini`
 - Event source: Time-driven
 - Type: Day timer
 - Time: 6:00 AM - 7:00 AM
 
-**Trigger 3: Post-Workout Analysis (Recommended)**
+**Trigger 2: Post-Workout Analysis (Recommended)**
 - Function: `checkForCompletedWorkouts`
 - Event source: Time-driven
 - Type: Hour timer
 - Every: 1 hour
 - Automatically analyzes completed workouts and sends AI insights via email
 
-**Trigger 4: Weekly Summary + Planning (Recommended)**
+**Trigger 3: Weekly Summary + Planning (Recommended)**
 - Function: `sendWeeklySummaryEmail`
 - Event source: Time-driven
 - Type: Week timer

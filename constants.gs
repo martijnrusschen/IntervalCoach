@@ -260,10 +260,3 @@ function getIcuAuthHeader() {
   return "Basic " + Utilities.base64Encode("API_KEY:" + API_KEYS.ICU_TOKEN);
 }
 
-const HEADERS_FIXED = [
-  "start_date_local","name","type","moving_time","distance",
-  "icu_ftp","icu_training_load","icu_ctl","icu_atl",
-  "icu_intensity","icu_joules_above_ftp",
-  "SS_secs_manual_fix",
-  "Z1_secs","Z2_secs","Z3_secs","Z4_secs","Z5_secs","Z6_secs","Z7_secs"
-];

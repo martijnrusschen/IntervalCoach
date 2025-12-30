@@ -591,8 +591,18 @@ ${t.upcoming_week_title || "This Week"}
       if (day.hasEvent) {
         status = `[${day.eventCategory}]${day.eventName ? ' ' + day.eventName : ''}`;
       } else if (day.activityType) {
-        const duration = day.duration ? ` ${day.duration.min}min` : '';
-        status = `${day.placeholderName || day.activityType}${duration}`;
+        // For today, use the uploaded workout name if available (to override stale placeholder data)
+        let name;
+        if (isToday && type === 'workout' && workout?.type) {
+          // Use the actual uploaded workout type
+          name = workout.type;
+        } else {
+          name = day.placeholderName || day.activityType;
+        }
+        // Only add duration if name doesn't already include it
+        const hasDurationInName = name.includes('min');
+        const duration = day.duration && !hasDurationInName ? ` ${day.duration.min}min` : '';
+        status = `${name}${duration}`;
       } else {
         status = '-';
       }

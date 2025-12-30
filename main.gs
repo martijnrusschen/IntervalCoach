@@ -284,12 +284,18 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const activityType = availability.activityType; // "Ride" or "Run"
   const isRun = activityType === "Run";
 
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-  const data = sheet.getDataRange().getValues();
-  data.shift(); // Remove header
+  // If there's an existing IntervalCoach workout with TSS, delete it first
+  // This ensures fitness metrics aren't affected by the planned TSS
+  const existingPlaceholder = availability.placeholder;
+  if (existingPlaceholder?.name?.startsWith('IntervalCoach_') && existingPlaceholder?.icu_training_load > 0) {
+    Logger.log(`Removing existing workout (TSS: ${existingPlaceholder.icu_training_load}) before fetching metrics...`);
+    deleteIntervalEvent(existingPlaceholder);
+    // Small delay to ensure API reflects the deletion
+    Utilities.sleep(1000);
+  }
 
-  // Create Athlete Summary
-  const summary = createAthleteSummary(data);
+  // Create Athlete Summary (fetches directly from Intervals.icu API)
+  const summary = createAthleteSummary();
 
   // Fetch dynamic goals from calendar (A/B/C races)
   const goals = fetchUpcomingGoals();
@@ -467,7 +473,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   // Check for sustained high ramp rate over multiple weeks
   let rampRateWarning = null;
   try {
-    rampRateWarning = checkRampRateWarning(fitnessMetrics);
+    rampRateWarning = checkRampRateWarning(summary);
     if (rampRateWarning.warning) {
       Logger.log(`Ramp Rate Warning (${rampRateWarning.level}): ${rampRateWarning.consecutiveWeeks} weeks at elevated rate`);
       Logger.log(`  Weekly rates: ${rampRateWarning.weeklyRates.map(w => `${w.label}: ${w.rate}`).join(', ')}`);
@@ -816,44 +822,6 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
 }
 
 // =========================================================
-// DATA SYNC: Fetch Activities from Intervals.icu
-// =========================================================
-
-/**
- * Fetch activities from Intervals.icu and update the tracking spreadsheet
- * Syncs last 90 days of activities with power zones, HR zones, and metrics
- */
-function fetchAndLogActivities() {
-  requireValidConfig();
-
-  const sheet = SpreadsheetApp.openById(USER_SETTINGS.SPREADSHEET_ID).getSheetByName(USER_SETTINGS.SHEET_NAME);
-
-  const to = new Date();
-  const from = new Date();
-  from.setDate(to.getDate() - TRAINING_CONSTANTS.LOOKBACK.ACTIVITIES_DEFAULT);
-
-  const endpoint = `/athlete/0/activities?oldest=${formatDateISO(from)}&newest=${formatDateISO(to)}`;
-  const result = fetchIcuApi(endpoint);
-
-  if (!result.success) {
-    Logger.log("Error fetching activities: " + result.error);
-    return;
-  }
-
-  const activities = result.data;
-  if (!activities || activities.length === 0) {
-    Logger.log("No activities to write");
-    return;
-  }
-
-  const rows = activities.map(a => mapActivityToRow(a));
-  sheet.clear();
-  sheet.getRange(1, 1, 1, HEADERS_FIXED.length).setValues([HEADERS_FIXED]);
-  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
-  Logger.log(`${rows.length} rows added to spreadsheet.`);
-}
-
-// =========================================================
 // POST-WORKOUT ANALYSIS: Check for Completed Workouts
 // =========================================================
 
@@ -1046,64 +1014,53 @@ function classifyActivityCategory(activityType) {
 // =========================================================
 
 /**
- * Create athlete summary from spreadsheet data
- * Combines spreadsheet data with live fitness metrics from Intervals.icu
- * @param {Array} data - Spreadsheet data rows
+ * Create athlete summary from Intervals.icu API
+ * Fetches fitness metrics and recent activities directly
  * @returns {object} Athlete summary with CTL, ATL, TSB, recent activity
  */
-function createAthleteSummary(data) {
+function createAthleteSummary() {
   const today = new Date();
   const threeWeeksAgo = new Date();
   threeWeeksAgo.setDate(today.getDate() - 21);
 
-  // Get CTL/ATL/TSB directly from Intervals.icu (more reliable)
+  // Get CTL/ATL/TSB directly from Intervals.icu
   const fitness = fetchFitnessMetrics();
 
-  const recent3Weeks = data.filter(r => new Date(r[0]) >= threeWeeksAgo)
-    .map(r => HEADERS_FIXED.reduce((obj, h, i) => ({ ...obj, [h]: r[i] ?? 0 }), {}));
+  // Fetch recent activities for Z5 calculation and last activity
+  const oldestStr = formatDateISO(threeWeeksAgo);
+  const newestStr = formatDateISO(today);
+  const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + oldestStr + "&newest=" + newestStr);
 
-  const newestRow = data[0];
-  const lastRowObj = newestRow ? HEADERS_FIXED.reduce((obj, h, i) => ({ ...obj, [h]: newestRow[i] ?? 0 }), {}) : null;
+  let lastActivity = null;
+  let z5Total = 0;
 
-  // Use Intervals.icu fitness data, fallback to spreadsheet if needed
-  const ctl = fitness.ctl || (lastRowObj ? lastRowObj.icu_ctl : 0) || 0;
-  const atl = fitness.atl || (lastRowObj ? lastRowObj.icu_atl : 0) || 0;
+  if (activitiesResult.success && Array.isArray(activitiesResult.data) && activitiesResult.data.length > 0) {
+    // Activities are returned newest first
+    const newest = activitiesResult.data[0];
+    lastActivity = {
+      date: Utilities.formatDate(new Date(newest.start_date_local), SYSTEM_SETTINGS.TIMEZONE, "MM/dd"),
+      name: newest.name,
+      load: newest.icu_training_load || 0
+    };
+
+    // Sum Z5 time across all activities
+    for (const activity of activitiesResult.data) {
+      if (activity.icu_zone_times) {
+        const z5Zone = activity.icu_zone_times.find(z => z.id === "Z5");
+        if (z5Zone) {
+          z5Total += z5Zone.secs || 0;
+        }
+      }
+    }
+  }
 
   return {
-    ctl_90: ctl,
-    atl: atl,
-    tsb_current: fitness.tsb || (ctl - atl),
+    ctl_90: fitness.ctl || 0,
+    atl: fitness.atl || 0,
+    tsb_current: fitness.tsb || 0,
     rampRate: fitness.rampRate,
-    last_activity: lastRowObj ? {
-      date: Utilities.formatDate(new Date(lastRowObj.start_date_local), SYSTEM_SETTINGS.TIMEZONE, "MM/dd"),
-      name: lastRowObj.name,
-      load: lastRowObj.icu_training_load
-    } : null,
-    z5_recent_total: sum(recent3Weeks.map(r => r["Z5_secs"] || 0))
+    last_activity: lastActivity,
+    z5_recent_total: z5Total
   };
 }
 
-/**
- * Map an Intervals.icu activity to a spreadsheet row
- * @param {object} a - Activity object from API
- * @returns {Array} Row data for spreadsheet
- */
-function mapActivityToRow(a) {
-  const zoneIds = ["Z1","Z2","Z3","Z4","Z5","Z6","Z7","SS"];
-  const powerZoneTimes = zoneIds.map(id => {
-    const zone = a.icu_zone_times ? a.icu_zone_times.find(z => z.id === id) : null;
-    return zone ? zone.secs : 0;
-  });
-  const hrZoneTimes = a.icu_hr_zone_times ? a.icu_hr_zone_times.slice(0,7) : Array(7).fill(0);
-  while(hrZoneTimes.length < 7) hrZoneTimes.push(0);
-
-  return [
-    a.start_date_local, a.name, a.type, a.moving_time, a.distance,
-    a.icu_ftp, a.icu_training_load, a.icu_ctl, a.icu_atl, a.icu_intensity,
-    a.icu_joules_above_ftp, 0, ...powerZoneTimes.slice(0,7), powerZoneTimes[7], 0,
-    ...hrZoneTimes, a.icu_power_zones?.join(",") || "", a.icu_hr_zones?.join(",") || "",
-    a.icu_weighted_avg_watts || 0, a.icu_average_watts || 0, a.icu_variability_index || 0,
-    a.icu_efficiency_factor || 0, a.decoupling || 0, a.icu_max_wbal_depletion || 0,
-    a.trimp || 0, (a.icu_ctl - a.icu_atl)
-  ];
-}

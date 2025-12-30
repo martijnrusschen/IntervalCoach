@@ -552,25 +552,37 @@ function checkWeekProgress() {
     dayByDay: [], // Day-by-day breakdown for the week so far
     summary: '',
     adaptationAdvice: '', // Guidance on how to adapt remaining week
-    daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday
+    aheadLevel: null, // null, 'slightly_ahead', 'moderately_ahead', 'way_ahead'
+    daysAnalyzed: dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Days from Monday to yesterday (for planned vs completed analysis)
   };
 
-  // Only analyze if we're past Monday
-  if (result.daysAnalyzed === 0) {
-    result.summary = "It's Monday - starting fresh week";
-    return result;
-  }
-
   try {
-    // Fetch events (planned workouts) for this week up to yesterday
+    // Fetch events (planned workouts) for this week up to yesterday (for missed workout detection)
     const yesterdayDate = new Date(today);
     yesterdayDate.setDate(today.getDate() - 1);
     const yesterdayStr = formatDateISO(yesterdayDate);
 
     const eventsResult = fetchIcuApi("/athlete/0/events?oldest=" + startStr + "&newest=" + yesterdayStr);
 
-    // Fetch activities (completed workouts) for same period
-    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + yesterdayStr);
+    // Fetch activities for the ENTIRE week so far (including today) for total TSS count
+    const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + startStr + "&newest=" + todayStr);
+
+    // Calculate total completed TSS for the week (including today)
+    if (activitiesResult.success && activitiesResult.data) {
+      const weekActivities = activitiesResult.data.filter(a =>
+        isSportActivity(a) && a.icu_training_load && a.icu_training_load > 0
+      );
+      result.tssCompleted = weekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0);
+      result.completedSessions = weekActivities.length;
+    }
+
+    // Early return if it's Monday (no days to analyze for missed workouts)
+    if (result.daysAnalyzed === 0) {
+      result.summary = result.completedSessions > 0
+        ? `${result.completedSessions} session(s) completed today | TSS: ${Math.round(result.tssCompleted)}`
+        : "It's Monday - starting fresh week";
+      return result;
+    }
 
     if (!eventsResult.success || !activitiesResult.success) {
       result.summary = "Unable to check week progress (API error)";
@@ -593,9 +605,10 @@ function checkWeekProgress() {
         (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
       );
 
-      // Find completed activity for this day
+      // Find completed activity for this day (only Ride/Run count as training)
       const completedActivity = (activitiesResult.data || []).find(a =>
         a.start_date_local?.startsWith(dayStr) &&
+        isSportActivity(a) &&  // Only cycling/running, not walks
         a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300
       );
 
@@ -633,14 +646,15 @@ function checkWeekProgress() {
           duration: Math.round((completedActivity.moving_time || 0) / 60),
           name: completedActivity.name
         };
-        result.completedSessions++;
-        result.tssCompleted += dayInfo.completed.tss;
+        // Note: completedSessions and tssCompleted are calculated earlier for the entire week (including today)
+        // Here we just track the day-by-day breakdown for missed/extra detection
         result.completedTypes.push(completedActivity.type);
       }
 
-      // Determine status
+      // Determine status and track matched sessions
       if (dayInfo.planned && dayInfo.completed) {
         dayInfo.status = 'completed';
+        result.matchedSessions = (result.matchedSessions || 0) + 1;
       } else if (dayInfo.planned && !dayInfo.completed) {
         dayInfo.status = 'missed';
         result.missedSessions++;
@@ -656,15 +670,17 @@ function checkWeekProgress() {
         });
       } else if (!dayInfo.planned && dayInfo.completed) {
         dayInfo.status = 'extra';
-        result.extraSessions++;
       }
 
       result.dayByDay.push(dayInfo);
     }
 
-    // Calculate adherence
+    // Calculate extra sessions: activities not matching a planned day
+    result.extraSessions = result.completedSessions - (result.matchedSessions || 0);
+
+    // Calculate adherence (based on planned sessions vs matched)
     if (result.plannedSessions > 0) {
-      result.adherenceRate = Math.round((result.completedSessions / result.plannedSessions) * 100);
+      result.adherenceRate = Math.round(((result.matchedSessions || 0) / result.plannedSessions) * 100);
     }
 
     // Build summary
@@ -675,8 +691,25 @@ function checkWeekProgress() {
       // Build adaptation advice based on what was missed
       result.adaptationAdvice = buildAdaptationAdvice(result.missedWorkouts, result.tssPlanned - result.tssCompleted);
     } else if (result.extraSessions > 0) {
-      result.summary = `Ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
-      result.adaptationAdvice = 'Consider easier remaining workouts to avoid overtraining this week.';
+      // Determine how far ahead: slightly, moderately, or way ahead
+      const tssRatio = result.tssPlanned > 0 ? result.tssCompleted / result.tssPlanned : 1;
+
+      if (result.extraSessions >= 3 || tssRatio > 1.5) {
+        // Way ahead: 3+ extra sessions OR >150% TSS
+        result.aheadLevel = 'way_ahead';
+        result.summary = `Way ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Significantly ahead of plan. Consider a recovery day or very easy session to avoid overtraining.';
+      } else if (result.extraSessions >= 2 || tssRatio > 1.3) {
+        // Moderately ahead: 2 extra OR 130-150% TSS
+        result.aheadLevel = 'moderately_ahead';
+        result.summary = `Moderately ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Ahead of plan. Consider slightly easier intensity for remaining workouts.';
+      } else {
+        // Slightly ahead: 1 extra AND <130% TSS - continue as planned
+        result.aheadLevel = 'slightly_ahead';
+        result.summary = `Slightly ahead of plan: ${result.completedSessions} completed (${result.extraSessions} extra). TSS: ${result.tssCompleted} (planned: ${result.tssPlanned})`;
+        result.adaptationAdvice = 'Slightly ahead but within normal range. Continue with planned workouts.';
+      }
     } else if (result.plannedSessions === 0) {
       result.summary = `No workouts planned so far. Completed ${result.completedSessions} sessions (TSS: ${result.tssCompleted})`;
     } else {
@@ -811,8 +844,9 @@ function checkDeloadNeeded(fitnessMetrics, wellness) {
     sleepDebt: null  // Track sleep debt for display
   };
 
-  const currentCTL = fitnessMetrics?.ctl || 0;
-  const currentTSB = fitnessMetrics?.tsb || 0;
+  // Support both field naming conventions (ctl vs ctl_90, tsb vs tsb_current)
+  const currentCTL = fitnessMetrics?.ctl || fitnessMetrics?.ctl_90 || 0;
+  const currentTSB = fitnessMetrics?.tsb || fitnessMetrics?.tsb_current || 0;
   const currentRampRate = fitnessMetrics?.rampRate || 0;
 
   // Fetch last 4 weeks of activities
@@ -836,22 +870,30 @@ function checkDeloadNeeded(fitnessMetrics, wellness) {
   const avgWeeklyTSS = weeklyData.reduce((sum, w) => sum + w.totalTSS, 0) / 4;
   const targetWeeklyTSS = currentCTL * 7; // Expected TSS to maintain current CTL
 
-  // Deload threshold: 70% of average = recovery week
-  const deloadThreshold = avgWeeklyTSS * 0.70;
+  // Use the higher of: target TSS or minimum 100 TSS as "real training" threshold
+  // This prevents low CTL athletes from triggering false "sustained load" warnings
+  const minTrainingTSS = Math.max(targetWeeklyTSS, 100);
 
-  // Count consecutive weeks without deload (TSS > 70% of average)
+  // Deload threshold: 70% of target or 70 TSS minimum
+  const deloadThreshold = Math.max(minTrainingTSS * 0.70, 70);
+
+  // Count consecutive weeks of actual high load (TSS > target)
+  // Only weeks above target count as "sustained load"
   let consecutiveHighWeeks = 0;
   let hadRecentDeload = false;
 
   for (let i = weeklyData.length - 1; i >= 0; i--) {
     const week = weeklyData[i];
-    if (week.totalTSS < deloadThreshold && week.totalTSS > 0) {
+    // A week is "recovery" if below deload threshold
+    if (week.totalTSS < deloadThreshold) {
       hadRecentDeload = true;
       result.weeksWithoutDeload = consecutiveHighWeeks;
       break;
-    } else if (week.totalTSS > 0) {
+    } else if (week.totalTSS >= minTrainingTSS) {
+      // Only count as "high load" if actually above target
       consecutiveHighWeeks++;
     }
+    // Weeks between deload threshold and target don't count as "sustained load"
   }
 
   if (!hadRecentDeload) {
@@ -978,7 +1020,8 @@ function formatDeloadCheckLog(deloadCheck) {
 // =========================================================
 
 /**
- * Check for volume jump between weeks
+ * Check for volume jump between calendar weeks
+ * Compares last complete week (prev Mon-Sun) vs week before that
  * Flags week-to-week TSS increases >15% as injury risk
  *
  * @returns {object} { detected, percentChange, thisWeekTSS, lastWeekTSS, risk, recommendation }
@@ -994,12 +1037,41 @@ function checkVolumeJump() {
   };
 
   try {
-    // Fetch this week's and last week's activities
-    const thisWeek = fetchWeeklyActivities(7);
-    const lastWeek = fetchWeeklyActivities(7, 7);
+    // Calculate calendar week boundaries
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday
 
-    result.thisWeekTSS = Math.round(thisWeek.totalTss);
-    result.lastWeekTSS = Math.round(lastWeek.totalTss);
+    // Find the most recent Monday (start of current week)
+    const currentWeekStart = new Date(today);
+    currentWeekStart.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    // Previous week: Monday to Sunday before current week
+    const prevWeekEnd = new Date(currentWeekStart);
+    prevWeekEnd.setDate(currentWeekStart.getDate() - 1); // Sunday
+    const prevWeekStart = new Date(prevWeekEnd);
+    prevWeekStart.setDate(prevWeekEnd.getDate() - 6); // Monday
+
+    // Week before that
+    const olderWeekEnd = new Date(prevWeekStart);
+    olderWeekEnd.setDate(prevWeekStart.getDate() - 1); // Sunday before
+    const olderWeekStart = new Date(olderWeekEnd);
+    olderWeekStart.setDate(olderWeekEnd.getDate() - 6); // Monday before
+
+    // Fetch activities for both complete weeks
+    const prevWeekResult = fetchIcuApi(`/athlete/0/activities?oldest=${formatDateISO(prevWeekStart)}&newest=${formatDateISO(prevWeekEnd)}`);
+    const olderWeekResult = fetchIcuApi(`/athlete/0/activities?oldest=${formatDateISO(olderWeekStart)}&newest=${formatDateISO(olderWeekEnd)}`);
+
+    if (!prevWeekResult.success || !olderWeekResult.success) {
+      return result;
+    }
+
+    // Sum TSS for each week
+    const prevWeekActivities = prevWeekResult.data || [];
+    const olderWeekActivities = olderWeekResult.data || [];
+
+    result.thisWeekTSS = Math.round(prevWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0));
+    result.lastWeekTSS = Math.round(olderWeekActivities.reduce((sum, a) => sum + (a.icu_training_load || 0), 0));
 
     // Calculate percentage change
     if (result.lastWeekTSS > 0) {
