@@ -593,9 +593,10 @@ function checkWeekProgress() {
         (e.description?.includes('[Weekly Plan]') || e.name?.match(/^(Ride|Run)/i))
       );
 
-      // Find completed activity for this day
+      // Find completed activity for this day (only Ride/Run count as training)
       const completedActivity = (activitiesResult.data || []).find(a =>
         a.start_date_local?.startsWith(dayStr) &&
+        isSportActivity(a) &&  // Only cycling/running, not walks
         a.icu_training_load && a.icu_training_load > 0 && a.moving_time > 300
       );
 
