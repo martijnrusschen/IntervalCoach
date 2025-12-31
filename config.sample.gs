@@ -55,6 +55,9 @@ const AI_SETTINGS = {
 // USER SETTINGS
 // =========================================================
 const USER_SETTINGS = {
+  // Your first name (used in personalized email greetings)
+  ATHLETE_NAME: "Athlete",
+
   // Language for Email and Analysis
   // Options: "en" (English), "nl" (Dutch), "ja" (Japanese), "es" (Spanish), "fr" (French)
   LANGUAGE: "en",

@@ -23,6 +23,789 @@
  * @param {object} params.midWeekAdaptation - Mid-week adaptation results (if any)
  */
 /**
+ * Build Whoop-style rest day email body
+ * Personal, data-driven, explains the "why" behind recommendations
+ * @param {object} params - Email parameters
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string} Email body
+ */
+function buildWhoopStyleRestDayEmail(params, isNL) {
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo } = params;
+  const today = new Date();
+  const dayNames = isNL
+    ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[today.getDay()];
+
+  // Get athlete name from settings or use default
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+
+  // Get recovery data
+  const recovery = wellness?.today?.recovery;
+  const hrv = wellness?.today?.hrv;
+  const sleep = wellness?.today?.sleep;
+  const hrvBaseline = wellness?.averages?.hrv;
+
+  // Determine recovery color based on percentage (Whoop-style thresholds)
+  let recoveryColor;
+  if (recovery != null) {
+    if (recovery >= 67) {
+      recoveryColor = isNL ? 'groen' : 'green';
+    } else if (recovery >= 34) {
+      recoveryColor = isNL ? 'geel' : 'yellow';
+    } else {
+      recoveryColor = isNL ? 'rood' : 'red';
+    }
+  } else {
+    recoveryColor = '';
+  }
+
+  let body = '';
+
+  // === GREETING + CONTEXT (conversational opener) ===
+  body += isNL
+    ? `Hey ${athleteName}, fijne ${dayName}ochtend.\n\n`
+    : `Hey ${athleteName}, happy ${dayName} morning.\n\n`;
+
+  // === STATUS BANNER ===
+  body += '═══════════════════════════════════════\n';
+  if (recovery != null) {
+    body += isNL
+      ? `   RECOVERY ${recovery}% (${recoveryColor})  •  RUSTDAG\n`
+      : `   RECOVERY ${recovery}% (${recoveryColor})  •  REST DAY\n`;
+  } else {
+    body += isNL ? `   RUSTDAG\n` : `   REST DAY\n`;
+  }
+  body += '═══════════════════════════════════════\n\n';
+
+  // === MAIN NARRATIVE (flowing, conversational) ===
+
+  // Acknowledge yesterday's work
+  const lastWorkoutType = weekProgress?.completedTypes?.[weekProgress.completedTypes.length - 1];
+  const lastTSS = weekProgress?.tssCompleted || 0;
+
+  if (lastWorkoutType && lastTSS > 0) {
+    body += isNL
+      ? `Goed bezig gisteren met je ${lastWorkoutType} (${lastTSS} TSS). `
+      : `Nice work on yesterday's ${lastWorkoutType} (${lastTSS} TSS). `;
+  }
+
+  // Explain why rest day based on recovery color
+  if (recoveryColor === (isNL ? 'geel' : 'yellow')) {
+    body += isNL
+      ? `Met ${recovery}% recovery is je lichaam nog bezig die inspanning te verwerken - niet slecht, maar ook niet optimaal voor intensiteit. `
+      : `At ${recovery}% recovery, your body is still processing that effort - not bad, but not optimal for intensity either. `;
+  } else if (recoveryColor === (isNL ? 'rood' : 'red')) {
+    body += isNL
+      ? `Met ${recovery}% recovery geeft je lichaam duidelijk aan dat het rust nodig heeft. `
+      : `At ${recovery}% recovery, your body is clearly signaling it needs rest. `;
+  } else if (recoveryColor === (isNL ? 'groen' : 'green')) {
+    body += isNL
+      ? `Hoewel je recovery goed is (${recovery}%), is vandaag strategische rust - soms is niet trainen de slimste zet. `
+      : `Although your recovery is good (${recovery}%), today is strategic rest - sometimes not training is the smartest move. `;
+  }
+
+  // Add sleep/HRV context
+  if (sleep != null && hrv != null && hrvBaseline != null) {
+    const hrvRounded = Math.round(hrv);
+    const hrvBaselineRounded = Math.round(hrvBaseline);
+    const hrvDiff = hrvRounded - hrvBaselineRounded;
+
+    if (sleep >= 7 && hrvDiff < -5) {
+      body += isNL
+        ? `Je slaap was prima (${sleep.toFixed(1)}u), maar je HRV van ${hrvRounded}ms ligt onder je baseline van ${hrvBaselineRounded}ms - een teken dat je lichaam adapteert.\n\n`
+        : `Your sleep was solid (${sleep.toFixed(1)}h), but your HRV of ${hrvRounded}ms is below your ${hrvBaselineRounded}ms baseline - a sign your body is adapting.\n\n`;
+    } else if (sleep >= 7 && hrvDiff >= -5) {
+      body += isNL
+        ? `Je slaap (${sleep.toFixed(1)}u) en HRV (${hrvRounded}ms) zien er goed uit.\n\n`
+        : `Your sleep (${sleep.toFixed(1)}h) and HRV (${hrvRounded}ms) look good.\n\n`;
+    } else if (sleep < 7) {
+      body += isNL
+        ? `Met ${sleep.toFixed(1)}u slaap mis je wat herstel - probeer vanavond eerder naar bed.\n\n`
+        : `At ${sleep.toFixed(1)}h of sleep you're missing some recovery - try to get to bed earlier tonight.\n\n`;
+    }
+  } else if (sleep != null) {
+    body += isNL
+      ? `Je slaap: ${sleep.toFixed(1)} uur.\n\n`
+      : `Your sleep: ${sleep.toFixed(1)} hours.\n\n`;
+  } else {
+    body += '\n';
+  }
+
+  // === WEEK CONTEXT ===
+  const completed = weekProgress?.completedSessions || 0;
+  const tssCompleted = weekProgress?.tssCompleted || 0;
+  const remaining = weekProgress?.remainingSessions || 0;
+
+  if (completed > 0 || remaining > 0) {
+    body += isNL
+      ? `Deze week: ${completed} ${completed === 1 ? 'sessie' : 'sessies'} gedaan (${tssCompleted} TSS)`
+      : `This week: ${completed} ${completed === 1 ? 'session' : 'sessions'} done (${tssCompleted} TSS)`;
+
+    if (remaining > 0) {
+      body += isNL ? `, nog ${remaining} gepland.\n\n` : `, ${remaining} more planned.\n\n`;
+    } else {
+      body += '.\n\n';
+    }
+  }
+
+  // === TODAY'S RECOMMENDATION ===
+  body += isNL
+    ? `Vandaag draait om herstel. Actief herstel mag - een wandeling van 20-30 minuten houdt de bloedsomloop op gang zonder stress toe te voegen. Geen intensiteit.\n\n`
+    : `Today is about recovery. Active recovery is fine - a 20-30 minute walk keeps blood flowing without adding stress. No intensity.\n\n`;
+
+  // === LOOKING AHEAD ===
+  const futureWorkouts = upcomingDays?.filter((d, i) => i > 0 && (d.activityType || d.hasEvent || d.placeholderName));
+  if (futureWorkouts && futureWorkouts.length > 0) {
+    const shortDayNames = isNL
+      ? ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    body += isNL ? 'Komende dagen:\n' : 'Coming up:\n';
+
+    futureWorkouts.slice(0, 3).forEach(day => {
+      const dayDate = new Date(day.date);
+      const shortDay = shortDayNames[dayDate.getDay()];
+      let description = '';
+
+      if (day.hasEvent) {
+        description = `[${day.eventCategory}] ${day.eventName || ''}`.trim();
+      } else if (day.placeholderName) {
+        description = day.placeholderName;
+        // Only add duration if not already in the name
+        const nameHasDuration = /\d+\s*min/i.test(day.placeholderName);
+        if (!nameHasDuration) {
+          const dur = day.duration;
+          if (dur && typeof dur === 'number') {
+            description += ` (${dur} min)`;
+          } else if (dur && typeof dur === 'object' && dur.min) {
+            description += ` (${dur.min}-${dur.max} min)`;
+          }
+        }
+      } else if (day.activityType) {
+        description = day.activityType;
+      }
+
+      body += `  ${shortDay}: ${description}\n`;
+    });
+    body += '\n';
+  }
+
+  // === CLOSING ===
+  body += isNL
+    ? 'Goed hydrateren, slaap prioriteit geven. Morgen gaan we weer.\n\n'
+    : 'Stay hydrated, prioritize sleep. Tomorrow we go again.\n\n';
+
+  body += '— Coach\n';
+
+  return body;
+}
+
+/**
+ * Build Whoop-style workout day email body
+ * @param {object} params - Email parameters
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string} Email body
+ */
+function buildWhoopStyleWorkoutEmail(params, isNL) {
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, workout, workoutSelection, powerProfile } = params;
+  const today = new Date();
+  const dayNames = isNL
+    ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[today.getDay()];
+
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+
+  // Get recovery data
+  const recovery = wellness?.today?.recovery;
+  const hrv = wellness?.today?.hrv;
+  const sleep = wellness?.today?.sleep;
+  const hrvBaseline = wellness?.averages?.hrv;
+  const tsb = summary?.tsb_current || summary?.tsb || 0;
+
+  // Determine recovery color
+  let recoveryColor;
+  if (recovery != null) {
+    if (recovery >= 67) {
+      recoveryColor = isNL ? 'groen' : 'green';
+    } else if (recovery >= 34) {
+      recoveryColor = isNL ? 'geel' : 'yellow';
+    } else {
+      recoveryColor = isNL ? 'rood' : 'red';
+    }
+  } else {
+    recoveryColor = '';
+  }
+
+  const workoutType = workout?.type || 'Workout';
+
+  let body = '';
+
+  // === GREETING ===
+  body += isNL
+    ? `Hey ${athleteName}, fijne ${dayName}ochtend.\n\n`
+    : `Hey ${athleteName}, happy ${dayName} morning.\n\n`;
+
+  // === STATUS BANNER ===
+  body += '═══════════════════════════════════════\n';
+  if (recovery != null) {
+    body += isNL
+      ? `   RECOVERY ${recovery}% (${recoveryColor})  •  ${workoutType.toUpperCase()}\n`
+      : `   RECOVERY ${recovery}% (${recoveryColor})  •  ${workoutType.toUpperCase()}\n`;
+  } else {
+    body += `   ${workoutType.toUpperCase()}\n`;
+  }
+  body += '═══════════════════════════════════════\n\n';
+
+  // === READINESS NARRATIVE ===
+  if (recoveryColor === (isNL ? 'groen' : 'green')) {
+    body += isNL
+      ? `Je bent goed hersteld en klaar voor kwaliteitswerk. `
+      : `You're well recovered and ready for quality work. `;
+  } else if (recoveryColor === (isNL ? 'geel' : 'yellow')) {
+    body += isNL
+      ? `Met ${recovery}% recovery kun je trainen, maar luister goed naar je lichaam. `
+      : `At ${recovery}% recovery you can train, but listen to your body carefully. `;
+  } else if (recoveryColor === (isNL ? 'rood' : 'red')) {
+    body += isNL
+      ? `Je recovery is laag (${recovery}%), maar je hebt gekozen om te trainen. Houd het beheerst. `
+      : `Your recovery is low (${recovery}%), but you've chosen to train. Keep it controlled. `;
+  }
+
+  // Add HRV/sleep context
+  if (hrv != null && hrvBaseline != null) {
+    const hrvRounded = Math.round(hrv);
+    const hrvBaselineRounded = Math.round(hrvBaseline);
+    const hrvDiff = hrvRounded - hrvBaselineRounded;
+
+    if (hrvDiff >= 5) {
+      body += isNL
+        ? `Je HRV van ${hrvRounded}ms ligt boven je baseline - je lichaam kan de belasting goed aan. `
+        : `Your HRV of ${hrvRounded}ms is above baseline - your body can handle the load well. `;
+    } else if (hrvDiff < -5) {
+      body += isNL
+        ? `Je HRV (${hrvRounded}ms) ligt onder baseline, dus verwacht wat zwaardere benen. `
+        : `Your HRV (${hrvRounded}ms) is below baseline, so expect heavier legs. `;
+    }
+  }
+
+  if (sleep != null) {
+    if (sleep >= 7.5) {
+      body += isNL
+        ? `Goede nachtrust (${sleep.toFixed(1)}u).\n\n`
+        : `Good sleep (${sleep.toFixed(1)}h).\n\n`;
+    } else if (sleep < 6.5) {
+      body += isNL
+        ? `Let op: beperkte slaap (${sleep.toFixed(1)}u) kan je prestatie beïnvloeden.\n\n`
+        : `Note: limited sleep (${sleep.toFixed(1)}h) may affect performance.\n\n`;
+    } else {
+      body += '\n\n';
+    }
+  } else {
+    body += '\n\n';
+  }
+
+  // === WORKOUT DETAILS ===
+  body += isNL ? `Vandaag: ${workoutType}\n\n` : `Today: ${workoutType}\n\n`;
+
+  // Add AI reasoning in conversational style
+  if (workoutSelection?.reason) {
+    body += workoutSelection.reason;
+    if (workoutSelection.varietyNote) {
+      body += ` ${workoutSelection.varietyNote}`;
+    }
+    if (workoutSelection.zoneNote) {
+      body += ` ${workoutSelection.zoneNote}`;
+    }
+    body += '\n\n';
+  } else if (workout?.explanation) {
+    body += workout.explanation + '\n\n';
+  }
+
+  // === WEEK CONTEXT ===
+  const completed = weekProgress?.completedSessions || 0;
+  const tssCompleted = weekProgress?.tssCompleted || 0;
+  const remaining = weekProgress?.remainingSessions || 0;
+
+  if (completed > 0 || remaining > 0) {
+    body += isNL
+      ? `Deze week: ${completed} ${completed === 1 ? 'sessie' : 'sessies'} gedaan (${tssCompleted} TSS)`
+      : `This week: ${completed} ${completed === 1 ? 'session' : 'sessions'} done (${tssCompleted} TSS)`;
+
+    if (remaining > 0) {
+      body += isNL
+        ? `, nog ${remaining} gepland (inclusief vandaag).\n\n`
+        : `, ${remaining} more planned (including today).\n\n`;
+    } else {
+      body += '.\n\n';
+    }
+  }
+
+  // === LOOKING AHEAD ===
+  const futureWorkouts = upcomingDays?.filter((d, i) => i > 0 && (d.activityType || d.hasEvent || d.placeholderName));
+  if (futureWorkouts && futureWorkouts.length > 0) {
+    const shortDayNames = isNL
+      ? ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    body += isNL ? 'Komende dagen:\n' : 'Coming up:\n';
+
+    futureWorkouts.slice(0, 3).forEach(day => {
+      const dayDate = new Date(day.date);
+      const shortDay = shortDayNames[dayDate.getDay()];
+      let description = '';
+
+      if (day.hasEvent) {
+        description = `[${day.eventCategory}] ${day.eventName || ''}`.trim();
+      } else if (day.placeholderName) {
+        description = day.placeholderName;
+        const nameHasDuration = /\d+\s*min/i.test(day.placeholderName);
+        if (!nameHasDuration) {
+          const dur = day.duration;
+          if (dur && typeof dur === 'number') {
+            description += ` (${dur} min)`;
+          } else if (dur && typeof dur === 'object' && dur.min) {
+            description += ` (${dur.min}-${dur.max} min)`;
+          }
+        }
+      } else if (day.activityType) {
+        description = day.activityType;
+      }
+
+      body += `  ${shortDay}: ${description}\n`;
+    });
+    body += '\n';
+  }
+
+  // === CLOSING ===
+  body += isNL
+    ? 'Succes met je training!\n\n'
+    : 'Have a great workout!\n\n';
+
+  body += '— Coach\n';
+
+  return body;
+}
+
+/**
+ * Build Whoop-style group ride email - personal, conversational, data-driven
+ */
+function buildWhoopStyleGroupRideEmail(params, isNL) {
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, cEventName, cEventDescription, groupRideAdvice } = params;
+  const today = new Date();
+  const dayNames = isNL
+    ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[today.getDay()];
+
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+
+  // Get recovery data
+  const recovery = wellness?.today?.recovery;
+  const hrv = wellness?.today?.hrv;
+  const sleep = wellness?.today?.sleep;
+  const hrvBaseline = wellness?.averages?.hrv;
+
+  // Determine recovery color
+  let recoveryColor;
+  if (recovery != null) {
+    if (recovery >= 67) {
+      recoveryColor = isNL ? 'groen' : 'green';
+    } else if (recovery >= 34) {
+      recoveryColor = isNL ? 'geel' : 'yellow';
+    } else {
+      recoveryColor = isNL ? 'rood' : 'red';
+    }
+  } else {
+    recoveryColor = '';
+  }
+
+  const eventName = cEventName || (isNL ? 'Groepsrit' : 'Group Ride');
+  const advice = groupRideAdvice || {};
+
+  let body = '';
+
+  // === GREETING ===
+  body += isNL
+    ? `Hey ${athleteName}, fijne ${dayName}ochtend.\n\n`
+    : `Hey ${athleteName}, happy ${dayName} morning.\n\n`;
+
+  // === STATUS BANNER ===
+  body += '═══════════════════════════════════════\n';
+  if (recovery != null) {
+    body += isNL
+      ? `   RECOVERY ${recovery}% (${recoveryColor})  •  GROEPSRIT\n`
+      : `   RECOVERY ${recovery}% (${recoveryColor})  •  GROUP RIDE\n`;
+  } else {
+    body += isNL ? '   GROEPSRIT\n' : '   GROUP RIDE\n';
+  }
+  body += '═══════════════════════════════════════\n\n';
+
+  // === EVENT DETAILS ===
+  body += `${eventName}`;
+  if (cEventDescription) {
+    body += ` - ${cEventDescription}`;
+  }
+  body += '\n\n';
+
+  // === INTENSITY RECOMMENDATION ===
+  const intensityLabel = {
+    'easy': isNL ? 'Rustig' : 'Easy',
+    'moderate': isNL ? 'Matig' : 'Moderate',
+    'hard': isNL ? 'Vol gas' : 'Hard'
+  }[advice.intensity] || (isNL ? 'Matig' : 'Moderate');
+
+  body += isNL
+    ? `Aanbevolen intensiteit: ${intensityLabel}\n\n`
+    : `Recommended intensity: ${intensityLabel}\n\n`;
+
+  // === AI ADVICE (conversational) ===
+  if (advice.advice) {
+    body += advice.advice + '\n\n';
+  } else {
+    // Fallback advice based on recovery
+    if (recoveryColor === (isNL ? 'groen' : 'green')) {
+      body += isNL
+        ? `Je bent goed hersteld, dus je kunt gerust meegaan met de groep als het tempo oploopt. Geniet ervan.\n\n`
+        : `You're well recovered, so feel free to go with the group if the pace picks up. Enjoy it.\n\n`;
+    } else if (recoveryColor === (isNL ? 'geel' : 'yellow')) {
+      body += isNL
+        ? `Met ${recovery}% recovery kun je meedoen, maar houd het verstandig. Laat het ego thuis en kies voor een tempo dat bij je herstel past.\n\n`
+        : `At ${recovery}% recovery you can join in, but be sensible. Leave the ego at home and pick a pace that matches your recovery.\n\n`;
+    } else if (recoveryColor === (isNL ? 'rood' : 'red')) {
+      body += isNL
+        ? `Je recovery is laag (${recovery}%). Overweeg om deze groepsrit te skippen, of rijd mee op je eigen tempo zonder mee te doen aan sprints of aanvallen.\n\n`
+        : `Your recovery is low (${recovery}%). Consider skipping this group ride, or ride at your own pace without joining sprints or attacks.\n\n`;
+    } else {
+      body += isNL
+        ? `Luister naar je lichaam en pas je intensiteit aan op hoe je je voelt.\n\n`
+        : `Listen to your body and adjust your intensity based on how you feel.\n\n`;
+    }
+  }
+
+  // === TIPS ===
+  if (advice.tips && advice.tips.length > 0) {
+    body += isNL ? 'Tips:\n' : 'Tips:\n';
+    advice.tips.forEach(tip => {
+      body += `• ${tip}\n`;
+    });
+    body += '\n';
+  }
+
+  // === WEEK CONTEXT ===
+  const completed = weekProgress?.completedSessions || 0;
+  const tssCompleted = weekProgress?.tssCompleted || 0;
+
+  if (completed > 0) {
+    body += isNL
+      ? `Deze week tot nu toe: ${completed} ${completed === 1 ? 'sessie' : 'sessies'} (${tssCompleted} TSS).\n\n`
+      : `This week so far: ${completed} ${completed === 1 ? 'session' : 'sessions'} (${tssCompleted} TSS).\n\n`;
+  }
+
+  // === LOOKING AHEAD ===
+  const futureWorkouts = upcomingDays?.filter((d, i) => i > 0 && (d.activityType || d.hasEvent || d.placeholderName));
+  if (futureWorkouts && futureWorkouts.length > 0) {
+    const shortDayNames = isNL
+      ? ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    body += isNL ? 'Komende dagen:\n' : 'Coming up:\n';
+
+    futureWorkouts.slice(0, 3).forEach(day => {
+      const dayDate = new Date(day.date);
+      const shortDay = shortDayNames[dayDate.getDay()];
+      let description = '';
+
+      if (day.hasEvent) {
+        description = `[${day.eventCategory}] ${day.eventName || ''}`.trim();
+      } else if (day.placeholderName) {
+        description = day.placeholderName;
+        const nameHasDuration = /\d+\s*min/i.test(day.placeholderName);
+        if (!nameHasDuration) {
+          const dur = day.duration;
+          if (dur && typeof dur === 'number') {
+            description += ` (${dur} min)`;
+          } else if (dur && typeof dur === 'object' && dur.min) {
+            description += ` (${dur.min}-${dur.max} min)`;
+          }
+        }
+      } else if (day.activityType) {
+        description = day.activityType;
+      }
+
+      body += `  ${shortDay}: ${description}\n`;
+    });
+    body += '\n';
+  }
+
+  // === CLOSING ===
+  body += isNL
+    ? 'Geniet van de rit!\n\n'
+    : 'Enjoy the ride!\n\n';
+
+  body += '— Coach\n';
+
+  return body;
+}
+
+/**
+ * Build Whoop-style race day email - focused, motivational, strategic
+ */
+function buildWhoopStyleRaceDayEmail(params, isNL) {
+  const { wellness, weekProgress, raceName, raceCategory, raceDescription, raceDayAdvice } = params;
+  const today = new Date();
+  const dayNames = isNL
+    ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[today.getDay()];
+
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+
+  // Get recovery data
+  const recovery = wellness?.today?.recovery;
+  const hrv = wellness?.today?.hrv;
+  const sleep = wellness?.today?.sleep;
+  const hrvBaseline = wellness?.averages?.hrv;
+
+  // Determine recovery color
+  let recoveryColor;
+  if (recovery != null) {
+    if (recovery >= 67) {
+      recoveryColor = isNL ? 'groen' : 'green';
+    } else if (recovery >= 34) {
+      recoveryColor = isNL ? 'geel' : 'yellow';
+    } else {
+      recoveryColor = isNL ? 'rood' : 'red';
+    }
+  } else {
+    recoveryColor = '';
+  }
+
+  const advice = raceDayAdvice || {};
+  const readiness = (advice.readiness || 'unknown').toUpperCase();
+
+  let body = '';
+
+  // === GREETING ===
+  body += isNL
+    ? `${athleteName}, het is zover.\n\n`
+    : `${athleteName}, today is the day.\n\n`;
+
+  // === STATUS BANNER ===
+  body += '═══════════════════════════════════════\n';
+  body += isNL
+    ? `   ${raceCategory} RACE  •  ${readiness} PARAAT\n`
+    : `   ${raceCategory} RACE  •  ${readiness} READINESS\n`;
+  body += '═══════════════════════════════════════\n\n';
+
+  // === RACE INFO ===
+  body += `${raceName}`;
+  if (raceDescription) {
+    body += `\n${raceDescription}`;
+  }
+  body += '\n\n';
+
+  // === READINESS NARRATIVE ===
+  if (recovery != null) {
+    body += isNL
+      ? `Recovery: ${recovery}% (${recoveryColor}). `
+      : `Recovery: ${recovery}% (${recoveryColor}). `;
+  }
+
+  if (advice.readinessNote) {
+    body += advice.readinessNote;
+  } else {
+    if (recoveryColor === (isNL ? 'groen' : 'green')) {
+      body += isNL
+        ? `Je bent goed hersteld en klaar om te presteren.`
+        : `You're well recovered and ready to perform.`;
+    } else if (recoveryColor === (isNL ? 'geel' : 'yellow')) {
+      body += isNL
+        ? `Niet op je best, maar je kunt nog steeds een goede race rijden.`
+        : `Not at your best, but you can still race well.`;
+    } else if (recoveryColor === (isNL ? 'rood' : 'red')) {
+      body += isNL
+        ? `Recovery is laag. Pas je verwachtingen aan en race slim.`
+        : `Recovery is low. Adjust expectations and race smart.`;
+    }
+  }
+  body += '\n\n';
+
+  // === STRATEGY ===
+  body += isNL ? 'STRATEGIE\n' : 'STRATEGY\n';
+  body += advice.strategy || (isNL
+    ? 'Begin conservatief, bouw op naarmate de race vordert.'
+    : 'Start conservatively, build into the race.');
+  body += '\n\n';
+
+  // === POWER TARGETS ===
+  if (advice.powerTargets) {
+    body += isNL ? 'VERMOGENSDOELEN\n' : 'POWER TARGETS\n';
+    body += isNL ? '• Veilig: ' : '• Safe: ';
+    body += `${advice.powerTargets.conservative || 'N/A'}\n`;
+    body += isNL ? '• Normaal: ' : '• Normal: ';
+    body += `${advice.powerTargets.normal || 'N/A'}\n`;
+    body += isNL ? '• Vol gas: ' : '• All-out: ';
+    body += `${advice.powerTargets.aggressive || 'N/A'}\n\n`;
+  }
+
+  // === WARMUP ===
+  body += isNL ? 'WARMING-UP\n' : 'WARMUP\n';
+  body += advice.warmup || (isNL
+    ? '15-20 min rustig met 2-3 korte inspanningen.'
+    : '15-20 min easy with 2-3 short efforts.');
+  body += '\n\n';
+
+  // === NUTRITION ===
+  body += isNL ? 'VOEDING\n' : 'NUTRITION\n';
+  body += advice.nutrition || (isNL
+    ? 'Eet vertrouwde voeding, drink voldoende.'
+    : 'Eat familiar foods, hydrate well.');
+  body += '\n\n';
+
+  // === MENTAL TIPS ===
+  if (advice.mentalTips && advice.mentalTips.length > 0) {
+    body += isNL ? 'MENTAAL\n' : 'MENTAL\n';
+    advice.mentalTips.forEach(tip => {
+      body += `• ${tip}\n`;
+    });
+    body += '\n';
+  }
+
+  // === CLOSING ===
+  body += isNL
+    ? 'Je hebt het werk gedaan. Vertrouw op je training en geniet van de race.\n\n'
+    : 'You\'ve done the work. Trust your training and enjoy the race.\n\n';
+
+  body += '— Coach\n';
+
+  return body;
+}
+
+/**
+ * Build Whoop-style sick/injured email - supportive, recovery-focused
+ */
+function buildWhoopStyleSickEmail(params, isNL) {
+  const { wellness, sickStatus, returnAdvice, upcomingDays } = params;
+  const today = new Date();
+  const dayNames = isNL
+    ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
+    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[today.getDay()];
+
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+
+  const isSick = sickStatus?.isSick;
+  const statusLabel = isSick
+    ? (isNL ? 'ZIEK' : 'SICK')
+    : (isNL ? 'GEBLESSEERD' : 'INJURED');
+
+  const statusLabelLower = isSick
+    ? (isNL ? 'ziek' : 'sick')
+    : (isNL ? 'geblesseerd' : 'injured');
+
+  const event = sickStatus?.event || {};
+  const dayNumber = (event.daysSinceStart || 0) + 1;
+  const daysRemaining = event.daysRemaining || 0;
+
+  let body = '';
+
+  // === GREETING ===
+  body += isNL
+    ? `Hey ${athleteName},\n\n`
+    : `Hey ${athleteName},\n\n`;
+
+  // === STATUS BANNER ===
+  body += '═══════════════════════════════════════\n';
+  body += `   ${statusLabel}  •  `;
+  body += isNL ? `DAG ${dayNumber}` : `DAY ${dayNumber}`;
+  if (daysRemaining > 0) {
+    body += isNL
+      ? ` (nog ${daysRemaining} dag${daysRemaining > 1 ? 'en' : ''} gepland)`
+      : ` (${daysRemaining} day${daysRemaining > 1 ? 's' : ''} remaining)`;
+  } else {
+    body += isNL ? ' (laatste dag)' : ' (last day)';
+  }
+  body += '\n';
+  body += '═══════════════════════════════════════\n\n';
+
+  // === EVENT INFO ===
+  if (event.name && event.name !== statusLabel) {
+    body += `${event.name}\n`;
+    if (event.startDate && event.endDate) {
+      body += isNL
+        ? `Periode: ${event.startDate} t/m ${event.endDate}\n`
+        : `Period: ${event.startDate} to ${event.endDate}\n`;
+    }
+    body += '\n';
+  }
+
+  // === SUPPORTIVE MESSAGE ===
+  if (isSick) {
+    if (dayNumber === 1) {
+      body += isNL
+        ? `Je hebt jezelf ${statusLabelLower} gemeld. Goed dat je naar je lichaam luistert. Herstel is nu de prioriteit.\n\n`
+        : `You've marked yourself as ${statusLabelLower}. Good that you're listening to your body. Recovery is now the priority.\n\n`;
+    } else if (daysRemaining === 0) {
+      body += isNL
+        ? `Dit is je laatste geplande rustdag. Evalueer hoe je je voelt voordat je weer begint.\n\n`
+        : `This is your last planned rest day. Evaluate how you feel before resuming.\n\n`;
+    } else {
+      body += isNL
+        ? `Dag ${dayNumber} van je herstelperiode. Blijf rusten en laat je lichaam het werk doen.\n\n`
+        : `Day ${dayNumber} of your recovery period. Keep resting and let your body do the work.\n\n`;
+    }
+  } else {
+    if (dayNumber === 1) {
+      body += isNL
+        ? `Je hebt een blessure gemarkeerd. Neem de tijd om goed te herstellen.\n\n`
+        : `You've marked an injury. Take the time to recover properly.\n\n`;
+    } else if (daysRemaining === 0) {
+      body += isNL
+        ? `Dit is je laatste geplande rustdag. Test voorzichtig hoe de blessure reageert voordat je weer traint.\n\n`
+        : `This is your last planned rest day. Carefully test how the injury responds before training again.\n\n`;
+    } else {
+      body += isNL
+        ? `Dag ${dayNumber} van je herstelperiode. Geduld is essentieel bij blessures.\n\n`
+        : `Day ${dayNumber} of your recovery period. Patience is essential with injuries.\n\n`;
+    }
+  }
+
+  // === ADVICE ===
+  body += isNL ? 'ADVIES\n' : 'ADVICE\n';
+  if (returnAdvice?.recommendation) {
+    body += returnAdvice.recommendation + '\n\n';
+  } else {
+    body += isNL
+      ? 'Focus op rust en herstel. Geen training vandaag.\n\n'
+      : 'Focus on rest and recovery. No training today.\n\n';
+  }
+
+  // === TIPS ===
+  body += isNL ? 'TIPS\n' : 'TIPS\n';
+  if (isSick) {
+    body += isNL
+      ? '• Drink voldoende\n• Slaap extra\n• Vermijd intensieve activiteit\n• Luister naar je lichaam\n'
+      : '• Stay hydrated\n• Get extra sleep\n• Avoid strenuous activity\n• Listen to your body\n';
+  } else {
+    body += isNL
+      ? '• Volg medisch advies\n• Rust de geblesseerde zone\n• Overweeg alternatieve activiteiten indien mogelijk\n• Wees geduldig met herstel\n'
+      : '• Follow medical advice\n• Rest the injured area\n• Consider alternative activities if possible\n• Be patient with recovery\n';
+  }
+  body += '\n';
+
+  // === CLOSING ===
+  body += isNL
+    ? 'Beterschap en neem de tijd die je nodig hebt.\n\n'
+    : 'Get well soon and take the time you need.\n\n';
+
+  body += '— Coach\n';
+
+  return body;
+}
+
+/**
  * Determine the reason for a rest day based on context
  * @param {object} params - Email parameters
  * @returns {object} { message, showAlternatives }
@@ -226,151 +1009,75 @@ function sendDailyEmail(params) {
 
   // Today's Plan (conditional)
   if (type === 'workout' && workout) {
-    // Workout day - conversational style
-    body += isNL
-      ? `Vandaag: ${workout.type}\n\n`
-      : `Today: ${workout.type}\n\n`;
+    // Workout day - use Whoop-style format
+    body = buildWhoopStyleWorkoutEmail(params, isNL);
 
-    // Show AI selection reasoning as flowing text
-    if (workoutSelection?.reason) {
-      body += workoutSelection.reason;
-      if (workoutSelection.varietyNote) {
-        body += ` ${workoutSelection.varietyNote}`;
-      }
-      if (workoutSelection.zoneNote) {
-        body += ` ${workoutSelection.zoneNote}`;
-      }
-      body += '\n';
-    } else if (workout.explanation || workout.recommendationReason) {
-      body += (workout.explanation || workout.recommendationReason) + '\n';
+    // Send email and return early
+    try {
+      GmailApp.sendEmail(
+        USER_SETTINGS.EMAIL_TO,
+        subject,
+        body,
+        { name: 'IntervalCoach' }
+      );
+      Logger.log('Sent Whoop-style workout email to: ' + USER_SETTINGS.EMAIL_TO);
+    } catch (e) {
+      Logger.log('Error sending workout email: ' + e.toString());
     }
+    return;
   } else if (type === 'race_day') {
-    // A/B race day - race strategy and advice (conversational)
-    const advice = raceDayAdvice || {};
-
-    body += `${raceCategory} - ${raceName}${raceDescription ? '\n' + raceDescription : ''}\n\n`;
-
-    body += isNL ? 'Paraatheid: ' : 'Readiness: ';
-    body += `${(advice.readiness || 'unknown').toUpperCase()}. ${advice.readinessNote || ''}\n\n`;
-
-    body += isNL ? 'Strategie: ' : 'Strategy: ';
-    body += `${advice.strategy || t.default_race_strategy || "Start conservatively, build into the race."}\n`;
-
-    if (advice.powerTargets) {
-      body += isNL ? '\nVermogensdoelen: ' : '\nPower targets: ';
-      body += `${advice.powerTargets.conservative || 'N/A'} (safe) / ${advice.powerTargets.normal || 'N/A'} (normal) / ${advice.powerTargets.aggressive || 'N/A'} (all-out)\n`;
-    }
-
-    body += `\n${isNL ? 'Warming-up' : 'Warmup'}: ${advice.warmup || t.default_warmup || "15-20 min easy with 2-3 short efforts"}\n`;
-    body += `${isNL ? 'Voeding' : 'Nutrition'}: ${advice.nutrition || t.default_nutrition || "Eat familiar foods, hydrate well"}\n`;
-
-    if (advice.mentalTips && advice.mentalTips.length > 0) {
-      body += `\n${isNL ? 'Mental' : 'Mental'}: ${advice.mentalTips.join('. ')}\n`;
-    }
+    // A/B race day - use Whoop-style format
+    const body = buildWhoopStyleRaceDayEmail(params, isNL);
+    MailApp.sendEmail({
+      to: USER_SETTINGS.EMAIL_TO,
+      subject: subject,
+      body: body
+    });
+    Logger.log("Sent Whoop-style race day email to: " + USER_SETTINGS.EMAIL_TO);
+    return;
 
   } else if (type === 'group_ride') {
-    // C event day - group ride (conversational)
-    const eventName = params.cEventName || t.group_ride || "Group Ride";
-    const eventDescription = params.cEventDescription || null;
-    const advice = params.groupRideAdvice || {};
-
-    const intensityLabel = {
-      'easy': isNL ? 'rustig aan' : 'take it easy',
-      'moderate': isNL ? 'matige inspanning' : 'moderate effort',
-      'hard': isNL ? 'vol gas' : 'go all out'
-    }[advice.intensity] || (isNL ? 'matige inspanning' : 'moderate effort');
-
-    body += `${eventName}${eventDescription ? ' - ' + eventDescription : ''}\n\n`;
-    body += isNL ? `Aanbevolen intensiteit: ${intensityLabel}.\n\n` : `Recommended intensity: ${intensityLabel}.\n\n`;
-    body += `${advice.advice || t.group_ride_default_advice || "Enjoy the group ride. Listen to your body."}\n`;
-
-    if (advice.tips && advice.tips.length > 0) {
-      body += `\n${isNL ? 'Tips' : 'Tips'}: ${advice.tips.join('. ')}\n`;
-    }
+    // C event day - group ride - use Whoop-style format
+    const body = buildWhoopStyleGroupRideEmail(params, isNL);
+    MailApp.sendEmail({
+      to: USER_SETTINGS.EMAIL_TO,
+      subject: subject,
+      body: body
+    });
+    Logger.log("Sent Whoop-style group ride email to: " + USER_SETTINGS.EMAIL_TO);
+    return;
 
   } else if (type === 'sick') {
-    // Sick/Injured day - no training allowed
-    const sickStatus = params.sickStatus;
-    const returnAdvice = params.returnAdvice;
-
-    const statusLabel = sickStatus?.isSick
-      ? (isNL ? 'Ziek' : 'Sick')
-      : (isNL ? 'Geblesseerd' : 'Injured');
-
-    body += `${statusLabel}: ${sickStatus?.event?.name || statusLabel}\n`;
-    body += isNL
-      ? `Periode: ${sickStatus?.event?.startDate} t/m ${sickStatus?.event?.endDate}\n`
-      : `Period: ${sickStatus?.event?.startDate} to ${sickStatus?.event?.endDate}\n`;
-
-    if (sickStatus?.event?.daysSinceStart >= 0) {
-      body += isNL
-        ? `Dag ${sickStatus.event.daysSinceStart + 1}`
-        : `Day ${sickStatus.event.daysSinceStart + 1}`;
-      if (sickStatus?.event?.daysRemaining > 0) {
-        body += isNL
-          ? `, nog ${sickStatus.event.daysRemaining} dag(en) rust gepland\n`
-          : `, ${sickStatus.event.daysRemaining} day(s) of rest remaining\n`;
-      } else {
-        body += isNL ? ' (laatste dag)\n' : ' (last day)\n';
-      }
-    }
-
-    body += '\n';
-
-    // Return to training advice
-    if (returnAdvice?.recommendation) {
-      body += isNL ? 'Advies: ' : 'Advice: ';
-      body += `${returnAdvice.recommendation}\n`;
-    } else {
-      body += isNL
-        ? 'Advies: Focus op rust en herstel. Geen training vandaag.\n'
-        : 'Advice: Focus on rest and recovery. No training today.\n';
-    }
-
-    // General sick/injured tips
-    body += '\n';
-    if (sickStatus?.isSick) {
-      body += isNL
-        ? 'Tips bij ziekte:\n• Drink voldoende\n• Slaap extra\n• Vermijd intensieve activiteit\n• Luister naar je lichaam\n'
-        : 'Tips when sick:\n• Stay hydrated\n• Get extra sleep\n• Avoid strenuous activity\n• Listen to your body\n';
-    } else {
-      body += isNL
-        ? 'Tips bij blessure:\n• Volg medisch advies\n• Rust de geblesseerde zone\n• Overweeg alternatieve activiteiten indien mogelijk\n• Wees geduldig met herstel\n'
-        : 'Tips for injury:\n• Follow medical advice\n• Rest the injured area\n• Consider alternative activities if possible\n• Be patient with recovery\n';
-    }
+    // Sick/Injured day - use Whoop-style format
+    const body = buildWhoopStyleSickEmail(params, isNL);
+    MailApp.sendEmail({
+      to: USER_SETTINGS.EMAIL_TO,
+      subject: subject,
+      body: body
+    });
+    Logger.log("Sent Whoop-style sick/injured email to: " + USER_SETTINGS.EMAIL_TO);
+    return;
 
   } else {
-    // Rest day (conversational)
-    const restReason = determineRestReason(params);
-    body += `${restReason.message}\n`;
+    // Rest day - use Whoop-style format (includes all sections)
+    body = buildWhoopStyleRestDayEmail(params, isNL);
 
-    if (restAssessment?.alternatives || restReason.showAlternatives) {
-      body += isNL
-        ? `\nLichte alternatieven: wandeling (20-30 min), stretching/mobility.\n`
-        : `\nLight alternatives: easy walk (20-30 min), stretching/mobility.\n`;
+    // Send email and return early (Whoop-style already includes everything)
+    try {
+      GmailApp.sendEmail(
+        USER_SETTINGS.EMAIL_TO,
+        subject,
+        body,
+        { name: 'IntervalCoach' }
+      );
+      Logger.log('Sent Whoop-style rest day email to: ' + USER_SETTINGS.EMAIL_TO);
+    } catch (e) {
+      Logger.log('Error sending rest day email: ' + e.toString());
     }
-
-    // Generate and add rest day coaching note
-    if (params.enableCoachingNote !== false) {
-      try {
-        const coachingNote = generateRestDayCoachingNote({
-          wellness: wellness,
-          phaseInfo: phaseInfo,
-          weekProgress: weekProgress,
-          upcomingDays: upcomingDays,
-          fitness: params.fitness || { ctl: summary?.ctl_90, tsb: summary?.tsb_current }
-        });
-
-        if (coachingNote) {
-          body += `\n${coachingNote}\n`;
-        }
-      } catch (e) {
-        Logger.log("Error adding rest day coaching note: " + e.toString());
-      }
-    }
+    return;
   }
 
-  // Week Progress (compact inline)
+  // Week Progress (compact inline) - only for non-rest emails
   if (weekProgress && weekProgress.daysAnalyzed > 0) {
     const wp = weekProgress;
     body += '\n';

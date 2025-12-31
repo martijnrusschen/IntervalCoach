@@ -122,6 +122,285 @@ function testUnifiedEmail_Workout() { testUnifiedDailyEmail('workout'); }
 function testUnifiedEmail_GroupRide() { testUnifiedDailyEmail('group_ride'); }
 
 /**
+ * Compare old vs new Whoop-style email formats
+ * Logs both versions to console for comparison (does not send email)
+ */
+function testCompareEmailStyles() {
+  Logger.log("=== COMPARE EMAIL STYLES ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  const params = {
+    type: 'workout',
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    workout: {
+      type: 'Sweet_Spot',
+      explanation: 'Met je huidige TSB en goede recovery is dit het perfecte moment voor threshold werk.'
+    },
+    workoutSelection: {
+      reason: 'Sweet Spot gekozen om je aerobe basis te versterken terwijl je hersteld bent.',
+      varietyNote: 'Je hebt al 3 dagen geen threshold werk gedaan.',
+      zoneNote: 'Focus op zone 4 vandaag.'
+    }
+  };
+
+  // === OLD STYLE ===
+  Logger.log("========== OLD STYLE ==========\n");
+
+  const t = getTranslations();
+  const recoveryStatus = wellness?.recoveryStatus || 'Unknown';
+  const tsb = fitnessMetrics?.tsb || 0;
+
+  let oldBody = buildDailyOpening('workout', recoveryStatus, tsb, wellness, phaseInfo, isNL);
+  oldBody += '\n';
+  oldBody += isNL ? `Vandaag: ${params.workout.type}\n\n` : `Today: ${params.workout.type}\n\n`;
+  if (params.workoutSelection?.reason) {
+    oldBody += params.workoutSelection.reason;
+    if (params.workoutSelection.varietyNote) oldBody += ` ${params.workoutSelection.varietyNote}`;
+    if (params.workoutSelection.zoneNote) oldBody += ` ${params.workoutSelection.zoneNote}`;
+    oldBody += '\n';
+  }
+  // Add week progress
+  const wp = weekProgress;
+  if (wp) {
+    oldBody += '\n';
+    oldBody += isNL
+      ? `Deze week: ${wp.completedSessions}/${wp.plannedSessions} sessies (${wp.tssCompleted} TSS)\n`
+      : `This week: ${wp.completedSessions}/${wp.plannedSessions} sessions (${wp.tssCompleted} TSS)\n`;
+  }
+  // Add schedule
+  oldBody += isNL ? '\nSchema:\n' : '\nSchedule:\n';
+  upcomingDays.slice(0, 5).forEach((day, i) => {
+    const prefix = i === 0 ? '> ' : '  ';
+    let desc = day.placeholderName || day.activityType || '-';
+    if (day.hasEvent) desc = `[${day.eventCategory}] ${day.eventName || ''}`;
+    oldBody += `${prefix}${day.dayLabel}: ${desc}\n`;
+  });
+  oldBody += '\n- IntervalCoach\n';
+
+  Logger.log(oldBody);
+
+  // === NEW WHOOP STYLE ===
+  Logger.log("\n========== NEW WHOOP STYLE ==========\n");
+
+  const newBody = buildWhoopStyleWorkoutEmail(params, isNL);
+  Logger.log(newBody);
+
+  Logger.log("\n=== COMPARISON COMPLETE ===");
+}
+
+/**
+ * Test Whoop-style group ride email
+ * Logs the email to console (does not send)
+ */
+function testGroupRideEmailStyle() {
+  Logger.log("=== GROUP RIDE EMAIL STYLE TEST ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  // Get real AI advice for the group ride
+  const recentTypes = getRecentWorkoutTypes(7);
+  const adaptiveContext = getAdaptiveTrainingContext();
+
+  const groupRideAdvice = generateGroupRideAdvice({
+    wellness: wellness,
+    tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
+    ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
+    atl: fitnessMetrics.atl_7 || fitnessMetrics.atl,
+    eventName: 'Zwift Crit City Race',
+    eventTomorrow: hasEventTomorrow(),
+    eventIn2Days: hasEventInDays(2),
+    recentWorkouts: { rides: recentTypes.rides, runs: recentTypes.runs },
+    daysSinceLastWorkout: adaptiveContext.gap?.daysSinceLastWorkout || 0,
+    phase: phaseInfo?.phaseName
+  });
+
+  const params = {
+    type: 'group_ride',
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    cEventName: 'Zwift Crit City Race',
+    cEventDescription: 'Virtual race event',
+    groupRideAdvice: groupRideAdvice
+  };
+
+  Logger.log("Recovery: " + wellness?.today?.recovery + "%");
+  Logger.log("AI Intensity: " + (groupRideAdvice?.intensity || 'unknown'));
+  Logger.log("AI Advice: " + (groupRideAdvice?.advice || 'none'));
+  Logger.log("\n========== WHOOP STYLE GROUP RIDE EMAIL ==========\n");
+
+  const body = buildWhoopStyleGroupRideEmail(params, isNL);
+  Logger.log(body);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test Whoop-style race day email
+ * Logs the email to console (does not send)
+ */
+function testRaceDayEmailStyle() {
+  Logger.log("=== RACE DAY EMAIL STYLE TEST ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Fetch all required data
+  const wellnessRecords = fetchWellnessDataEnhanced(30);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  const weekProgress = checkWeekProgress();
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  // Create mock race context
+  const ctx = {
+    wellness: wellness,
+    fitnessMetrics: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    powerProfile: powerProfile,
+    raceToday: {
+      hasEvent: true,
+      category: 'A',
+      eventName: 'Test Championship Race',
+      eventDescription: 'Hilly road race, 120km'
+    }
+  };
+
+  // Get real AI advice
+  const raceDayAdvice = generateRaceDayAdvice(ctx);
+
+  const params = {
+    type: 'race_day',
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    wellness: wellness,
+    weekProgress: weekProgress,
+    raceName: 'Test Championship Race',
+    raceCategory: 'A',
+    raceDescription: 'Hilly road race, 120km',
+    raceDayAdvice: raceDayAdvice
+  };
+
+  Logger.log("Recovery: " + wellness?.today?.recovery + "%");
+  Logger.log("AI Readiness: " + (raceDayAdvice?.readiness || 'unknown'));
+  Logger.log("\n========== WHOOP STYLE RACE DAY EMAIL ==========\n");
+
+  const body = buildWhoopStyleRaceDayEmail(params, isNL);
+  Logger.log(body);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test Whoop-style sick/injured email
+ * Logs the email to console (does not send)
+ */
+function testSickEmailStyle() {
+  Logger.log("=== SICK/INJURED EMAIL STYLE TEST ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Fetch basic wellness data
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+
+  // Create mock sick status (day 2 of 5-day illness)
+  const mockSickStatus = {
+    isSick: true,
+    isInjured: false,
+    event: {
+      name: 'Verkoudheid',
+      startDate: '2024-12-29',
+      endDate: '2025-01-02',
+      daysSinceStart: 1,  // Day 2
+      daysRemaining: 3
+    }
+  };
+
+  // Get return to training advice
+  const returnAdvice = getReturnToTrainingAdvice(mockSickStatus);
+
+  const params = {
+    type: 'sick',
+    wellness: wellness,
+    sickStatus: mockSickStatus,
+    returnAdvice: returnAdvice
+  };
+
+  Logger.log("Status: " + (mockSickStatus.isSick ? 'Sick' : 'Injured'));
+  Logger.log("Day: " + (mockSickStatus.event.daysSinceStart + 1) + " of " + (mockSickStatus.event.daysSinceStart + mockSickStatus.event.daysRemaining + 1));
+  Logger.log("\n========== WHOOP STYLE SICK EMAIL ==========\n");
+
+  const body = buildWhoopStyleSickEmail(params, isNL);
+  Logger.log(body);
+
+  // Also test injury variant
+  Logger.log("\n========== WHOOP STYLE INJURY EMAIL ==========\n");
+
+  const mockInjuryStatus = {
+    isSick: false,
+    isInjured: true,
+    event: {
+      name: 'Knie blessure',
+      startDate: '2024-12-28',
+      endDate: '2025-01-04',
+      daysSinceStart: 3,  // Day 4
+      daysRemaining: 4
+    }
+  };
+
+  const injuryParams = {
+    type: 'sick',
+    wellness: wellness,
+    sickStatus: mockInjuryStatus,
+    returnAdvice: getReturnToTrainingAdvice(mockInjuryStatus)
+  };
+
+  const injuryBody = buildWhoopStyleSickEmail(injuryParams, isNL);
+  Logger.log(injuryBody);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test daily workout email structure (does not send email)
  * Verifies the simplified email format with helper functions
  */
