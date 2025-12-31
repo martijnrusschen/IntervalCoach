@@ -991,6 +991,131 @@ function previewMonthlyEmail() {
 }
 
 /**
+ * Test Yesterday's Review section in daily email
+ * Previews how the last workout analysis appears in the email
+ */
+function testYesterdaysReview() {
+  Logger.log("=== YESTERDAY'S REVIEW TEST ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Get the last stored workout analysis
+  const lastWorkoutAnalysis = getLastWorkoutAnalysis();
+
+  if (!lastWorkoutAnalysis || !lastWorkoutAnalysis.date) {
+    Logger.log("No recent workout analysis found.");
+    Logger.log("Run a workout through checkForCompletedWorkouts() first, or mock the data below.");
+
+    // Create mock data for testing
+    const mockAnalysis = {
+      date: formatDateISO(new Date(Date.now() - 86400000)), // Yesterday
+      activityName: 'Sweet Spot Intervals',
+      effectiveness: 8,
+      difficultyMatch: 'as_expected',
+      keyInsight: isNL
+        ? 'Goede uitvoering van de intervallen. Power was consistent.'
+        : 'Good execution of the intervals. Power was consistent.'
+    };
+
+    Logger.log("\n--- Using mock data for testing ---");
+    Logger.log("Mock analysis: " + JSON.stringify(mockAnalysis, null, 2));
+
+    testWithAnalysis(mockAnalysis, isNL);
+    return;
+  }
+
+  Logger.log("Found last workout analysis:");
+  Logger.log("  Date: " + lastWorkoutAnalysis.date);
+  Logger.log("  Activity: " + (lastWorkoutAnalysis.activityName || 'Unknown'));
+  Logger.log("  Effectiveness: " + (lastWorkoutAnalysis.effectiveness || 'N/A'));
+  Logger.log("  Difficulty Match: " + (lastWorkoutAnalysis.difficultyMatch || 'N/A'));
+
+  testWithAnalysis(lastWorkoutAnalysis, isNL);
+}
+
+function testWithAnalysis(lastWorkoutAnalysis, isNL) {
+  // Fetch other required data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const fitnessMetrics = fetchFitnessMetrics();
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate);
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  // Mock workout selection
+  const mockWorkout = {
+    type: 'Endurance_Z2',
+    explanation: 'Light endurance ride to continue recovery.'
+  };
+
+  const mockSelection = {
+    reason: isNL
+      ? 'Na gisteren is vandaag een rustige duurtraining ideaal.'
+      : 'After yesterday, a light endurance ride is ideal today.',
+    varietyNote: ''
+  };
+
+  // Build the email with the Yesterday's Review section
+  const params = {
+    wellness: wellness,
+    weekProgress: weekProgress,
+    upcomingDays: upcomingDays,
+    summary: fitnessMetrics,
+    phaseInfo: phaseInfo,
+    workout: mockWorkout,
+    workoutSelection: mockSelection,
+    lastWorkoutAnalysis: lastWorkoutAnalysis
+  };
+
+  Logger.log("\n--- EMAIL PREVIEW WITH YESTERDAY'S REVIEW ---\n");
+
+  const emailBody = buildWhoopStyleWorkoutEmail(params, isNL);
+  Logger.log(emailBody);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
+ * Test Yesterday's Review with different day offsets
+ * Shows how the label changes for 1, 2, and 3 days ago
+ */
+function testYesterdaysReviewDayLabels() {
+  Logger.log("=== YESTERDAY'S REVIEW - DAY LABELS TEST ===\n");
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // Test 1, 2, and 3 days ago
+  [1, 2, 3].forEach(daysAgo => {
+    const workoutDate = new Date(Date.now() - daysAgo * 86400000);
+    const dateStr = formatDateISO(workoutDate);
+
+    let whenLabel;
+    if (daysAgo === 1) {
+      whenLabel = isNL ? 'Gisteren' : 'Yesterday';
+    } else if (daysAgo === 2) {
+      whenLabel = isNL ? 'Eergisteren' : '2 days ago';
+    } else {
+      whenLabel = isNL ? '3 dagen geleden' : '3 days ago';
+    }
+
+    Logger.log(`${daysAgo} day(s) ago (${dateStr}): "${whenLabel}"`);
+  });
+
+  // Test 4 days ago (should not show)
+  Logger.log("\n4 days ago: Would NOT show (outside 3-day window)");
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test creating week labels in Intervals.icu calendar
  * Creates NOTE events with week type (Build/Recovery/Race Week)
  */

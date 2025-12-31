@@ -208,7 +208,7 @@ function buildWhoopStyleRestDayEmail(params, isNL) {
  * @returns {string} Email body
  */
 function buildWhoopStyleWorkoutEmail(params, isNL) {
-  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, workout, workoutSelection, powerProfile } = params;
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, workout, workoutSelection, powerProfile, lastWorkoutAnalysis } = params;
   const today = new Date();
   const dayNames = isNL
     ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
@@ -304,6 +304,70 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
     }
   } else {
     body += '\n\n';
+  }
+
+  // === YESTERDAY'S REVIEW ===
+  if (lastWorkoutAnalysis && lastWorkoutAnalysis.date) {
+    // Calculate days since workout
+    const workoutDate = new Date(lastWorkoutAnalysis.date);
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const workoutDayStart = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate());
+    const daysDiff = Math.round((todayStart - workoutDayStart) / (1000 * 60 * 60 * 24));
+
+    // Only show if workout was within last 3 days
+    if (daysDiff >= 1 && daysDiff <= 3) {
+      let whenLabel;
+      if (daysDiff === 1) {
+        whenLabel = isNL ? 'Gisteren' : 'Yesterday';
+      } else if (daysDiff === 2) {
+        whenLabel = isNL ? 'Eergisteren' : '2 days ago';
+      } else {
+        whenLabel = isNL ? '3 dagen geleden' : '3 days ago';
+      }
+
+      const activityName = lastWorkoutAnalysis.activityName || (isNL ? 'Training' : 'Workout');
+      const effectiveness = lastWorkoutAnalysis.effectiveness;
+      const difficultyMatch = lastWorkoutAnalysis.difficultyMatch;
+      const keyInsight = lastWorkoutAnalysis.keyInsight;
+
+      body += isNL ? '───── VORIGE TRAINING ─────\n' : '───── LAST WORKOUT ─────\n';
+      body += `${whenLabel}: ${activityName}`;
+      if (effectiveness) {
+        body += ` — ${effectiveness}/10`;
+      }
+      body += '\n';
+
+      // Difficulty match
+      if (difficultyMatch) {
+        let difficultyText;
+        if (difficultyMatch === 'easier_than_expected') {
+          difficultyText = isNL ? 'Makkelijker dan verwacht' : 'Easier than expected';
+        } else if (difficultyMatch === 'harder_than_expected') {
+          difficultyText = isNL ? 'Zwaarder dan verwacht' : 'Harder than expected';
+        } else {
+          difficultyText = isNL ? 'Zoals verwacht' : 'As expected';
+        }
+        body += `${isNL ? 'Moeilijkheid' : 'Difficulty'}: ${difficultyText}\n`;
+      }
+
+      // Key insight (if available and not too long)
+      if (keyInsight && keyInsight.length < 150) {
+        body += `${keyInsight}\n`;
+      }
+
+      // How it affects today
+      if (difficultyMatch === 'harder_than_expected') {
+        body += isNL
+          ? '→ Vandaag aangepast: lagere intensiteit aanbevolen.\n'
+          : '→ Today adjusted: lower intensity recommended.\n';
+      } else if (difficultyMatch === 'easier_than_expected' && effectiveness >= 7) {
+        body += isNL
+          ? '→ Je kunt vandaag wat meer aan.\n'
+          : '→ You can push a bit more today.\n';
+      }
+
+      body += '\n';
+    }
   }
 
   // === WORKOUT DETAILS ===

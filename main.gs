@@ -873,6 +873,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     powerProfile: isRun ? null : powerProfile,
     weekProgress: weekProgress,
     upcomingDays: upcomingDays,
+    lastWorkoutAnalysis: lastWorkoutAnalysis,  // Yesterday's workout review
     midWeekAdaptation: midWeekAdaptation,  // Include adaptation info if any
     deloadCheck: deloadCheck,  // Include deload recommendation if needed
     taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
