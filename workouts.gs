@@ -606,18 +606,36 @@ ${workoutOptions}
     - Or try a different approach: over-unders, progressive intervals, or race-pace simulation
 
 **YOUR TASK:**
-Recommend ONE specific workout type from the list above. Consider all factors holistically.
+Recommend THREE specific workout types from the list above, ranked by suitability (best first).
+Each option should have a confidence score (1-10) and brief explanation.
+Consider all factors holistically.
 
-**IMPORTANT: Write all text fields (reasoning, varietyNote, zoneNote) in ${getPromptLanguage()}.**
+**IMPORTANT: Write all text fields (reasoning, whyThisWorkout) in ${getPromptLanguage()}.**
 
 **Output JSON only (no markdown):**
 {
   "shouldTrain": true,
-  "workoutType": "exact_workout_name_from_list",
-  "intensity": 1-5,
-  "reasoning": "2-3 sentence explanation of why this workout in ${getPromptLanguage()}",
-  "varietyNote": "optional note about variety in ${getPromptLanguage()}",
-  "zoneNote": "optional note about zone focus in ${getPromptLanguage()}"
+  "options": [
+    {
+      "workoutType": "exact_workout_name_from_list",
+      "intensity": 1-5,
+      "score": 1-10,
+      "whyThisWorkout": "1-2 sentence explanation why this is a good choice today in ${getPromptLanguage()}"
+    },
+    {
+      "workoutType": "second_best_option",
+      "intensity": 1-5,
+      "score": 1-10,
+      "whyThisWorkout": "1-2 sentence explanation in ${getPromptLanguage()}"
+    },
+    {
+      "workoutType": "third_option",
+      "intensity": 1-5,
+      "score": 1-10,
+      "whyThisWorkout": "1-2 sentence explanation in ${getPromptLanguage()}"
+    }
+  ],
+  "reasoning": "Overall 1-2 sentence summary of today's training decision in ${getPromptLanguage()}"
 }`;
 
   const response = callGeminiAPIText(prompt);
@@ -628,13 +646,44 @@ Recommend ONE specific workout type from the list above. Consider all factors ho
     return null;
   }
 
-  // Validate the workout type exists
-  if (decision.workoutType && catalog[decision.workoutType]) {
-    return decision;
-  } else {
-    Logger.log("AI suggested unknown workout type: " + decision.workoutType);
-    return null;
+  // Handle new multi-option format
+  if (decision.options && Array.isArray(decision.options)) {
+    // Validate all workout types exist
+    const validOptions = decision.options.filter(function(opt) {
+      return opt.workoutType && catalog[opt.workoutType];
+    });
+
+    if (validOptions.length === 0) {
+      Logger.log("AI suggested no valid workout types");
+      return null;
+    }
+
+    // Sort by score (highest first)
+    validOptions.sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+
+    return {
+      shouldTrain: decision.shouldTrain !== false,
+      options: validOptions,
+      reasoning: decision.reasoning || ""
+    };
   }
+
+  // Fallback: Handle old single-workout format for backwards compatibility
+  if (decision.workoutType && catalog[decision.workoutType]) {
+    return {
+      shouldTrain: decision.shouldTrain !== false,
+      options: [{
+        workoutType: decision.workoutType,
+        intensity: decision.intensity || 3,
+        score: 7,
+        whyThisWorkout: decision.reasoning || ""
+      }],
+      reasoning: decision.reasoning || ""
+    };
+  }
+
+  Logger.log("AI suggested unknown workout type format");
+  return null;
 }
 
 // =========================================================
@@ -713,22 +762,22 @@ function selectWorkoutTypes(params) {
 
       const aiDecision = generateAIWorkoutDecision(aiContext);
 
-      if (aiDecision && aiDecision.workoutType) {
-        Logger.log("Workout Decision: " + aiDecision.workoutType + " (intensity " + aiDecision.intensity + "/5)");
-        Logger.log("  Reasoning: " + aiDecision.reasoning);
-        if (aiDecision.varietyNote) {
-          Logger.log("  Variety: " + aiDecision.varietyNote);
-        }
-        if (aiDecision.zoneNote) {
-          Logger.log("  Zone Focus: " + aiDecision.zoneNote);
-        }
+      if (aiDecision && aiDecision.options && aiDecision.options.length > 0) {
+        // Log all options
+        Logger.log("=== AI WORKOUT OPTIONS (ranked by score) ===");
+        aiDecision.options.forEach(function(opt, idx) {
+          Logger.log("  " + (idx + 1) + ". " + opt.workoutType + " - Score: " + opt.score + "/10 (intensity " + opt.intensity + "/5)");
+          Logger.log("     " + opt.whyThisWorkout);
+        });
+        Logger.log("  Overall: " + aiDecision.reasoning);
+
+        const bestOption = aiDecision.options[0];
 
         return {
-          types: [aiDecision.workoutType],
+          types: aiDecision.options.map(function(opt) { return opt.workoutType; }),
+          options: aiDecision.options,  // Full options array with scores
           reason: aiDecision.reasoning,
-          varietyNote: aiDecision.varietyNote || null,
-          zoneNote: aiDecision.zoneNote || null,
-          maxIntensity: aiDecision.intensity,
+          maxIntensity: bestOption.intensity,
           isRestDay: !aiDecision.shouldTrain,
           aiEnhanced: true
         };

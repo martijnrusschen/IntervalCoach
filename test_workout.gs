@@ -6,6 +6,113 @@
  */
 
 // =========================================================
+// MULTI-WORKOUT OPTIONS TEST
+// =========================================================
+
+/**
+ * Test Multi-Workout Option Comparison
+ * Generates 3 workout options and shows scores for each
+ */
+function testMultiWorkoutOptions() {
+  Logger.log("=== MULTI-WORKOUT OPTIONS TEST ===");
+  Logger.log("Testing: Generate 3 workout options with scores\n");
+  requireValidConfig();
+
+  // Gather context
+  const summary = createAthleteSummary();
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate, { enableAI: false });
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const twoWeekHistory = getTwoWeekWorkoutHistory();
+
+  // Get recent workout types
+  const recentTypes = getRecentWorkoutTypes(7);
+
+  Logger.log("--- Context ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("TSB: " + (summary.tsb_current || 0).toFixed(1));
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "N/A"));
+
+  // Call selectWorkoutTypes to get 3 options
+  Logger.log("\n--- AI Workout Type Selection (3 options) ---");
+  const typeSelection = selectWorkoutTypes({
+    wellness: wellness,
+    recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
+    activityType: "Ride",
+    phaseInfo: phaseInfo,
+    tsb: summary.tsb_current,
+    ctl: summary.ctl_90 || summary.ctl,
+    eventTomorrow: { hasEvent: false },
+    eventYesterday: { hadEvent: false },
+    duration: { min: 60, max: 75 },
+    recentStimuli: twoWeekHistory.recentStimuli,
+    stimulusCounts: twoWeekHistory.stimulusCounts,
+    enableAI: true
+  });
+
+  if (!typeSelection.options || typeSelection.options.length === 0) {
+    Logger.log("ERROR: No workout options returned");
+    Logger.log("Fallback type: " + (typeSelection.types ? typeSelection.types[0] : "none"));
+    return;
+  }
+
+  Logger.log("\n--- Options Summary ---");
+  typeSelection.options.forEach(function(opt, idx) {
+    Logger.log((idx + 1) + ". " + opt.workoutType + " - Pre-score: " + opt.score + "/10");
+    Logger.log("   " + opt.whyThisWorkout);
+  });
+
+  Logger.log("\nOverall reasoning: " + typeSelection.reason);
+
+  // Now generate complete workouts for each option
+  Logger.log("\n--- Generating Complete Workouts ---");
+  const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMdd");
+
+  const multiResult = generateMultipleWorkoutOptions({
+    options: typeSelection.options,
+    createPrompt: createPrompt,
+    promptParams: {
+      summary: summary,
+      phaseInfo: phaseInfo,
+      dateStr: dateStr,
+      duration: { min: 60, max: 75 },
+      wellness: wellness,
+      powerProfileOrRunningData: powerProfile,
+      adaptiveContext: null,
+      crossSportEquivalency: null,
+      lastWorkoutAnalysis: null,
+      warnings: {}
+    },
+    minScore: 6
+  });
+
+  if (!multiResult.success) {
+    Logger.log("ERROR: " + multiResult.error);
+    return;
+  }
+
+  Logger.log("\n=== FINAL RESULTS ===");
+  multiResult.allOptions.forEach(function(opt, idx) {
+    const status = opt.success ? (opt.finalScore >= 6 ? "✓" : "⚠") : "✗";
+    const selected = opt.workoutType === multiResult.selectedWorkout.workoutType ? " ◀ SELECTED" : "";
+    Logger.log(status + " " + opt.workoutType + ": " + opt.finalScore + "/10" + selected);
+  });
+
+  Logger.log("\n✓ Auto-selected: " + multiResult.selectedWorkout.workoutType);
+  Logger.log("  Score: " + multiResult.selectedWorkout.finalScore + "/10");
+  Logger.log("  Reason: " + multiResult.selectedWorkout.recommendationReason);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
 // ANTI-MONOTONY ENGINE TEST
 // =========================================================
 

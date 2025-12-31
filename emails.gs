@@ -323,6 +323,32 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
     body += workout.explanation + '\n\n';
   }
 
+  // === WORKOUT OPTIONS (show all 3 with scores) ===
+  if (workout?.allOptions && workout.allOptions.length > 1) {
+    body += isNL ? '───── WORKOUT OPTIES ─────\n' : '───── WORKOUT OPTIONS ─────\n';
+
+    // Find the selected one (first successful that meets threshold, or best available)
+    const selectedType = workout.type;
+
+    workout.allOptions.forEach(function(opt, idx) {
+      const isSelected = opt.workoutType === selectedType;
+      const marker = isSelected ? '▶' : ' ';
+      const status = opt.success ? (opt.finalScore >= 6 ? '✓' : '⚠') : '✗';
+
+      // Format workout type name nicely
+      const displayType = opt.workoutType.replace(/_/g, ' ');
+
+      body += `${marker} ${status} ${displayType}: ${opt.finalScore}/10\n`;
+      if (opt.whyThisWorkout && opt.success) {
+        body += `   ${opt.whyThisWorkout}\n`;
+      }
+    });
+
+    body += isNL
+      ? `\n▶ = ${isNL ? 'geselecteerd' : 'selected'}  ✓ = ${isNL ? 'voldoet aan drempel' : 'meets threshold'}  ⚠ = ${isNL ? 'onder drempel' : 'below threshold'}\n\n`
+      : `\n▶ = selected  ✓ = meets threshold  ⚠ = below threshold\n\n`;
+  }
+
   // === WEEK CONTEXT ===
   const completed = weekProgress?.completedSessions || 0;
   const tssCompleted = weekProgress?.tssCompleted || 0;

@@ -353,6 +353,142 @@ function generateWorkoutWithFeedback(prompt, context, maxAttempts, minScore) {
 }
 
 /**
+ * Generate multiple workout options and return all with scores
+ * Auto-selects the best one that meets threshold
+ * @param {object} params - Parameters for generation
+ * @param {Array} params.options - Workout type options from selectWorkoutTypes (with scores, whyThisWorkout)
+ * @param {function} params.createPrompt - Function to create prompt (createPrompt or createRunPrompt)
+ * @param {object} params.promptParams - Parameters for createPrompt (summary, phaseInfo, dateStr, etc.)
+ * @param {number} params.minScore - Minimum acceptable score (default 6)
+ * @returns {object} { selectedWorkout, allOptions, selectedIndex }
+ */
+function generateMultipleWorkoutOptions(params) {
+  const options = params.options || [];
+  const minScore = params.minScore || 6;
+  const createPromptFn = params.createPrompt;
+  const promptParams = params.promptParams;
+
+  if (options.length === 0) {
+    return { success: false, error: "No workout options provided" };
+  }
+
+  Logger.log("=== GENERATING " + options.length + " WORKOUT OPTIONS ===");
+
+  const results = [];
+
+  // Generate complete workout for each option
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i];
+    Logger.log("\n--- Option " + (i + 1) + ": " + option.workoutType + " (pre-score: " + option.score + "/10) ---");
+
+    try {
+      // Create prompt for this workout type
+      const prompt = createPromptFn(
+        option.workoutType,
+        promptParams.summary,
+        promptParams.phaseInfo,
+        promptParams.dateStr,
+        promptParams.duration,
+        promptParams.wellness,
+        promptParams.powerProfileOrRunningData,
+        promptParams.adaptiveContext,
+        promptParams.crossSportEquivalency,
+        promptParams.lastWorkoutAnalysis,
+        promptParams.warnings
+      );
+
+      // Generate the workout
+      const result = callGeminiAPI(prompt);
+
+      if (result.success) {
+        const finalScore = result.recommendationScore || 5;
+        Logger.log("  Generated: Score " + finalScore + "/10");
+
+        results.push({
+          workoutType: option.workoutType,
+          preScore: option.score,
+          finalScore: finalScore,
+          whyThisWorkout: option.whyThisWorkout,
+          recommendationReason: result.recommendationReason,
+          explanation: result.explanation,
+          xml: result.xml,
+          workoutDescription: result.workoutDescription,
+          success: true
+        });
+      } else {
+        Logger.log("  Failed: " + result.error);
+        results.push({
+          workoutType: option.workoutType,
+          preScore: option.score,
+          finalScore: 0,
+          whyThisWorkout: option.whyThisWorkout,
+          error: result.error,
+          success: false
+        });
+      }
+    } catch (e) {
+      Logger.log("  Error: " + e.toString());
+      results.push({
+        workoutType: option.workoutType,
+        preScore: option.score,
+        finalScore: 0,
+        whyThisWorkout: option.whyThisWorkout,
+        error: e.toString(),
+        success: false
+      });
+    }
+  }
+
+  // Sort by final score (highest first)
+  results.sort(function(a, b) { return b.finalScore - a.finalScore; });
+
+  // Log summary
+  Logger.log("\n=== WORKOUT OPTIONS SUMMARY ===");
+  results.forEach(function(r, idx) {
+    const status = r.success ? (r.finalScore >= minScore ? "✓" : "⚠") : "✗";
+    Logger.log("  " + status + " " + (idx + 1) + ". " + r.workoutType + " - Score: " + r.finalScore + "/10" +
+               (r.success ? "" : " (failed)"));
+  });
+
+  // Find best successful option that meets threshold
+  let selectedIndex = -1;
+  let selectedWorkout = null;
+
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].success && results[i].finalScore >= minScore) {
+      selectedIndex = i;
+      selectedWorkout = results[i];
+      break;
+    }
+  }
+
+  // If none meet threshold, use best available
+  if (!selectedWorkout) {
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].success) {
+        selectedIndex = i;
+        selectedWorkout = results[i];
+        Logger.log("⚠ No option met threshold " + minScore + ", using best available: " + selectedWorkout.workoutType);
+        break;
+      }
+    }
+  }
+
+  if (!selectedWorkout) {
+    return { success: false, error: "All workout generation attempts failed", allOptions: results };
+  }
+
+  Logger.log("\n✓ AUTO-SELECTED: " + selectedWorkout.workoutType + " (Score: " + selectedWorkout.finalScore + "/10)");
+
+  return {
+    success: true,
+    selectedWorkout: selectedWorkout,
+    allOptions: results,
+    selectedIndex: selectedIndex
+  };
+}
+
+/**
  * Build regeneration prompt with feedback about why previous was low-scored
  * @param {string} originalPrompt - Original workout prompt
  * @param {object} previousResult - Previous generation result

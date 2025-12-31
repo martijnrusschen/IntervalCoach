@@ -771,9 +771,6 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Last workout analysis fetch failed (non-critical): " + e.toString());
   }
 
-  // Generate workout with appropriate prompt
-  Logger.log("Generating " + activityType + " workout: " + selectedType + "...");
-
   // Build warnings object to pass to prompt (so AI factors these into decisions)
   const warnings = {
     volumeJump: volumeJump,
@@ -782,31 +779,45 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     illnessPattern: illnessPattern
   };
 
-  const prompt = isRun
-    ? createRunPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, runningData, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings)
-    : createPrompt(selectedType, summary, phaseInfo, dateStr, availability.duration, wellness, powerProfile, adaptiveContext, crossSportEquivalency, lastWorkoutAnalysis, warnings);
+  // Generate multiple workout options and auto-select best
+  Logger.log("Generating " + activityType + " workout options...");
 
-  // Build context for regeneration feedback loop
-  const regenerationContext = {
-    workoutType: selectedType,
-    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
-    tsb: summary.tsb_current,
-    phase: phaseInfo.phaseName,
-    duration: availability.duration
-  };
+  // Check if we have multiple options from AI selection
+  const workoutOptions = typeSelection.options || [{ workoutType: selectedType, score: 7, whyThisWorkout: typeSelection.reason }];
 
-  // Generate workout with feedback loop - regenerate if score < 6
-  const result = generateWorkoutWithFeedback(prompt, regenerationContext, 2, 6);
+  const multiResult = generateMultipleWorkoutOptions({
+    options: workoutOptions,
+    createPrompt: isRun ? createRunPrompt : createPrompt,
+    promptParams: {
+      summary: summary,
+      phaseInfo: phaseInfo,
+      dateStr: dateStr,
+      duration: availability.duration,
+      wellness: wellness,
+      powerProfileOrRunningData: isRun ? runningData : powerProfile,
+      adaptiveContext: adaptiveContext,
+      crossSportEquivalency: crossSportEquivalency,
+      lastWorkoutAnalysis: lastWorkoutAnalysis,
+      warnings: warnings
+    },
+    minScore: 6
+  });
 
-  if (!result.success) {
-    Logger.log("Failed to generate workout: " + result.error);
+  if (!multiResult.success) {
+    Logger.log("Failed to generate workout: " + multiResult.error);
     return;
   }
 
+  const result = multiResult.selectedWorkout;
+  const allWorkoutOptions = multiResult.allOptions;
+
   const isoDateStr = formatDateISO(today);
 
+  // Use the selected workout type from multi-option result
+  const finalSelectedType = result.workoutType;
+
   // Generate clean workout name (e.g., "IntervalCoach Sweet Spot")
-  const displayName = generateWorkoutName(selectedType);
+  const displayName = generateWorkoutName(finalSelectedType);
 
   let workout;
 
@@ -815,12 +826,14 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     const workoutText = result.workoutDescription || result.explanation;
 
     workout = {
-      type: selectedType,
+      type: finalSelectedType,
       explanation: result.explanation,
-      recommendationScore: result.recommendationScore,
+      recommendationScore: result.finalScore,
       recommendationReason: result.recommendationReason,
+      whyThisWorkout: result.whyThisWorkout,
       fileName: displayName,
-      workoutDescription: workoutText
+      workoutDescription: workoutText,
+      allOptions: allWorkoutOptions  // Include all options for email
     };
 
     // Upload run to Intervals.icu calendar
@@ -829,12 +842,14 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // For rides: upload ZWO to Intervals.icu (Zwift syncs from there)
 
     workout = {
-      type: selectedType,
+      type: finalSelectedType,
       explanation: result.explanation,
-      recommendationScore: result.recommendationScore,
+      recommendationScore: result.finalScore,
       recommendationReason: result.recommendationReason,
+      whyThisWorkout: result.whyThisWorkout,
       fileName: displayName,
-      xml: result.xml
+      xml: result.xml,
+      allOptions: allWorkoutOptions  // Include all options for email
     };
 
     // Upload to Intervals.icu calendar (replaces placeholder)
