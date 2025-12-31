@@ -4,6 +4,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Completed
 
+- [x] **Anti-Monotony Engine** - Engaging workout structure: max 5-min blocks, cadence drills (65-105 RPM), 9 structure patterns, coach-like TextEvents in user's language
 - [x] **Recommendation Score Feedback Loop** - Regenerates workouts when score < 6
 - [x] **AI-Driven Periodization** - Replaces date-based phase calculation
 - [x] **AI-Driven Workout Selection** - AI chooses optimal workout type
@@ -47,7 +48,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Anti-Monotony Engine** | Structure all workouts (especially endurance) into engaging blocks: max 5-min segments, cadence drills (alternating RPM), micro-power fluctuations. "Mental & Physical Texture" to keep athletes engaged. (Inspired by Aixle) | Coaching |
 | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
 | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
@@ -105,7 +105,7 @@ AI Coach for Intervals.icu - Similar architecture to IntervalCoach (daily .zwo g
 | Multiple workout options | ✓ Primary + 2 alternatives with scores (9/10, 8/10, 7/10) | ✗ Single workout | **Added to backlog** |
 | Workout scoring | ✓ AI confidence score for each option | ✗ No scoring | **Added to backlog** |
 | Coach's Insight section | ✓ Personalized "why this workout" explanation | ✓ Coaching notes | Similar |
-| Anti-Monotony Engine | ✓ Max 5-min blocks, cadence drills, micro-power variations | ✗ Can generate flat endurance rides | **Added to backlog (HIGH)** |
+| Anti-Monotony Engine | ✓ Max 5-min blocks, cadence drills, micro-power variations | ✓ Max 5-min blocks, cadence drills, 9 structure patterns | **Complete** |
 | Yesterday's Review | ✓ Previous workout feedback shown with today's recommendation | ✓ Post-workout analysis (separate email) | **Added to backlog** |
 | No Data vs Bad Data | ✓ Explicit "Sync Pending" status detection | ~ Partial (uses last available) | **Added to backlog** |
 | Dashboard | ✓ Web dashboard with charts, recent history | ✗ Email only | Future (App) |
