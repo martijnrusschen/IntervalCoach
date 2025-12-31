@@ -422,13 +422,18 @@ function checkRecentSickOrInjured(daysBack) {
  * @returns {object} { shouldTrain, recommendation, tssMultiplier, maxIntensity }
  */
 function getReturnToTrainingAdvice(sickStatus) {
+  const isNL = (USER_SETTINGS.LANGUAGE || 'en') === 'nl';
+  const typeLabel = sickStatus.isSick
+    ? (isNL ? 'ziekte' : 'illness')
+    : (isNL ? 'blessure' : 'injury');
+
   // Currently sick/injured - no training
   if (sickStatus.isSick || sickStatus.isInjured) {
     return {
       shouldTrain: false,
       recommendation: sickStatus.isSick
-        ? 'Rest and recover. No training while sick.'
-        : 'Recovery period. Follow medical advice for injury.',
+        ? (isNL ? 'Rust en herstel. Geen training tijdens ziekte.' : 'Rest and recover. No training while sick.')
+        : (isNL ? 'Herstelperiode. Volg medisch advies voor je blessure.' : 'Recovery period. Follow medical advice for injury.'),
       tssMultiplier: 0,
       maxIntensity: 'none',
       daysUntilNormal: sickStatus.event?.daysRemaining || 0
@@ -445,7 +450,9 @@ function getReturnToTrainingAdvice(sickStatus) {
     if (daysSince <= 2) {
       return {
         shouldTrain: true,
-        recommendation: `Day ${daysSince} post-${recent.type}. Easy zone 1-2 only, max 30-45 min.`,
+        recommendation: isNL
+          ? `Dag ${daysSince} na ${typeLabel}. Alleen zone 1-2, max 30-45 min.`
+          : `Day ${daysSince} post-${recent.type}. Easy zone 1-2 only, max 30-45 min.`,
         tssMultiplier: 0.3,
         maxIntensity: 'Z2',
         phase: 'initial'
@@ -453,7 +460,9 @@ function getReturnToTrainingAdvice(sickStatus) {
     } else if (daysSince <= 5) {
       return {
         shouldTrain: true,
-        recommendation: `Day ${daysSince} post-${recent.type}. Endurance only, monitor how you feel.`,
+        recommendation: isNL
+          ? `Dag ${daysSince} na ${typeLabel}. Alleen duurtraining, let op hoe je je voelt.`
+          : `Day ${daysSince} post-${recent.type}. Endurance only, monitor how you feel.`,
         tssMultiplier: 0.5,
         maxIntensity: 'Z3',
         phase: 'building'
@@ -461,7 +470,9 @@ function getReturnToTrainingAdvice(sickStatus) {
     } else if (daysSince <= 7 && severity > 3) {
       return {
         shouldTrain: true,
-        recommendation: `Day ${daysSince} post-${recent.type} (${severity} days). Moderate intensity OK if feeling good.`,
+        recommendation: isNL
+          ? `Dag ${daysSince} na ${typeLabel} (${severity} dagen). Matige intensiteit OK als je je goed voelt.`
+          : `Day ${daysSince} post-${recent.type} (${severity} days). Moderate intensity OK if feeling good.`,
         tssMultiplier: 0.7,
         maxIntensity: 'Z4',
         phase: 'moderate'
