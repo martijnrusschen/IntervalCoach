@@ -4,6 +4,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Completed
 
+- [x] **Yesterday's Review in Daily Email** - Shows previous workout analysis (effectiveness, difficulty match, key insight) at top of daily email for training continuity
 - [x] **Multi-Workout Option Comparison** - Generates 3 workout options with AI scores, auto-selects best, shows all options in email
 - [x] **Anti-Monotony Engine** - Engaging workout structure: max 5-min blocks, cadence drills (65-105 RPM), 9 structure patterns, coach-like TextEvents in user's language
 - [x] **Recommendation Score Feedback Loop** - Regenerates workouts when score < 6
@@ -57,7 +58,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Yesterday's Review in Daily Email** | Consolidate previous workout's AI analysis (effectiveness, difficulty match, key insight) into top of daily email for continuity, rather than separate post-workout email. (Inspired by Aixle) | Coaching |
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
