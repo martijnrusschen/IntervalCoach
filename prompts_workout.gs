@@ -431,7 +431,7 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
 **3. REQUIRED ZWO FEATURES (Critical):**
 - **Cadence:** You MUST specify target cadence for every interval using the \`Cadence\` attribute. VARY the cadence per the Anti-Monotony rules above (65-105 RPM range). Example: \`Cadence="95"\` for high-cadence blocks, \`Cadence="70"\` for strength blocks.
 - **Text Events (Messages) - Make it feel like a real coach is with you:**
-  - **LANGUAGE: Messages MUST be in ENGLISH.**
+  - **LANGUAGE: All TextEvent messages MUST be in ${analysisLang}.**
   - Nest them: \`<SteadyState ... ><TextEvent timeoffset="10" message="Keep pushing!"/></SteadyState>\`
 
   **WARMUP PHASE (Introduction):**
