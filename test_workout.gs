@@ -6,6 +6,129 @@
  */
 
 // =========================================================
+// ANTI-MONOTONY ENGINE TEST
+// =========================================================
+
+/**
+ * Test Anti-Monotony Engine by generating an Endurance workout
+ * Verifies: varied cadence, max 5min blocks, engaging structure
+ */
+function testAntiMonotonyWorkout() {
+  Logger.log("=== ANTI-MONOTONY ENGINE TEST ===");
+  Logger.log("Testing: Endurance workout should have varied structure\n");
+  requireValidConfig();
+
+  // Gather context
+  const summary = createAthleteSummary();
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const powerCurve = fetchPowerCurve();
+  const powerProfile = analyzePowerProfile(powerCurve);
+
+  const goals = fetchUpcomingGoals();
+  const targetDate = goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
+  const phaseInfo = calculateTrainingPhase(targetDate, { enableAI: false });
+  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+
+  const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMdd");
+
+  // Test with Endurance_Z2 - most likely to be boring without anti-monotony
+  const workoutType = "Endurance_Z2";
+  const duration = { min: 60, max: 75 };
+
+  Logger.log("--- Generating " + workoutType + " workout ---");
+  Logger.log("Duration: " + duration.min + "-" + duration.max + " min");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "N/A"));
+
+  // Create prompt with anti-monotony rules
+  const prompt = createPrompt(
+    workoutType,
+    summary,
+    phaseInfo,
+    dateStr,
+    duration,
+    wellness,
+    powerProfile,
+    null,  // adaptiveContext
+    null,  // crossSportEquivalency
+    null,  // lastWorkoutAnalysis
+    {}     // warnings
+  );
+
+  // Call Gemini
+  Logger.log("\n--- Calling Gemini API ---");
+  const response = callGeminiAPI(prompt);
+
+  if (!response.success) {
+    Logger.log("ERROR: " + response.error);
+    return;
+  }
+
+  Logger.log("\n--- AI Response ---");
+  Logger.log("Recommendation Score: " + response.recommendationScore + "/10");
+  Logger.log("Reason: " + response.recommendationReason);
+
+  // Analyze the generated ZWO for anti-monotony compliance
+  Logger.log("\n--- ANTI-MONOTONY ANALYSIS ---");
+  const xml = response.xml || "";
+
+  // Check for varied cadence
+  const cadenceMatches = xml.match(/Cadence="(\d+)"/g) || [];
+  const uniqueCadences = [...new Set(cadenceMatches.map(m => m.match(/\d+/)[0]))];
+  Logger.log("Cadence values used: " + (uniqueCadences.length > 0 ? uniqueCadences.join(", ") + " RPM" : "NONE FOUND"));
+  Logger.log("Cadence variety: " + (uniqueCadences.length >= 2 ? "✓ PASS (multiple)" : "✗ FAIL (needs variation)"));
+
+  // Check for steady state durations (exclude warmup/cooldown which can be longer)
+  const steadyStateDurations = [];
+  const steadyStateRegex = /<SteadyState[^>]*Duration="(\d+)"/g;
+  let match;
+  while ((match = steadyStateRegex.exec(xml)) !== null) {
+    steadyStateDurations.push(parseInt(match[1]));
+  }
+  const maxSteadyDuration = Math.max(...steadyStateDurations, 0);
+  Logger.log("Max SteadyState duration: " + maxSteadyDuration + "s (" + (maxSteadyDuration/60).toFixed(1) + " min)");
+  Logger.log("Block duration: " + (maxSteadyDuration <= 300 ? "✓ PASS (≤5min)" : "✗ FAIL (>5min SteadyState blocks)"));
+
+  // Also check warmup/cooldown (allowed to be longer)
+  const warmupMatch = xml.match(/<Warmup[^>]*Duration="(\d+)"/);
+  const cooldownMatch = xml.match(/<Cooldown[^>]*Duration="(\d+)"/);
+  if (warmupMatch) Logger.log("Warmup duration: " + (parseInt(warmupMatch[1])/60).toFixed(1) + " min (OK - exempt from 5min rule)");
+  if (cooldownMatch) Logger.log("Cooldown duration: " + (parseInt(cooldownMatch[1])/60).toFixed(1) + " min (OK - exempt from 5min rule)");
+
+  // Count segment variety
+  const steadyStates = (xml.match(/<SteadyState/g) || []).length;
+  const ramps = (xml.match(/<Ramp/g) || []).length;
+  const intervals = (xml.match(/<IntervalsT/g) || []).length;
+  Logger.log("Segment types: " + steadyStates + " SteadyState, " + ramps + " Ramp, " + intervals + " Intervals");
+
+  // Check for text events (engagement)
+  const textEvents = (xml.match(/<TextEvent/g) || []).length;
+  Logger.log("Text events (motivation): " + textEvents);
+
+  // Overall assessment
+  Logger.log("\n--- OVERALL ASSESSMENT ---");
+  const cadencePass = uniqueCadences.length >= 2;
+  const durationPass = maxSteadyDuration <= 300;
+  const varietyPass = (steadyStates + ramps + intervals) >= 4;
+
+  if (cadencePass && durationPass && varietyPass) {
+    Logger.log("✓ ANTI-MONOTONY: PASS - Workout has good variety!");
+  } else {
+    Logger.log("✗ ANTI-MONOTONY: NEEDS IMPROVEMENT");
+    if (!cadencePass) Logger.log("  - Add more cadence variation");
+    if (!durationPass) Logger.log("  - Break up long blocks (>5min)");
+    if (!varietyPass) Logger.log("  - Add more segment variety");
+  }
+
+  // Log full XML for inspection
+  Logger.log("\n--- GENERATED ZWO (first 2000 chars) ---");
+  Logger.log(xml.substring(0, 2000));
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
 // COACHING & WORKOUT TESTS
 // =========================================================
 

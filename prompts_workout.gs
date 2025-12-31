@@ -383,17 +383,81 @@ Generate a Zwift workout (.zwo) and evaluate its suitability.
 ${wellnessContext}${powerContext}${adaptiveTrainingContext}${crossSportContext}${lastWorkoutContext}${warningsContext}
 **2. Assignment: Design a "${type}" Workout**
 - **Duration:** ${durationStr}. Design the workout to fit within this time window.
-- **Structure:** Engaging (Pyramids, Over-Unders). NO boring steady states.
 - **Intensity:** Adjust based on TSB AND Recovery Status.
   - If TSB < -20 OR Recovery is Red/Yellow, reduce intensity significantly.
   - Apply the Intensity Modifier (${wellness && wellness.available ? (wellness.intensityModifier * 100).toFixed(0) + '%' : '100%'}) to target power zones.
 
+**ANTI-MONOTONY ENGINE (Critical - Follow These Rules):**
+Mental engagement is as important as physical stimulus. Boring workouts lead to dropout.
+**Goal: Make every workout FUN to ride, not just physiologically correct.**
+
+**A. Maximum Block Duration:**
+- NO steady-state blocks longer than 5 minutes at the same power
+- Break long efforts into 3-5 minute segments with micro-variations
+- Exception: Warm-up and cool-down can be longer but vary cadence
+
+**B. Structure Patterns (Choose variety, not just Pyramids):**
+- **Pyramids:** 1-2-3-4-3-2-1 min efforts (classic)
+- **Ladders:** Progressive 1-2-3-4-5 min or descending 5-4-3-2-1
+- **Over-Unders:** Alternating 2min at 95% / 1min at 105% FTP
+- **Waves:** Undulating within a block (e.g., 88-92-96-92-88% FTP over 5min)
+- **Micro-intervals:** 30/30s, 40/20s, 15/15s (great for VO2max)
+- **Surges:** 20-30s bursts within steady efforts (e.g., Z2 with Z4 surges every 3min)
+- **Progressive blocks:** Start at 85%, finish at 95% within same interval
+- **Regressive blocks:** Start hard, ease off (good when fatigued)
+- **Varied-length repeats:** Mix 2min + 3min + 4min instead of 5x3min
+
+**C. Cadence Variation (Required for ALL workouts):**
+- Don't use Cadence="85" for entire workout
+- **High cadence blocks:** 95-105 RPM (neuromuscular, efficiency)
+- **Low cadence blocks:** 65-75 RPM (strength, torque)
+- **Normal cadence:** 85-95 RPM (default)
+- Alternate cadence even within same power zone
+- Example endurance: 4min @85rpm, 3min @95rpm, 3min @70rpm, repeat
+
+**D. Endurance/Recovery Specific (Z1-Z2 workouts):**
+- Break into segments with different cadence targets
+- Add "tempo touches": 20-30s at Z3 every 8-10min to stay engaged
+- Include 2-3 cadence drills per hour (30s high, 30s low, 30s normal)
+- Micro power waves: ±3-5% fluctuation within zone (e.g., 68-72% FTP)
+- Never prescribe "60 minutes at 70% FTP" - always structure it
+
+**E. Interval Workouts (Z4+ workouts):**
+- Vary interval lengths within the same workout when possible
+- Include power ramps (start/end of intervals)
+- Use different recovery durations (not all 2min rest)
+- Add 10-15s surges at end of some intervals ("kick practice")
+
 **3. REQUIRED ZWO FEATURES (Critical):**
-- **Cadence:** You MUST specify target cadence for every interval using \`Cadence="85"\`.
-- **Text Events (Messages):**
-  - You MUST include motivational or instructional text messages.
-  - **LANGUAGE: Messages MUST be in ENGLISH.** (Even if the user's language is different, Zwift works best with English text).
+- **Cadence:** You MUST specify target cadence for every interval using the \`Cadence\` attribute. VARY the cadence per the Anti-Monotony rules above (65-105 RPM range). Example: \`Cadence="95"\` for high-cadence blocks, \`Cadence="70"\` for strength blocks.
+- **Text Events (Messages) - Make it feel like a real coach is with you:**
+  - **LANGUAGE: Messages MUST be in ENGLISH.**
   - Nest them: \`<SteadyState ... ><TextEvent timeoffset="10" message="Keep pushing!"/></SteadyState>\`
+
+  **WARMUP PHASE (Introduction):**
+  - Explain TODAY's workout: what we're doing, why, and what to expect
+  - Reference recovery status if relevant ("Recovery is yellow today, so we're keeping it controlled")
+  - Set expectations ("We'll build through 3 sets of Sweet Spot intervals")
+  - Mental preparation ("This is about building your aerobic engine")
+
+  **MAIN WORKOUT (Engaging & Fun):**
+  - Be encouraging and energetic, not robotic
+  - Use humor sparingly ("Your legs might disagree, but they'll thank you later")
+  - Countdown cues ("Halfway there!", "Last 30 seconds!")
+  - Technique reminders ("Relax those shoulders", "Smooth circles")
+  - Cadence cues when changing ("Spin it up to 95!", "Drop to 70 RPM, feel the torque")
+  - Effort validation ("This is supposed to feel hard", "You're doing great")
+  - Breathing cues ("Deep breaths", "Find your rhythm")
+
+  **RECOVERY INTERVALS:**
+  - Celebrate completing hard efforts ("Nailed it!", "That's how it's done!")
+  - Prepare for next interval ("Shake it out, next one in 30 seconds")
+
+  **COOLDOWN PHASE:**
+  - Congratulate on completing the workout
+  - Summarize what was accomplished
+  - Recovery tips ("Get some protein in within 30 minutes")
+
   - **Workout Name:** The <name> tag MUST be exactly: "${zwiftDisplayName}" (Do NOT add "IntervalCoach_" prefix here).
 
 **4. Evaluate Recommendation (1-10):**

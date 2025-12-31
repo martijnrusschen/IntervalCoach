@@ -47,6 +47,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
+| **Anti-Monotony Engine** | Structure all workouts (especially endurance) into engaging blocks: max 5-min segments, cadence drills (alternating RPM), micro-power fluctuations. "Mental & Physical Texture" to keep athletes engaged. (Inspired by Aixle) | Coaching |
 | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
 | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
 | **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
@@ -55,6 +56,9 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
+| **Multi-Workout Option Comparison** | Generate 3 workout options with AI confidence scores (9/10, 8/10, etc.), each with "why this workout" explanation. Let user choose or auto-select highest. (Inspired by Aixle) | AI-First |
+| **Wellness Data Freshness Detection** | Distinguish "No Data" (device not synced yet) from "Bad Data" (actual poor wellness). Add "Sync Pending" status to avoid stale-data decisions. (Inspired by Aixle) | Coaching |
+| **Yesterday's Review in Daily Email** | Consolidate previous workout's AI analysis (effectiveness, difficulty match, key insight) into top of daily email for continuity, rather than separate post-workout email. (Inspired by Aixle) | Coaching |
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
@@ -64,7 +68,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Multi-Workout Option Comparison** | Generate 3 workout options with projected outcomes (like Aixle), let user choose | AI-First |
+| **Recent Workout History in Email** | Show last 7 days of workouts with AI effectiveness scores in weekly email, similar to Aixle dashboard view. (Inspired by Aixle) | Coaching |
 | **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
 | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
 
@@ -91,6 +95,32 @@ All pending features, unified and ordered by priority. Pick from the top for max
 ---
 
 ## Competitor Analysis
+
+### Aixle ([aixle.net](https://aixle.net/))
+
+AI Coach for Intervals.icu - Similar architecture to IntervalCoach (daily .zwo generation, Intervals.icu integration). Active development with 30+ beta testers.
+
+| Feature | Aixle | IntervalCoach | Gap |
+|---------|-------|---------------|-----|
+| Multiple workout options | ✓ Primary + 2 alternatives with scores (9/10, 8/10, 7/10) | ✗ Single workout | **Added to backlog** |
+| Workout scoring | ✓ AI confidence score for each option | ✗ No scoring | **Added to backlog** |
+| Coach's Insight section | ✓ Personalized "why this workout" explanation | ✓ Coaching notes | Similar |
+| Anti-Monotony Engine | ✓ Max 5-min blocks, cadence drills, micro-power variations | ✗ Can generate flat endurance rides | **Added to backlog (HIGH)** |
+| Yesterday's Review | ✓ Previous workout feedback shown with today's recommendation | ✓ Post-workout analysis (separate email) | **Added to backlog** |
+| No Data vs Bad Data | ✓ Explicit "Sync Pending" status detection | ~ Partial (uses last available) | **Added to backlog** |
+| Dashboard | ✓ Web dashboard with charts, recent history | ✗ Email only | Future (App) |
+| Baseline display | ✓ CTL/TSB/HRV/Sleep prominently at top | ✓ Included in email | Similar |
+| Recent history with scores | ✓ Last 7 days with workout scores | ✗ Not shown | **Added to backlog** |
+
+**Key Aixle Innovations (Dec 2024 update):**
+
+1. **Anti-Monotony Philosophy**: "Even for endurance rides, the AI now structures the workout into shorter blocks (max 5 mins). It introduces specific Cadence Drills (e.g., alternating rpm) and micro-power fluctuations to keep you engaged and focused."
+
+2. **Smarter Wellness Logic**: "Freshness Matters: The system now strictly distinguishes between 'No Data' and 'Bad Data.' Sync Pending Status: If your device hasn't synced yet, Aixle recognizes this status instead of making assumptions based on old fatigue data."
+
+3. **Workout Options with Scores**: Primary recommendation with score (9/10), plus 2 alternatives with strategy explanations (e.g., "Given your excellent recovery signals, Threshold Over-Unders provides a different stimulus...").
+
+---
 
 ### JOIN Cycling ([join.cc](https://join.cc/))
 | Feature | JOIN | IntervalCoach | Gap |
@@ -779,4 +809,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Displays pattern duration (consecutive days)
 - Provides training guidance
 
-*Last updated: 2025-12-28 (Added Recovery Debt Tracking feature)*
+*Last updated: 2025-12-31 (Added Aixle competitor analysis and inspired features)*
