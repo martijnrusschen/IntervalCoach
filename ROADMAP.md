@@ -57,7 +57,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Wellness Data Freshness Detection** | Distinguish "No Data" (device not synced yet) from "Bad Data" (actual poor wellness). Add "Sync Pending" status to avoid stale-data decisions. (Inspired by Aixle) | Coaching |
 | **Yesterday's Review in Daily Email** | Consolidate previous workout's AI analysis (effectiveness, difficulty match, key insight) into top of daily email for continuity, rather than separate post-workout email. (Inspired by Aixle) | Coaching |
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
@@ -107,7 +106,7 @@ AI Coach for Intervals.icu - Similar architecture to IntervalCoach (daily .zwo g
 | Coach's Insight section | ✓ Personalized "why this workout" explanation | ✓ Coaching notes | Similar |
 | Anti-Monotony Engine | ✓ Max 5-min blocks, cadence drills, micro-power variations | ✓ Max 5-min blocks, cadence drills, 9 structure patterns | **Complete** |
 | Yesterday's Review | ✓ Previous workout feedback shown with today's recommendation | ✓ Post-workout analysis (separate email) | **Added to backlog** |
-| No Data vs Bad Data | ✓ Explicit "Sync Pending" status detection | ~ Partial (uses last available) | **Added to backlog** |
+| No Data vs Bad Data | ✓ Explicit "Sync Pending" status detection | ✓ Already checks today's data + Whoop score_state | Similar |
 | Dashboard | ✓ Web dashboard with charts, recent history | ✗ Email only | Future (App) |
 | Baseline display | ✓ CTL/TSB/HRV/Sleep prominently at top | ✓ Included in email | Similar |
 | Recent history with scores | ✓ Last 7 days with workout scores | ✗ Not shown | **Added to backlog** |
