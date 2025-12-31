@@ -4,6 +4,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Completed
 
+- [x] **Multi-Workout Option Comparison** - Generates 3 workout options with AI scores, auto-selects best, shows all options in email
 - [x] **Anti-Monotony Engine** - Engaging workout structure: max 5-min blocks, cadence drills (65-105 RPM), 9 structure patterns, coach-like TextEvents in user's language
 - [x] **Recommendation Score Feedback Loop** - Regenerates workouts when score < 6
 - [x] **AI-Driven Periodization** - Replaces date-based phase calculation
@@ -56,7 +57,6 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
-| **Multi-Workout Option Comparison** | Generate 3 workout options with AI confidence scores (9/10, 8/10, etc.), each with "why this workout" explanation. Let user choose or auto-select highest. (Inspired by Aixle) | AI-First |
 | **Wellness Data Freshness Detection** | Distinguish "No Data" (device not synced yet) from "Bad Data" (actual poor wellness). Add "Sync Pending" status to avoid stale-data decisions. (Inspired by Aixle) | Coaching |
 | **Yesterday's Review in Daily Email** | Consolidate previous workout's AI analysis (effectiveness, difficulty match, key insight) into top of daily email for continuity, rather than separate post-workout email. (Inspired by Aixle) | Coaching |
 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
@@ -102,8 +102,8 @@ AI Coach for Intervals.icu - Similar architecture to IntervalCoach (daily .zwo g
 
 | Feature | Aixle | IntervalCoach | Gap |
 |---------|-------|---------------|-----|
-| Multiple workout options | ✓ Primary + 2 alternatives with scores (9/10, 8/10, 7/10) | ✗ Single workout | **Added to backlog** |
-| Workout scoring | ✓ AI confidence score for each option | ✗ No scoring | **Added to backlog** |
+| Multiple workout options | ✓ Primary + 2 alternatives with scores (9/10, 8/10, 7/10) | ✓ 3 options with scores, auto-select best | **Complete** |
+| Workout scoring | ✓ AI confidence score for each option | ✓ Pre-score + final score per option | **Complete** |
 | Coach's Insight section | ✓ Personalized "why this workout" explanation | ✓ Coaching notes | Similar |
 | Anti-Monotony Engine | ✓ Max 5-min blocks, cadence drills, micro-power variations | ✓ Max 5-min blocks, cadence drills, 9 structure patterns | **Complete** |
 | Yesterday's Review | ✓ Previous workout feedback shown with today's recommendation | ✓ Post-workout analysis (separate email) | **Added to backlog** |
