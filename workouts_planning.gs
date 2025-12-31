@@ -344,6 +344,27 @@ ${pb.weeksWithoutDeload >= 3 && !pb.isRecoveryWeek ? '- FATIGUE ACCUMULATING: Mo
 `;
   }
 
+  // Build holiday context
+  let holidayContext = '';
+  if (context.upcomingHoliday) {
+    const h = context.upcomingHoliday;
+    const weeksUntil = Math.floor(h.daysUntil / 7);
+
+    holidayContext = `
+**UPCOMING HOLIDAY (IMPORTANT - use strategically):**
+- Holiday: ${h.name}
+- Dates: ${h.startDate} to ${h.endDate} (${h.durationDays} days)
+- Days Until: ${h.daysUntil} days (${weeksUntil} weeks)
+${h.hasConflictingRace ? '- NOTE: Race during holiday takes priority over rest' : ''}
+
+**HOLIDAY PLANNING RULES:**
+${h.daysUntil <= 7 ? '- THIS WEEK BEFORE HOLIDAY: Push hard! Extra intensity sessions OK. Maximize training stress before the break.' : ''}
+${h.daysUntil > 7 && h.daysUntil <= 14 ? '- 1-2 WEEKS TO HOLIDAY: Increase training load. Body will recover during holiday.' : ''}
+${h.daysUntil > 14 && h.daysUntil <= 28 ? '- HOLIDAY COMING: Plan regular training but consider skipping tentative recovery weeks - holiday will provide rest.' : ''}
+- Holiday = guaranteed recovery week. Use it wisely by training harder beforehand.
+`;
+  }
+
   // Build goals context
   let goalsContext = '';
   if (context.goals?.available) {
@@ -399,7 +420,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
 - eFTP: ${context.eftp || 'N/A'}W
 - CTL Trend: ${context.ctlTrend || 'stable'}
-${goalsContext}${taperContext}${periodizationContext}
+${goalsContext}${taperContext}${periodizationContext}${holidayContext}
 **RECOVERY STATUS:**
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}
@@ -435,6 +456,7 @@ Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartle
 15. RACE WEEK: If race is this week, prioritize freshness over fitness. Easy spinning only, with opener workout 1-2 days before.
 16. SPORT BALANCE: Aim for roughly 2:1 ratio of cycling to running (e.g., 3 rides + 1-2 runs, or 2 rides + 1 run)
 17. RECOVERY TIMING: Take recovery when body signals indicate (high fatigue, poor wellness, 3+ weeks without deload). Don't force fixed patterns - adapt to actual recovery status.
+18. HOLIDAY PLANNING: If a holiday is coming within 2 weeks, train harder this week (extra intensity OK). Holiday = guaranteed recovery, so maximize training stress beforehand. Skip tentative recovery weeks if holiday provides rest soon.
 
 **YOUR TASK:**
 Create a 7-day plan starting from ${context.startDate || 'tomorrow'}. For each day provide:
@@ -1332,6 +1354,14 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
   const weeksWithoutDeload = deloadCheck?.weeksWithoutDeload || 0;
   const needsRecoveryThisBlock = weeksWithoutDeload >= 2;
 
+  // Fetch upcoming holidays (look 8 weeks ahead to catch holidays just outside 4-week window)
+  let holidayData = { available: false, holidays: [], nextHoliday: null };
+  try {
+    holidayData = fetchUpcomingHolidays(8);
+  } catch (e) {
+    Logger.log("Holiday fetch failed (non-critical): " + e.toString());
+  }
+
   // Get focus areas from zone progression
   const focusAreas = zoneProgression?.focusAreas || [];
   const focusLabels = {
@@ -1380,6 +1410,24 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
       }
     }
 
+    // Check for holiday this week
+    const holidayThisWeek = getHolidayForWeek(weekStartStr, holidayData);
+
+    // Check if holiday is coming in the next 1-2 weeks (for pre-holiday push)
+    let holidayComingSoon = false;
+    let weeksUntilHoliday = null;
+    if (holidayData.nextHoliday && !holidayThisWeek) {
+      const nextHolidayStart = new Date(holidayData.nextHoliday.startDate);
+      const weekEndDate = new Date(weekEndStr);
+      const daysToHoliday = Math.floor((nextHolidayStart - weekEndDate) / (1000 * 60 * 60 * 24));
+      weeksUntilHoliday = Math.floor(daysToHoliday / 7);
+
+      // Mark as "holiday coming" if it's 1-2 weeks away
+      if (weeksUntilHoliday >= 0 && weeksUntilHoliday <= 2) {
+        holidayComingSoon = true;
+      }
+    }
+
     // Determine week type
     let weekType = 'Build';
     let tssMultiplier = 1.0;
@@ -1390,24 +1438,36 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
     const hasBRace = events.some(e => e.category === 'B');
 
     if (hasARace) {
+      // A Race takes highest priority
       weekType = 'Race Week';
       tssMultiplier = 0.5;
       weekFocus = 'Freshness & race prep';
     } else if (hasBRace) {
+      // B Race takes priority over holiday
       weekType = 'Race Week';
       tssMultiplier = 0.7;
       weekFocus = 'Taper & race prep';
+    } else if (holidayThisWeek && !holidayThisWeek.hasConflictingRace) {
+      // Holiday week = planned recovery (unless race during holiday)
+      weekType = 'Holiday';
+      tssMultiplier = 0.5;
+      weekFocus = `Planned rest: ${holidayThisWeek.name}`;
     } else if (phaseInfo?.phaseName === 'Taper') {
       weekType = 'Taper';
       tssMultiplier = 0.6 - (w * 0.1); // Progressive taper
       weekFocus = 'Maintain sharpness, reduce volume';
-    } else if (w === 0 && deloadCheck?.needed) {
-      // Immediate recovery if body signals indicate need (any urgency)
+    } else if (holidayComingSoon && weeksUntilHoliday <= 1) {
+      // Week right before holiday: push harder (overreaching)
+      weekType = 'Pre-Holiday Push';
+      tssMultiplier = 1.15; // 15% above normal
+      weekFocus = `Push hard before ${holidayData.nextHoliday.name}`;
+    } else if (w === 0 && deloadCheck?.needed && !holidayComingSoon) {
+      // Immediate recovery if body signals indicate need (but skip if holiday coming soon)
       weekType = 'Recovery';
       tssMultiplier = 0.6;
       weekFocus = 'Recovery week - body needs rest';
-    } else if (w > 0 && weeksWithoutDeload + w >= 4 && !events.some(e => e.category === 'A' || e.category === 'B')) {
-      // Suggest recovery when fatigue likely accumulated (but don't force at fixed week)
+    } else if (w > 0 && weeksWithoutDeload + w >= 4 && !events.some(e => e.category === 'A' || e.category === 'B') && !holidayComingSoon) {
+      // Suggest recovery when fatigue likely accumulated (but skip if holiday provides recovery soon)
       weekType = 'Recovery (tentative)';
       tssMultiplier = 0.6;
       weekFocus = 'Potential recovery - monitor wellness';
@@ -1430,9 +1490,11 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
 
     // Determine intensity sessions for the week
     let intensitySessions = 2;
-    if (weekType === 'Recovery') intensitySessions = 1;
+    if (weekType === 'Recovery' || weekType === 'Recovery (tentative)') intensitySessions = 1;
     if (weekType === 'Race Week') intensitySessions = 1;
     if (weekType === 'Taper') intensitySessions = 1;
+    if (weekType === 'Holiday') intensitySessions = 0; // Full rest during holiday
+    if (weekType === 'Pre-Holiday Push') intensitySessions = 3; // Extra intensity before holiday
 
     weeks.push({
       weekNumber: w + 1,
@@ -1442,7 +1504,8 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
       tssTarget: tssTarget,
       focus: weekFocus,
       intensitySessions: intensitySessions,
-      events: events
+      events: events,
+      holiday: holidayThisWeek || null
     });
   }
 
@@ -1530,25 +1593,36 @@ function formatFourWeekOutlookSection(outlook, isNL) {
       'Recovery': isNL ? 'Herstel' : 'Recovery',
       'Recovery (tentative)': isNL ? 'Herstel (voorlopig)' : 'Recovery (tentative)',
       'Race Week': isNL ? 'Wedstrijdweek' : 'Race Week',
-      'Taper': isNL ? 'Afbouw' : 'Taper'
+      'Taper': isNL ? 'Afbouw' : 'Taper',
+      'Holiday': isNL ? 'Vakantie' : 'Holiday',
+      'Pre-Holiday Push': isNL ? 'Pre-Vakantie Push' : 'Pre-Holiday Push'
     };
     const weekType = typeTranslations[week.type] || week.type;
 
-    // Translate focus
-    const focusTranslations = {
-      'Potential recovery - monitor wellness': isNL ? 'Mogelijk herstel - monitor welzijn' : 'Potential recovery - monitor wellness',
-      'Recovery week - body needs rest': isNL ? 'Herstelweek - lichaam heeft rust nodig' : 'Recovery week - body needs rest',
-      'Freshness & race prep': isNL ? 'Frisheid & wedstrijdvoorbereiding' : 'Freshness & race prep',
-      'Taper & race prep': isNL ? 'Afbouw & wedstrijdvoorbereiding' : 'Taper & race prep',
-      'Maintain sharpness, reduce volume': isNL ? 'Scherpte behouden, volume verlagen' : 'Maintain sharpness, reduce volume',
-      'Consolidate gains, active recovery': isNL ? 'Winst consolideren, actief herstel' : 'Consolidate gains, active recovery',
-      'Endurance': isNL ? 'Duurvermogen' : 'Endurance',
-      'Threshold': isNL ? 'Drempel' : 'Threshold',
-      'VO2max': 'VO2max',
-      'Anaerobic': isNL ? 'Anaeroob' : 'Anaerobic',
-      'Aerobic base': isNL ? 'Aerobe basis' : 'Aerobic base'
-    };
-    const weekFocus = focusTranslations[week.focus] || week.focus;
+    // Translate focus (including dynamic holiday names)
+    let weekFocus = week.focus;
+    if (week.focus?.startsWith('Planned rest:')) {
+      const holidayName = week.focus.replace('Planned rest: ', '');
+      weekFocus = isNL ? `Geplande rust: ${holidayName}` : `Planned rest: ${holidayName}`;
+    } else if (week.focus?.startsWith('Push hard before')) {
+      const holidayName = week.focus.replace('Push hard before ', '');
+      weekFocus = isNL ? `Extra hard trainen voor ${holidayName}` : `Push hard before ${holidayName}`;
+    } else {
+      const focusTranslations = {
+        'Potential recovery - monitor wellness': isNL ? 'Mogelijk herstel - monitor welzijn' : 'Potential recovery - monitor wellness',
+        'Recovery week - body needs rest': isNL ? 'Herstelweek - lichaam heeft rust nodig' : 'Recovery week - body needs rest',
+        'Freshness & race prep': isNL ? 'Frisheid & wedstrijdvoorbereiding' : 'Freshness & race prep',
+        'Taper & race prep': isNL ? 'Afbouw & wedstrijdvoorbereiding' : 'Taper & race prep',
+        'Maintain sharpness, reduce volume': isNL ? 'Scherpte behouden, volume verlagen' : 'Maintain sharpness, reduce volume',
+        'Consolidate gains, active recovery': isNL ? 'Winst consolideren, actief herstel' : 'Consolidate gains, active recovery',
+        'Endurance': isNL ? 'Duurvermogen' : 'Endurance',
+        'Threshold': isNL ? 'Drempel' : 'Threshold',
+        'VO2max': 'VO2max',
+        'Anaerobic': isNL ? 'Anaeroob' : 'Anaerobic',
+        'Aerobic base': isNL ? 'Aerobe basis' : 'Aerobic base'
+      };
+      weekFocus = focusTranslations[week.focus] || week.focus;
+    }
 
     // Week type indicator for header
     let typeIndicator = '';
@@ -1558,6 +1632,10 @@ function formatFourWeekOutlookSection(outlook, isNL) {
       typeIndicator = isNL ? ' [Wedstrijd]' : ' [Race]';
     } else if (week.type === 'Taper') {
       typeIndicator = isNL ? ' [Afbouw]' : ' [Taper]';
+    } else if (week.type === 'Holiday') {
+      typeIndicator = isNL ? ' [Vakantie]' : ' [Holiday]';
+    } else if (week.type === 'Pre-Holiday Push') {
+      typeIndicator = isNL ? ' [Push]' : ' [Push]';
     }
 
     section += `${weekLabel} (${dateRange})${typeIndicator}\n`;

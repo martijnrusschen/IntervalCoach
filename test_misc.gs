@@ -309,3 +309,85 @@ function testActivityNotes() {
 
   Logger.log("\n=== ACTIVITY NOTES DISCOVERY COMPLETE ===");
 }
+
+// =========================================================
+// HOLIDAY/REST WEEK DISCOVERY
+// =========================================================
+
+/**
+ * Test function to discover holiday events in calendar
+ * Fetches upcoming events and shows all categories
+ */
+function testHolidayEvents() {
+  Logger.log("=== HOLIDAY EVENTS DISCOVERY ===\n");
+
+  // Fetch events for next 6 months
+  const today = new Date();
+  const future = new Date(today);
+  future.setMonth(future.getMonth() + 6);
+
+  const oldest = formatDateISO(today);
+  const newest = formatDateISO(future);
+
+  Logger.log(`Fetching events from ${oldest} to ${newest}...\n`);
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${oldest}&newest=${newest}`);
+
+  if (!result.success) {
+    Logger.log("ERROR: Failed to fetch events - " + result.error);
+    return;
+  }
+
+  if (!result.data || result.data.length === 0) {
+    Logger.log("No events found in next 6 months");
+    return;
+  }
+
+  Logger.log(`Found ${result.data.length} events\n`);
+
+  // Group events by category
+  const byCategory = {};
+  for (const e of result.data) {
+    const cat = e.category || 'UNKNOWN';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(e);
+  }
+
+  // Show all categories found
+  Logger.log("--- CATEGORIES FOUND ---");
+  for (const cat of Object.keys(byCategory).sort()) {
+    Logger.log(`${cat}: ${byCategory[cat].length} event(s)`);
+  }
+
+  // Show details of holiday/note/vacation events
+  const interestingCategories = ['HOLIDAY', 'NOTE', 'VACATION', 'REST', 'SICK'];
+  Logger.log("\n--- HOLIDAY/REST EVENTS ---");
+
+  let foundAny = false;
+  for (const e of result.data) {
+    const cat = (e.category || '').toUpperCase();
+    const name = (e.name || '').toLowerCase();
+
+    if (interestingCategories.includes(cat) ||
+        name.includes('holiday') || name.includes('vacation') ||
+        name.includes('vakantie') || name.includes('rust') || name.includes('rest')) {
+      foundAny = true;
+      Logger.log(`\nEvent: ${e.name || '(no name)'}`);
+      Logger.log(`  Category: ${e.category}`);
+      Logger.log(`  Start: ${e.start_date_local}`);
+      Logger.log(`  End: ${e.end_date_local || 'same day'}`);
+      Logger.log(`  Description: ${e.description || '(none)'}`);
+      Logger.log(`  ID: ${e.id}`);
+
+      // Show all fields for discovery
+      Logger.log(`  All fields: ${JSON.stringify(e)}`);
+    }
+  }
+
+  if (!foundAny) {
+    Logger.log("No holiday/vacation events found.");
+    Logger.log("\nTip: Add a 'Holiday' category event in Intervals.icu");
+  }
+
+  Logger.log("\n=== HOLIDAY DISCOVERY COMPLETE ===");
+}

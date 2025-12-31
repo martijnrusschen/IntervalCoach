@@ -198,3 +198,115 @@ function hasEventYesterday() {
 function hasEventInDays(days) {
   return hasEventOnDate(days);
 }
+
+// =========================================================
+// HOLIDAY DETECTION
+// =========================================================
+
+/**
+ * Fetch upcoming holidays from Intervals.icu calendar
+ * @param {number} weeksAhead - How many weeks to look ahead (default 12)
+ * @returns {object} { available, holidays: [...], nextHoliday }
+ */
+function fetchUpcomingHolidays(weeksAhead) {
+  weeksAhead = weeksAhead || 12;
+
+  const today = new Date();
+  const future = new Date(today);
+  future.setDate(future.getDate() + (weeksAhead * 7));
+
+  const oldest = formatDateISO(today);
+  const newest = formatDateISO(future);
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${oldest}&newest=${newest}`);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { available: false, holidays: [], nextHoliday: null };
+  }
+
+  // Filter for HOLIDAY category events
+  const holidays = result.data
+    .filter(e => e.category === 'HOLIDAY')
+    .map(e => {
+      const startDate = e.start_date_local?.substring(0, 10);
+      const endDate = e.end_date_local?.substring(0, 10);
+
+      // Calculate days until holiday starts
+      const start = new Date(startDate);
+      const daysUntil = Math.floor((start - today) / (1000 * 60 * 60 * 24));
+
+      // Calculate duration in days
+      const end = endDate ? new Date(endDate) : start;
+      const durationDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Calculate which week the holiday falls in (1 = this week, 2 = next week, etc.)
+      const weekNumber = Math.floor(daysUntil / 7) + 1;
+
+      return {
+        id: e.id,
+        name: e.name || 'Holiday',
+        startDate: startDate,
+        endDate: endDate,
+        daysUntil: daysUntil,
+        durationDays: durationDays,
+        weekNumber: weekNumber,
+        // Check if any races fall during this holiday
+        hasConflictingRace: false // Will be set below
+      };
+    })
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
+  // Check for conflicting races during each holiday
+  for (const holiday of holidays) {
+    const racesInPeriod = result.data.filter(e => {
+      if (!e.category?.startsWith('RACE_')) return false;
+      const raceDate = e.start_date_local?.substring(0, 10);
+      return raceDate >= holiday.startDate && raceDate <= holiday.endDate;
+    });
+
+    if (racesInPeriod.length > 0) {
+      holiday.hasConflictingRace = true;
+      holiday.conflictingRaces = racesInPeriod.map(r => ({
+        category: r.category.replace('RACE_', ''),
+        name: r.name,
+        date: r.start_date_local?.substring(0, 10)
+      }));
+    }
+  }
+
+  return {
+    available: holidays.length > 0,
+    holidays: holidays,
+    nextHoliday: holidays.length > 0 ? holidays[0] : null
+  };
+}
+
+/**
+ * Check if a specific week contains a holiday
+ * @param {string} weekStartDate - Start date of the week (yyyy-MM-dd)
+ * @param {object} holidayData - Output from fetchUpcomingHolidays()
+ * @returns {object|null} Holiday info if week contains holiday, null otherwise
+ */
+function getHolidayForWeek(weekStartDate, holidayData) {
+  if (!holidayData?.available || !holidayData.holidays) return null;
+
+  const weekStart = new Date(weekStartDate);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  const weekStartStr = formatDateISO(weekStart);
+  const weekEndStr = formatDateISO(weekEnd);
+
+  for (const holiday of holidayData.holidays) {
+    // Check if holiday overlaps with this week
+    const holidayStart = holiday.startDate;
+    const holidayEnd = holiday.endDate || holiday.startDate;
+
+    // Overlap check: holiday starts before week ends AND holiday ends after week starts
+    if (holidayStart <= weekEndStr && holidayEnd >= weekStartStr) {
+      return holiday;
+    }
+  }
+
+  return null;
+}

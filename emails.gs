@@ -841,6 +841,25 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
     Logger.log("Recovery timing check failed (non-critical): " + e.toString());
   }
 
+  // Add upcoming holiday info
+  try {
+    const holidayData = fetchUpcomingHolidays(8);
+    if (holidayData.available && holidayData.nextHoliday) {
+      const h = holidayData.nextHoliday;
+      planContext.upcomingHoliday = {
+        name: h.name,
+        startDate: h.startDate,
+        endDate: h.endDate,
+        daysUntil: h.daysUntil,
+        durationDays: h.durationDays,
+        weekNumber: h.weekNumber,
+        hasConflictingRace: h.hasConflictingRace
+      };
+    }
+  } catch (e) {
+    Logger.log("Holiday fetch failed (non-critical): " + e.toString());
+  }
+
   return planContext;
 }
 
