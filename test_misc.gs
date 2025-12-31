@@ -391,3 +391,86 @@ function testHolidayEvents() {
 
   Logger.log("\n=== HOLIDAY DISCOVERY COMPLETE ===");
 }
+
+// =========================================================
+// SICK/INJURED DETECTION TESTS
+// =========================================================
+
+/**
+ * Test function to check sick/injured detection
+ * Tests current status and recent history
+ */
+function testSickInjuredDetection() {
+  Logger.log("=== SICK/INJURED DETECTION TEST ===\n");
+
+  // 1. Check current status
+  Logger.log("--- Current Status ---");
+  const currentStatus = checkSickOrInjured();
+  Logger.log("Status: " + currentStatus.status);
+  Logger.log("Is Sick: " + currentStatus.isSick);
+  Logger.log("Is Injured: " + currentStatus.isInjured);
+
+  if (currentStatus.event) {
+    Logger.log("\nActive Event:");
+    Logger.log("  Name: " + currentStatus.event.name);
+    Logger.log("  Start: " + currentStatus.event.startDate);
+    Logger.log("  End: " + currentStatus.event.endDate);
+    Logger.log("  Days since start: " + currentStatus.event.daysSinceStart);
+    Logger.log("  Days remaining: " + currentStatus.event.daysRemaining);
+  }
+
+  // 2. Check recent history
+  Logger.log("\n--- Recent History (14 days) ---");
+  const recentStatus = checkRecentSickOrInjured(14);
+  Logger.log("Was recently sick/injured: " + recentStatus.wasRecent);
+  Logger.log("Events found: " + recentStatus.events.length);
+
+  if (recentStatus.events.length > 0) {
+    recentStatus.events.forEach((e, i) => {
+      Logger.log(`\nRecent Event ${i + 1}:`);
+      Logger.log("  Type: " + e.type);
+      Logger.log("  Name: " + e.name);
+      Logger.log("  Duration: " + e.durationDays + " days");
+      Logger.log("  Days since end: " + e.daysSinceEnd);
+      Logger.log("  Recovery multiplier: " + e.recoveryMultiplier);
+    });
+  }
+
+  // 3. Get training advice
+  Logger.log("\n--- Training Advice ---");
+  const advice = getReturnToTrainingAdvice(
+    currentStatus.isSick || currentStatus.isInjured ? currentStatus : recentStatus
+  );
+  Logger.log("Should train: " + advice.shouldTrain);
+  Logger.log("TSS multiplier: " + advice.tssMultiplier);
+  Logger.log("Max intensity: " + advice.maxIntensity);
+  if (advice.recommendation) {
+    Logger.log("Recommendation: " + advice.recommendation);
+  }
+  if (advice.phase) {
+    Logger.log("Phase: " + advice.phase);
+  }
+
+  // 4. Search for SICK/INJURED events in calendar
+  Logger.log("\n--- Calendar Search ---");
+  const today = new Date();
+  const monthAgo = new Date(today);
+  monthAgo.setDate(monthAgo.getDate() - 30);
+  const monthAhead = new Date(today);
+  monthAhead.setDate(monthAhead.getDate() + 30);
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${formatDateISO(monthAgo)}&newest=${formatDateISO(monthAhead)}`);
+
+  if (result.success && result.data) {
+    const sickEvents = result.data.filter(e => e.category === 'SICK' || e.category === 'INJURED');
+    Logger.log(`Found ${sickEvents.length} SICK/INJURED events in ±30 days`);
+
+    sickEvents.forEach(e => {
+      Logger.log(`\n  ${e.category}: ${e.name || '(no name)'}`);
+      Logger.log(`    Period: ${e.start_date_local?.substring(0, 10)} to ${e.end_date_local?.substring(0, 10) || 'same day'}`);
+      if (e.description) Logger.log(`    Description: ${e.description}`);
+    });
+  }
+
+  Logger.log("\n=== SICK/INJURED DETECTION TEST COMPLETE ===");
+}

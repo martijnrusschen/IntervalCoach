@@ -137,6 +137,10 @@ function buildDailyOpening(type, recoveryStatus, tsb, wellness, phaseInfo, isNL)
     opening = isNL
       ? 'Groepsrit vandaag. Geniet ervan!'
       : 'Group ride today. Enjoy!';
+  } else if (type === 'sick') {
+    opening = isNL
+      ? 'Je hebt aangegeven dat je ziek of geblesseerd bent. Rust is nu het belangrijkste.'
+      : 'You\'ve indicated you\'re sick or injured. Rest is the priority right now.';
   }
 
   // Add wellness context if available
@@ -196,6 +200,11 @@ function sendDailyEmail(params) {
     subject = `${t.subject_prefix}${workout?.type || 'Workout'} (${dateStr})`;
   } else if (type === 'rest') {
     subject = `${t.rest_day_subject} (${dateStr})`;
+  } else if (type === 'sick') {
+    const sickLabel = params.sickStatus?.isSick
+      ? (isNL ? 'Ziek' : 'Sick')
+      : (isNL ? 'Geblesseerd' : 'Injured');
+    subject = `[IntervalCoach] ${sickLabel} - ${isNL ? 'Rust en herstel' : 'Rest and recover'} (${dateStr})`;
   } else if (type === 'group_ride') {
     const eventName = params.cEventName || t.group_ride || 'Group Ride';
     subject = `${t.subject_prefix}${eventName} (${dateStr})`;
@@ -277,6 +286,57 @@ function sendDailyEmail(params) {
 
     if (advice.tips && advice.tips.length > 0) {
       body += `\n${isNL ? 'Tips' : 'Tips'}: ${advice.tips.join('. ')}\n`;
+    }
+
+  } else if (type === 'sick') {
+    // Sick/Injured day - no training allowed
+    const sickStatus = params.sickStatus;
+    const returnAdvice = params.returnAdvice;
+
+    const statusLabel = sickStatus?.isSick
+      ? (isNL ? 'Ziek' : 'Sick')
+      : (isNL ? 'Geblesseerd' : 'Injured');
+
+    body += `${statusLabel}: ${sickStatus?.event?.name || statusLabel}\n`;
+    body += isNL
+      ? `Periode: ${sickStatus?.event?.startDate} t/m ${sickStatus?.event?.endDate}\n`
+      : `Period: ${sickStatus?.event?.startDate} to ${sickStatus?.event?.endDate}\n`;
+
+    if (sickStatus?.event?.daysSinceStart >= 0) {
+      body += isNL
+        ? `Dag ${sickStatus.event.daysSinceStart + 1}`
+        : `Day ${sickStatus.event.daysSinceStart + 1}`;
+      if (sickStatus?.event?.daysRemaining > 0) {
+        body += isNL
+          ? `, nog ${sickStatus.event.daysRemaining} dag(en) rust gepland\n`
+          : `, ${sickStatus.event.daysRemaining} day(s) of rest remaining\n`;
+      } else {
+        body += isNL ? ' (laatste dag)\n' : ' (last day)\n';
+      }
+    }
+
+    body += '\n';
+
+    // Return to training advice
+    if (returnAdvice?.recommendation) {
+      body += isNL ? 'Advies: ' : 'Advice: ';
+      body += `${returnAdvice.recommendation}\n`;
+    } else {
+      body += isNL
+        ? 'Advies: Focus op rust en herstel. Geen training vandaag.\n'
+        : 'Advice: Focus on rest and recovery. No training today.\n';
+    }
+
+    // General sick/injured tips
+    body += '\n';
+    if (sickStatus?.isSick) {
+      body += isNL
+        ? 'Tips bij ziekte:\n• Drink voldoende\n• Slaap extra\n• Vermijd intensieve activiteit\n• Luister naar je lichaam\n'
+        : 'Tips when sick:\n• Stay hydrated\n• Get extra sleep\n• Avoid strenuous activity\n• Listen to your body\n';
+    } else {
+      body += isNL
+        ? 'Tips bij blessure:\n• Volg medisch advies\n• Rust de geblesseerde zone\n• Overweeg alternatieve activiteiten indien mogelijk\n• Wees geduldig met herstel\n'
+        : 'Tips for injury:\n• Follow medical advice\n• Rest the injured area\n• Consider alternative activities if possible\n• Be patient with recovery\n';
     }
 
   } else {

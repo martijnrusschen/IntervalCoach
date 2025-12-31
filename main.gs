@@ -128,6 +128,50 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
 
+  // ===== SICK/INJURED CHECK (highest priority) =====
+  // If athlete has marked themselves sick or injured in calendar, skip all training
+  const sickStatus = checkSickOrInjured();
+  if (sickStatus.isSick || sickStatus.isInjured) {
+    const status = sickStatus.isSick ? 'SICK' : 'INJURED';
+    Logger.log(`*** ${status} - No training today ***`);
+    Logger.log(`Event: ${sickStatus.event.name}`);
+    Logger.log(`Period: ${sickStatus.event.startDate} to ${sickStatus.event.endDate}`);
+    Logger.log(`Day ${sickStatus.event.daysSinceStart + 1}, ${sickStatus.event.daysRemaining} days remaining`);
+
+    const advice = getReturnToTrainingAdvice(sickStatus);
+
+    // Fetch minimal context for email
+    const fitnessMetrics = fetchFitnessMetrics();
+    const goals = fetchUpcomingGoals();
+    const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
+    const phaseInfo = calculateTrainingPhase(targetDate);
+    const upcomingDays = fetchUpcomingPlaceholders(7);
+
+    // Send sick/injured email
+    sendDailyEmail({
+      type: 'sick',
+      summary: fitnessMetrics,
+      phaseInfo: phaseInfo,
+      wellness: wellness,
+      upcomingDays: upcomingDays,
+      sickStatus: sickStatus,
+      returnAdvice: advice
+    });
+
+    Logger.log(`${status} day email sent - rest and recover`);
+    return;
+  }
+
+  // Check if recently sick/injured (for gradual return to training)
+  const recentSickStatus = checkRecentSickOrInjured(14);
+  if (recentSickStatus.wasRecent) {
+    const recent = recentSickStatus.mostRecent;
+    Logger.log(`Recently ${recent.type}: ${recent.name} (ended ${recent.daysSinceEnd} days ago)`);
+    const returnAdvice = getReturnToTrainingAdvice(recentSickStatus);
+    Logger.log(`Return-to-training: ${returnAdvice.recommendation || 'Normal training'}`);
+    Logger.log(`TSS multiplier: ${returnAdvice.tssMultiplier}, Max intensity: ${returnAdvice.maxIntensity}`);
+  }
+
   // Check for IntervalCoach placeholder in Intervals.icu calendar
   const availability = checkAvailability(wellness);
 

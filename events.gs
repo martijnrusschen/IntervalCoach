@@ -310,3 +310,172 @@ function getHolidayForWeek(weekStartDate, holidayData) {
 
   return null;
 }
+
+// =========================================================
+// SICK/INJURED DETECTION
+// =========================================================
+
+/**
+ * Check if athlete is currently sick or injured
+ * Looks for SICK or INJURED events that overlap with today
+ * @returns {object} { isSick, isInjured, status, event }
+ */
+function checkSickOrInjured() {
+  const today = formatDateISO(new Date());
+
+  // Fetch events for a range (sick/injured events can span multiple days)
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAhead = new Date();
+  weekAhead.setDate(weekAhead.getDate() + 7);
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${formatDateISO(weekAgo)}&newest=${formatDateISO(weekAhead)}`);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { isSick: false, isInjured: false, status: 'healthy', event: null };
+  }
+
+  // Find SICK or INJURED events that overlap with today
+  for (const e of result.data) {
+    if (e.category !== 'SICK' && e.category !== 'INJURED') continue;
+
+    const startDate = e.start_date_local?.substring(0, 10);
+    const endDate = e.end_date_local?.substring(0, 10) || startDate;
+
+    // Check if today falls within the event period
+    if (today >= startDate && today <= endDate) {
+      const daysRemaining = Math.ceil((new Date(endDate) - new Date(today)) / (1000 * 60 * 60 * 24));
+      const daysSinceStart = Math.ceil((new Date(today) - new Date(startDate)) / (1000 * 60 * 60 * 24));
+
+      return {
+        isSick: e.category === 'SICK',
+        isInjured: e.category === 'INJURED',
+        status: e.category.toLowerCase(),
+        event: {
+          id: e.id,
+          name: e.name || e.category,
+          description: e.description || null,
+          startDate: startDate,
+          endDate: endDate,
+          daysRemaining: daysRemaining,
+          daysSinceStart: daysSinceStart
+        }
+      };
+    }
+  }
+
+  return { isSick: false, isInjured: false, status: 'healthy', event: null };
+}
+
+/**
+ * Check if athlete was recently sick or injured (for return-to-training context)
+ * @param {number} daysBack - How many days to look back (default 14)
+ * @returns {object} { wasRecent, events: [...], mostRecent }
+ */
+function checkRecentSickOrInjured(daysBack) {
+  daysBack = daysBack || 14;
+
+  const today = new Date();
+  const pastDate = new Date(today);
+  pastDate.setDate(pastDate.getDate() - daysBack);
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${formatDateISO(pastDate)}&newest=${formatDateISO(today)}`);
+
+  if (!result.success || !Array.isArray(result.data)) {
+    return { wasRecent: false, events: [], mostRecent: null };
+  }
+
+  const events = result.data
+    .filter(e => e.category === 'SICK' || e.category === 'INJURED')
+    .map(e => {
+      const startDate = e.start_date_local?.substring(0, 10);
+      const endDate = e.end_date_local?.substring(0, 10) || startDate;
+      const endDateObj = new Date(endDate);
+      const daysSinceEnd = Math.ceil((today - endDateObj) / (1000 * 60 * 60 * 24));
+      const durationDays = Math.ceil((endDateObj - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
+
+      return {
+        type: e.category.toLowerCase(),
+        name: e.name || e.category,
+        description: e.description || null,
+        startDate: startDate,
+        endDate: endDate,
+        durationDays: durationDays,
+        daysSinceEnd: daysSinceEnd,
+        // Recovery multiplier: longer illness = longer recovery needed
+        recoveryMultiplier: durationDays <= 2 ? 1.0 : durationDays <= 5 ? 1.5 : 2.0
+      };
+    })
+    .filter(e => e.daysSinceEnd > 0) // Only past events, not current
+    .sort((a, b) => a.daysSinceEnd - b.daysSinceEnd);
+
+  return {
+    wasRecent: events.length > 0,
+    events: events,
+    mostRecent: events.length > 0 ? events[0] : null
+  };
+}
+
+/**
+ * Get return-to-training recommendations based on sick/injured status
+ * @param {object} sickStatus - Output from checkSickOrInjured() or checkRecentSickOrInjured()
+ * @returns {object} { shouldTrain, recommendation, tssMultiplier, maxIntensity }
+ */
+function getReturnToTrainingAdvice(sickStatus) {
+  // Currently sick/injured - no training
+  if (sickStatus.isSick || sickStatus.isInjured) {
+    return {
+      shouldTrain: false,
+      recommendation: sickStatus.isSick
+        ? 'Rest and recover. No training while sick.'
+        : 'Recovery period. Follow medical advice for injury.',
+      tssMultiplier: 0,
+      maxIntensity: 'none',
+      daysUntilNormal: sickStatus.event?.daysRemaining || 0
+    };
+  }
+
+  // Recently sick/injured - gradual return
+  if (sickStatus.wasRecent && sickStatus.mostRecent) {
+    const recent = sickStatus.mostRecent;
+    const daysSince = recent.daysSinceEnd;
+    const severity = recent.durationDays;
+
+    // Return-to-training protocol based on illness duration and days since recovery
+    if (daysSince <= 2) {
+      return {
+        shouldTrain: true,
+        recommendation: `Day ${daysSince} post-${recent.type}. Easy zone 1-2 only, max 30-45 min.`,
+        tssMultiplier: 0.3,
+        maxIntensity: 'Z2',
+        phase: 'initial'
+      };
+    } else if (daysSince <= 5) {
+      return {
+        shouldTrain: true,
+        recommendation: `Day ${daysSince} post-${recent.type}. Endurance only, monitor how you feel.`,
+        tssMultiplier: 0.5,
+        maxIntensity: 'Z3',
+        phase: 'building'
+      };
+    } else if (daysSince <= 7 && severity > 3) {
+      return {
+        shouldTrain: true,
+        recommendation: `Day ${daysSince} post-${recent.type} (${severity} days). Moderate intensity OK if feeling good.`,
+        tssMultiplier: 0.7,
+        maxIntensity: 'Z4',
+        phase: 'moderate'
+      };
+    }
+    // Beyond 7 days or short illness - back to normal
+  }
+
+  // Healthy - normal training
+  return {
+    shouldTrain: true,
+    recommendation: null,
+    tssMultiplier: 1.0,
+    maxIntensity: 'any',
+    phase: 'normal'
+  };
+}
