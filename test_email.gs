@@ -987,7 +987,7 @@ function testWeekLabels() {
     Logger.log("Zone progression failed: " + e.toString());
   }
 
-  const wellnessRecords = fetchWellnessData(7);
+  const wellnessRecords = fetchWellnessDataEnhanced(7);
   const wellnessSummary = createWellnessSummary(wellnessRecords);
   const deloadCheck = checkDeloadNeeded(fitnessMetrics, wellnessSummary);
 
