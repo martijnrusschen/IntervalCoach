@@ -4,6 +4,7 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Completed
 
+- [x] **AI Contextual Email Messages** - Generates personalized escape clause (low recovery + hard workout), eFTP motivation (gap to target), and race readiness notes via single AI call
 - [x] **Yesterday's Review in Daily Email** - Shows previous workout analysis (effectiveness, difficulty match, key insight) at top of daily email for training continuity
 - [x] **Multi-Workout Option Comparison** - Generates 3 workout options with AI scores, auto-selects best, shows all options in email
 - [x] **Anti-Monotony Engine** - Engaging workout structure: max 5-min blocks, cadence drills (65-105 RPM), 9 structure patterns, coach-like TextEvents in user's language
@@ -808,4 +809,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Displays pattern duration (consecutive days)
 - Provides training guidance
 
-*Last updated: 2025-12-31 (Added Aixle competitor analysis and inspired features)*
+*Last updated: 2026-01-01 (Added AI Contextual Email Messages)*
