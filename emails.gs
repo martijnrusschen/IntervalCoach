@@ -80,14 +80,13 @@ function buildWhoopStyleRestDayEmail(params, isNL) {
 
   // === MAIN NARRATIVE (flowing, conversational) ===
 
-  // Acknowledge yesterday's work
+  // Acknowledge yesterday's work (don't show TSS - week TSS is shown in week context)
   const lastWorkoutType = weekProgress?.completedTypes?.[weekProgress.completedTypes.length - 1];
-  const lastTSS = weekProgress?.tssCompleted || 0;
 
-  if (lastWorkoutType && lastTSS > 0) {
+  if (lastWorkoutType) {
     body += isNL
-      ? `Goed bezig gisteren met je ${lastWorkoutType} (${lastTSS} TSS). `
-      : `Nice work on yesterday's ${lastWorkoutType} (${lastTSS} TSS). `;
+      ? `Goed bezig gisteren met je ${lastWorkoutType}. `
+      : `Nice work on yesterday's ${lastWorkoutType}. `;
   }
 
   // Explain why rest day based on recovery color
