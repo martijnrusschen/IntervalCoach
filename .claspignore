@@ -8,6 +8,7 @@ README.md
 ROADMAP.md
 LICENSE
 CLAUDE.md
+deploy.sh
 .git/**
 .github/**
 
