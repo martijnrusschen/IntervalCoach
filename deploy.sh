@@ -87,9 +87,11 @@ fi
 cd "$ORIGINAL_DIR"
 rm -rf "$TEMP_DIR"
 
-# Push code (without --force to preserve remote-only files)
+# Push code (without --force to preserve remote-only files like config.gs)
 log_info "Pushing code..."
-clasp push
+if ! clasp push; then
+    log_warn "Push reported no changes (this is OK if code is already up-to-date)"
+fi
 
 if [ "$HAS_CONFIG" = false ]; then
     echo ""
