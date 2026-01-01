@@ -143,6 +143,20 @@ function testEmailStyles(emailType) {
   const upcomingDays = fetchUpcomingPlaceholders(7);
   const weekProgress = checkWeekProgress();
 
+  // Fetch last workout analysis for AI-generated yesterday acknowledgment
+  let lastWorkoutAnalysis = null;
+  try {
+    lastWorkoutAnalysis = getLastWorkoutAnalysis();
+    if (lastWorkoutAnalysis) {
+      Logger.log("Last workout analysis found: " + lastWorkoutAnalysis.activityName +
+                 " (" + lastWorkoutAnalysis.date + ") - Effectiveness: " + (lastWorkoutAnalysis.effectiveness || 'N/A'));
+    } else {
+      Logger.log("No last workout analysis available - yesterday acknowledgment will be skipped");
+    }
+  } catch (e) {
+    Logger.log("Could not fetch last workout analysis: " + e.toString());
+  }
+
   const types = emailType ? [emailType] : ['rest', 'workout', 'group_ride', 'race_day', 'sick'];
 
   types.forEach(type => {
@@ -151,7 +165,7 @@ function testEmailStyles(emailType) {
     Logger.log(`${'='.repeat(50)}\n`);
 
     let body = '';
-    const baseParams = { wellness, weekProgress, upcomingDays, summary: fitnessMetrics, phaseInfo };
+    const baseParams = { wellness, weekProgress, upcomingDays, summary: fitnessMetrics, phaseInfo, lastWorkoutAnalysis };
 
     if (type === 'rest') {
       body = buildWhoopStyleRestDayEmail(baseParams, isNL);
