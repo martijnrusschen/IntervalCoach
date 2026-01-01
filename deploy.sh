@@ -65,7 +65,7 @@ else
     log_info "Deploying to: default project"
 fi
 
-# Pull to temp dir to check for config.gs
+# Pull to temp dir to backup config.gs
 TEMP_DIR=$(mktemp -d)
 log_info "Checking for existing config.gs..."
 
@@ -77,8 +77,10 @@ clasp pull 2>/dev/null || true
 
 # Check if config.gs exists remotely (pulled as config.js)
 if [ -f "config.js" ]; then
-    log_info "Found existing config.gs - will be preserved"
+    log_info "Found existing config.gs - backing up"
     HAS_CONFIG=true
+    # Copy config.js to original dir so it gets pushed back
+    cp config.js "$ORIGINAL_DIR/config.gs.backup"
 else
     log_warn "No config.gs found - athlete needs to create it"
     HAS_CONFIG=false
@@ -87,10 +89,23 @@ fi
 cd "$ORIGINAL_DIR"
 rm -rf "$TEMP_DIR"
 
-# Push code (without --force to preserve remote-only files like config.gs)
+# If we have a config backup, temporarily make it available for push
+if [ "$HAS_CONFIG" = true ]; then
+    # Remove config.gs from .claspignore temporarily
+    sed -i.bak '/^config\.gs$/d' .claspignore
+    # Rename backup to config.gs
+    mv config.gs.backup config.gs
+fi
+
+# Push code
 log_info "Pushing code..."
-if ! clasp push; then
-    log_warn "Push reported no changes (this is OK if code is already up-to-date)"
+clasp push --force
+
+# Restore .claspignore and remove temp config.gs
+if [ "$HAS_CONFIG" = true ]; then
+    mv .claspignore.bak .claspignore
+    rm -f config.gs
+    log_info "Config.gs preserved on remote"
 fi
 
 if [ "$HAS_CONFIG" = false ]; then
