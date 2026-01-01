@@ -145,6 +145,50 @@ clasp pull
 clasp open
 ```
 
+## Multi-Athlete Deployment
+
+The project supports multiple athletes, each with their own Apps Script project and credentials.
+
+**File structure:**
+```
+.clasp.json          # Default project (Martijn)
+.clasp.eef.json      # Eef's project
+config.gs            # Your config (gitignored, managed in Apps Script UI)
+config.eef.gs        # Eef's config template (gitignored, for reference)
+deploy.sh            # Deploy script that preserves config.gs
+```
+
+**Deploy to an athlete's project:**
+```bash
+./deploy.sh          # Deploy to default (your own) project
+./deploy.sh eef      # Deploy to Eef's project
+```
+
+**How deploy.sh works:**
+1. Pulls config.gs from remote (backup)
+2. Pushes all code + config.gs back
+3. Cleans up local temp files
+4. Config.gs is always preserved
+
+**Adding a new athlete:**
+1. Create new Apps Script project for them
+2. Create `.clasp.{name}.json` with their script ID:
+   ```json
+   {
+     "scriptId": "their-script-id-here",
+     "rootDir": "."
+   }
+   ```
+3. Create `config.{name}.gs` as a template (gitignored)
+4. Athlete creates `config.gs` in their Apps Script UI with their credentials
+5. Deploy with `./deploy.sh {name}`
+
+**Important:**
+- Each athlete's `config.gs` contains their own API keys and settings
+- Config files are managed in Apps Script UI, not via clasp
+- Never use `clasp push --force` directly - it deletes config.gs
+- Always use `./deploy.sh` for safe deployments
+
 **Testing:**
 Run test functions manually in the Apps Script editor (Run button or Ctrl+R)
 
