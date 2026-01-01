@@ -5,6 +5,77 @@
  */
 
 // =========================================================
+// HELPER FUNCTIONS
+// =========================================================
+
+/**
+ * Build the "Previous Training" section for daily emails
+ * Shows last workout analysis in a consistent format across all email types
+ * @param {object} lastWorkoutAnalysis - Analysis from last workout
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string} Formatted section or empty string if no recent workout
+ */
+function buildPreviousTrainingSection(lastWorkoutAnalysis, isNL) {
+  if (!lastWorkoutAnalysis || !lastWorkoutAnalysis.date) {
+    return '';
+  }
+
+  const today = new Date();
+  const workoutDate = new Date(lastWorkoutAnalysis.date);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const workoutDayStart = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate());
+  const daysDiff = Math.round((todayStart - workoutDayStart) / (1000 * 60 * 60 * 24));
+
+  // Only show if workout was within last 3 days
+  if (daysDiff < 1 || daysDiff > 3) {
+    return '';
+  }
+
+  let whenLabel;
+  if (daysDiff === 1) {
+    whenLabel = isNL ? 'Gisteren' : 'Yesterday';
+  } else if (daysDiff === 2) {
+    whenLabel = isNL ? 'Eergisteren' : '2 days ago';
+  } else {
+    whenLabel = isNL ? '3 dagen geleden' : '3 days ago';
+  }
+
+  const activityName = lastWorkoutAnalysis.activityName || (isNL ? 'Training' : 'Workout');
+  const effectiveness = lastWorkoutAnalysis.effectiveness;
+  const difficultyMatch = lastWorkoutAnalysis.difficultyMatch;
+  const keyInsight = lastWorkoutAnalysis.keyInsight;
+
+  // Add empty line before section for mobile readability
+  let section = isNL ? '\n───── VORIGE TRAINING ─────\n' : '\n───── LAST WORKOUT ─────\n';
+  section += `${whenLabel}: ${activityName}`;
+  if (effectiveness) {
+    section += ` — ${effectiveness}/10`;
+  }
+  section += '\n';
+
+  // Difficulty match
+  if (difficultyMatch) {
+    let difficultyText;
+    if (difficultyMatch === 'easier_than_expected') {
+      difficultyText = isNL ? 'Makkelijker dan verwacht' : 'Easier than expected';
+    } else if (difficultyMatch === 'harder_than_expected') {
+      difficultyText = isNL ? 'Zwaarder dan verwacht' : 'Harder than expected';
+    } else {
+      difficultyText = isNL ? 'Zoals verwacht' : 'As expected';
+    }
+    section += `${isNL ? 'Moeilijkheid' : 'Difficulty'}: ${difficultyText}\n`;
+  }
+
+  // Key insight (if available and not too long)
+  if (keyInsight && keyInsight.length < 150) {
+    section += `${keyInsight}\n`;
+  }
+
+  section += '\n';
+  return section;
+}
+
+// =========================================================
 // UNIFIED DAILY EMAIL
 // =========================================================
 
@@ -78,13 +149,10 @@ function buildWhoopStyleRestDayEmail(params, isNL) {
   }
   body += '═══════════════════════════════════════\n\n';
 
-  // === MAIN NARRATIVE (flowing, conversational) ===
+  // === PREVIOUS TRAINING SECTION ===
+  body += buildPreviousTrainingSection(lastWorkoutAnalysis, isNL);
 
-  // Acknowledge yesterday's work using AI-generated personalized message
-  const yesterdayAck = generateYesterdayAcknowledgment(lastWorkoutAnalysis, wellness, isNL);
-  if (yesterdayAck) {
-    body += yesterdayAck + ' ';
-  }
+  // === MAIN NARRATIVE (flowing, conversational) ===
 
   // Explain why rest day based on recovery color
   if (recoveryColor === (isNL ? 'geel' : 'yellow')) {
@@ -248,6 +316,17 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
 
   const workoutType = workout?.type || 'Workout';
 
+  // Generate AI contextual messages
+  const currentEftp = powerProfile?.currentEftp || powerProfile?.eFTP;
+  const targetFtp = powerProfile?.manualFTP;
+  const aiMessages = generateContextualEmailMessages({
+    emailType: 'workout',
+    recovery: recovery,
+    workoutType: workoutType,
+    currentEftp: currentEftp,
+    targetFtp: targetFtp
+  }, isNL);
+
   let body = '';
 
   // === GREETING ===
@@ -315,71 +394,29 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
   }
 
   // === YESTERDAY'S REVIEW ===
-  if (lastWorkoutAnalysis && lastWorkoutAnalysis.date) {
-    // Calculate days since workout
-    const workoutDate = new Date(lastWorkoutAnalysis.date);
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const workoutDayStart = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate());
-    const daysDiff = Math.round((todayStart - workoutDayStart) / (1000 * 60 * 60 * 24));
+  const prevTrainingSection = buildPreviousTrainingSection(lastWorkoutAnalysis, isNL);
+  if (prevTrainingSection) {
+    // Remove trailing newline to add workout-specific impact
+    body += prevTrainingSection.trimEnd() + '\n';
 
-    // Only show if workout was within last 3 days
-    if (daysDiff >= 1 && daysDiff <= 3) {
-      let whenLabel;
-      if (daysDiff === 1) {
-        whenLabel = isNL ? 'Gisteren' : 'Yesterday';
-      } else if (daysDiff === 2) {
-        whenLabel = isNL ? 'Eergisteren' : '2 days ago';
-      } else {
-        whenLabel = isNL ? '3 dagen geleden' : '3 days ago';
-      }
-
-      const activityName = lastWorkoutAnalysis.activityName || (isNL ? 'Training' : 'Workout');
-      const effectiveness = lastWorkoutAnalysis.effectiveness;
-      const difficultyMatch = lastWorkoutAnalysis.difficultyMatch;
-      const keyInsight = lastWorkoutAnalysis.keyInsight;
-
-      body += isNL ? '───── VORIGE TRAINING ─────\n' : '───── LAST WORKOUT ─────\n';
-      body += `${whenLabel}: ${activityName}`;
-      if (effectiveness) {
-        body += ` — ${effectiveness}/10`;
-      }
-      body += '\n';
-
-      // Difficulty match
-      if (difficultyMatch) {
-        let difficultyText;
-        if (difficultyMatch === 'easier_than_expected') {
-          difficultyText = isNL ? 'Makkelijker dan verwacht' : 'Easier than expected';
-        } else if (difficultyMatch === 'harder_than_expected') {
-          difficultyText = isNL ? 'Zwaarder dan verwacht' : 'Harder than expected';
-        } else {
-          difficultyText = isNL ? 'Zoals verwacht' : 'As expected';
-        }
-        body += `${isNL ? 'Moeilijkheid' : 'Difficulty'}: ${difficultyText}\n`;
-      }
-
-      // Key insight (if available and not too long)
-      if (keyInsight && keyInsight.length < 150) {
-        body += `${keyInsight}\n`;
-      }
-
-      // How it affects today
-      if (difficultyMatch === 'harder_than_expected') {
-        body += isNL
-          ? '→ Vandaag aangepast: lagere intensiteit aanbevolen.\n'
-          : '→ Today adjusted: lower intensity recommended.\n';
-      } else if (difficultyMatch === 'easier_than_expected' && effectiveness >= 7) {
-        body += isNL
-          ? '→ Je kunt vandaag wat meer aan.\n'
-          : '→ You can push a bit more today.\n';
-      }
-
-      body += '\n';
+    // Add how yesterday affects today's workout (workout-specific logic)
+    const difficultyMatch = lastWorkoutAnalysis?.difficultyMatch;
+    const effectiveness = lastWorkoutAnalysis?.effectiveness;
+    if (difficultyMatch === 'harder_than_expected') {
+      body += isNL
+        ? '→ Vandaag aangepast: lagere intensiteit aanbevolen.\n'
+        : '→ Today adjusted: lower intensity recommended.\n';
+    } else if (difficultyMatch === 'easier_than_expected' && effectiveness >= 7) {
+      body += isNL
+        ? '→ Je kunt vandaag wat meer aan.\n'
+        : '→ You can push a bit more today.\n';
     }
+    body += '\n';
   }
 
   // === WORKOUT DETAILS ===
-  body += isNL ? `Vandaag: ${workoutType}\n\n` : `Today: ${workoutType}\n\n`;
+  body += isNL ? '\n───── TRAINING VANDAAG ─────\n' : '\n───── TODAY\'S WORKOUT ─────\n';
+  body += `${workoutType}\n\n`;
 
   // Add AI reasoning in conversational style
   if (workoutSelection?.reason) {
@@ -419,6 +456,11 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
     body += isNL
       ? `\n▶ = ${isNL ? 'geselecteerd' : 'selected'}  ✓ = ${isNL ? 'voldoet aan drempel' : 'meets threshold'}  ⚠ = ${isNL ? 'onder drempel' : 'below threshold'}\n\n`
       : `\n▶ = selected  ✓ = meets threshold  ⚠ = below threshold\n\n`;
+  }
+
+  // === ESCAPE CLAUSE (for hard workouts with low recovery) ===
+  if (aiMessages.escapeClause) {
+    body += aiMessages.escapeClause + '\n\n';
   }
 
   // === WEEK CONTEXT ===
@@ -474,6 +516,11 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
       body += `  ${shortDay}: ${description}\n`;
     });
     body += '\n';
+  }
+
+  // === eFTP TARGET MOTIVATION ===
+  if (aiMessages.eftpMotivation) {
+    body += aiMessages.eftpMotivation + '\n\n';
   }
 
   // === CLOSING ===
@@ -540,13 +587,11 @@ function buildWhoopStyleGroupRideEmail(params, isNL) {
   }
   body += '═══════════════════════════════════════\n\n';
 
-  // === YESTERDAY ACKNOWLEDGMENT ===
-  const yesterdayAck = generateYesterdayAcknowledgment(lastWorkoutAnalysis, wellness, isNL);
-  if (yesterdayAck) {
-    body += yesterdayAck + '\n\n';
-  }
+  // === PREVIOUS TRAINING SECTION ===
+  body += buildPreviousTrainingSection(lastWorkoutAnalysis, isNL);
 
   // === EVENT DETAILS ===
+  body += isNL ? '\n───── GROEPSRIT VANDAAG ─────\n' : '\n───── TODAY\'S GROUP RIDE ─────\n';
   body += `${eventName}`;
   if (cEventDescription) {
     body += ` - ${cEventDescription}`;
@@ -657,7 +702,7 @@ function buildWhoopStyleGroupRideEmail(params, isNL) {
  * Build Whoop-style race day email - focused, motivational, strategic
  */
 function buildWhoopStyleRaceDayEmail(params, isNL) {
-  const { wellness, weekProgress, raceName, raceCategory, raceDescription, raceDayAdvice } = params;
+  const { wellness, weekProgress, raceName, raceCategory, raceDescription, raceDayAdvice, lastWorkoutAnalysis, powerProfile } = params;
   const today = new Date();
   const dayNames = isNL
     ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
@@ -687,7 +732,30 @@ function buildWhoopStyleRaceDayEmail(params, isNL) {
   }
 
   const advice = raceDayAdvice || {};
-  const readiness = (advice.readiness || 'unknown').toUpperCase();
+  const rawReadiness = (advice.readiness || 'unknown').toLowerCase();
+
+  // Translate readiness for Dutch (more natural phrasing)
+  const readinessTranslations = {
+    'optimal': { nl: 'OPTIMAAL', en: 'OPTIMAL' },
+    'good': { nl: 'GOED', en: 'GOOD' },
+    'moderate': { nl: 'MATIG', en: 'MODERATE' },
+    'compromised': { nl: 'BEPERKT', en: 'COMPROMISED' },
+    'low': { nl: 'LAAG', en: 'LOW' },
+    'unknown': { nl: 'ONBEKEND', en: 'UNKNOWN' }
+  };
+  const readinessLabel = readinessTranslations[rawReadiness] || { nl: rawReadiness.toUpperCase(), en: rawReadiness.toUpperCase() };
+
+  // Generate AI contextual messages
+  const currentEftp = powerProfile?.currentEftp || powerProfile?.eFTP;
+  const targetFtp = powerProfile?.manualFTP;
+  const aiMessages = generateContextualEmailMessages({
+    emailType: 'race',
+    recovery: recovery,
+    currentEftp: currentEftp,
+    targetFtp: targetFtp,
+    raceName: raceName,
+    readiness: rawReadiness
+  }, isNL);
 
   let body = '';
 
@@ -699,11 +767,15 @@ function buildWhoopStyleRaceDayEmail(params, isNL) {
   // === STATUS BANNER ===
   body += '═══════════════════════════════════════\n';
   body += isNL
-    ? `   ${raceCategory} RACE  •  ${readiness} PARAAT\n`
-    : `   ${raceCategory} RACE  •  ${readiness} READINESS\n`;
+    ? `   ${raceCategory} RACE  •  PARAATHEID: ${readinessLabel.nl}\n`
+    : `   ${raceCategory} RACE  •  READINESS: ${readinessLabel.en}\n`;
   body += '═══════════════════════════════════════\n\n';
 
+  // === PREVIOUS TRAINING SECTION ===
+  body += buildPreviousTrainingSection(lastWorkoutAnalysis, isNL);
+
   // === RACE INFO ===
+  body += isNL ? '\n───── RACE VANDAAG ─────\n' : '\n───── TODAY\'S RACE ─────\n';
   body += `${raceName}`;
   if (raceDescription) {
     body += `\n${raceDescription}`;
@@ -717,7 +789,10 @@ function buildWhoopStyleRaceDayEmail(params, isNL) {
       : `Recovery: ${recovery}% (${recoveryColor}). `;
   }
 
-  if (advice.readinessNote) {
+  // Prioritize AI-generated readiness note, then advice.readinessNote, then fallback
+  if (aiMessages.readinessNote) {
+    body += aiMessages.readinessNote;
+  } else if (advice.readinessNote) {
     body += advice.readinessNote;
   } else {
     if (recoveryColor === (isNL ? 'groen' : 'green')) {
@@ -775,6 +850,11 @@ function buildWhoopStyleRaceDayEmail(params, isNL) {
       body += `• ${tip}\n`;
     });
     body += '\n';
+  }
+
+  // === eFTP TARGET MOTIVATION ===
+  if (aiMessages.eftpMotivation) {
+    body += aiMessages.eftpMotivation + '\n\n';
   }
 
   // === CLOSING ===
@@ -2614,10 +2694,11 @@ function sendMonthlyProgressEmail() {
   }
 
   // Helper for formatting differences
-  const formatDiff = function(val, suffix) {
+  const formatDiff = function(val, suffix, decimals) {
     if (val == null || val === 0) return '';
     const sign = val > 0 ? '+' : '';
-    return ` (${sign}${Math.round(val)}${suffix || ''})`;
+    const formatted = decimals != null ? val.toFixed(decimals) : Math.round(val);
+    return ` (${sign}${formatted}${suffix || ''})`;
   };
 
   // ══════════════════════════════════════════════════════════════
@@ -2661,7 +2742,7 @@ function sendMonthlyProgressEmail() {
   const ctlChange = currentMonth.fitness.ctlEnd - currentMonth.fitness.ctlStart;
 
   body += `Start: ${currentMonth.fitness.ctlStart.toFixed(1)}\n`;
-  body += `Eind: ${currentMonth.fitness.ctlEnd.toFixed(1)}${formatDiff(ctlChange)}\n`;
+  body += `Eind: ${currentMonth.fitness.ctlEnd.toFixed(1)}${formatDiff(ctlChange, '', 1)}\n`;
 
   // Trend visualization
   body += isNL ? 'Trend: [ ' : 'Trend: [ ';
@@ -2801,18 +2882,77 @@ function sendMonthlyProgressEmail() {
     if (fourWeekOutlook && fourWeekOutlook.weeks) {
       body += isNL ? '\nWeekschema:\n' : '\nWeekly schedule:\n';
 
+      // Week type translations
+      const weekTypeTranslations = {
+        'Build': 'Opbouw',
+        'Recovery': 'Herstel',
+        'Recovery (tentative)': 'Herstel (optioneel)',
+        'Race Week': 'Wedstrijdweek',
+        'Taper': 'Taper',
+        'Holiday': 'Vakantie',
+        'Pre-Holiday Push': 'Pre-vakantie push'
+      };
+
+      // Focus text translations
+      const focusTranslations = {
+        'Endurance': 'Duurzaamheid',
+        'Tempo': 'Tempo',
+        'Threshold': 'Drempel',
+        'VO2max': 'VO2max',
+        'Anaerobic': 'Anaeroob',
+        'Endurance volume': 'Duurzaamheid volume',
+        'Aerobic base': 'Aerobe basis',
+        'Threshold development': 'Drempel ontwikkeling',
+        'VO2max introduction': 'VO2max introductie',
+        'Race-specific efforts': 'Wedstrijdspecifiek',
+        'Sharpening': 'Verscherpen',
+        'Freshness': 'Frisheid',
+        'Openers only': 'Alleen openers',
+        'Easy spinning': 'Rustig fietsen',
+        'Active recovery': 'Actief herstel',
+        'Freshness & race prep': 'Frisheid & wedstrijdvoorbereiding',
+        'Taper & race prep': 'Taper & wedstrijdvoorbereiding',
+        'Maintain sharpness, reduce volume': 'Behoud scherpte, verminder volume',
+        'Recovery week - body needs rest': 'Herstelweek - lichaam heeft rust nodig',
+        'Potential recovery - monitor wellness': 'Mogelijk herstel - monitor welzijn'
+      };
+
       for (let i = 0; i < fourWeekOutlook.weeks.length; i++) {
         const week = fourWeekOutlook.weeks[i];
         const weekType = isNL
-          ? (week.type === 'recovery' ? 'Herstel' : 'Opbouw')
-          : (week.type === 'recovery' ? 'Recovery' : 'Build');
+          ? (weekTypeTranslations[week.type] || week.type)
+          : week.type;
 
         body += isNL
-          ? `• Week ${i + 1}: ${weekType} (TSS doel: ${week.targetTss})`
-          : `• Week ${i + 1}: ${weekType} (TSS target: ${week.targetTss})`;
+          ? `• Week ${i + 1}: ${weekType} (TSS doel: ${week.tssTarget})`
+          : `• Week ${i + 1}: ${weekType} (TSS target: ${week.tssTarget})`;
 
         if (week.focus) {
-          body += ` - ${week.focus}`;
+          let focus = week.focus;
+          if (isNL) {
+            // Handle dynamic holiday focus texts
+            if (week.focus.startsWith('Planned rest:')) {
+              const holidayName = week.focus.replace('Planned rest: ', '');
+              focus = `Geplande rust: ${holidayName}`;
+            } else if (week.focus.startsWith('Push hard before')) {
+              const holidayName = week.focus.replace('Push hard before ', '');
+              focus = `Extra hard trainen voor ${holidayName}`;
+            } else {
+              focus = focusTranslations[week.focus] || week.focus;
+            }
+            // In Base phase, prefix high-intensity focuses with "Prikkel:" to clarify it's a stimulus
+            const highIntensityFocuses = ['VO2max', 'Anaeroob'];
+            if (phaseInfo?.phaseName === 'Base' && highIntensityFocuses.includes(focus)) {
+              focus = `Prikkel: ${focus}`;
+            }
+          } else {
+            // English: prefix with "Stimulus:" in Base phase
+            const highIntensityFocuses = ['VO2max', 'Anaerobic'];
+            if (phaseInfo?.phaseName === 'Base' && highIntensityFocuses.includes(week.focus)) {
+              focus = `Stimulus: ${week.focus}`;
+            }
+          }
+          body += ` - ${focus}`;
         }
         body += '\n';
       }

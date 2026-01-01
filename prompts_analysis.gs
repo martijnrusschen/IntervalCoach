@@ -980,3 +980,130 @@ Return ONLY the sentence, nothing else.`;
     ? `Goed bezig ${whenLabel} met je ${activityName}.`
     : `Nice work on your ${activityName} ${whenLabel}.`;
 }
+
+// =========================================================
+// AI CONTEXTUAL EMAIL MESSAGES
+// =========================================================
+
+/**
+ * Generate contextual email messages via AI
+ * Creates personalized, context-aware messages for emails
+ * @param {object} context - Email context
+ * @param {string} context.emailType - 'workout' | 'race' | 'rest' | 'groupride'
+ * @param {number} context.recovery - Recovery percentage (0-100)
+ * @param {string} context.workoutType - Type of workout (e.g., 'Sweet Spot', 'VO2max')
+ * @param {number} context.currentEftp - Current eFTP in watts
+ * @param {number} context.targetFtp - Target FTP in watts
+ * @param {string} context.readiness - Race readiness level
+ * @param {string} context.raceName - Name of the race (for race day)
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {object} { escapeClause, eftpMotivation, readinessNote }
+ */
+function generateContextualEmailMessages(context, isNL) {
+  const langName = isNL ? 'Dutch' : 'English';
+  const emailType = context.emailType || 'workout';
+
+  // Determine what messages we need based on context
+  const needsEscapeClause = emailType === 'workout' &&
+    context.recovery != null && context.recovery < 40 &&
+    context.workoutType && /sweet[\s_]*spot|threshold|vo2|interval|tempo/i.test(context.workoutType);
+
+  const needsEftpMotivation = (emailType === 'workout' || emailType === 'race') &&
+    context.currentEftp && context.targetFtp && context.targetFtp > context.currentEftp;
+
+  const needsReadinessNote = emailType === 'race' && context.readiness;
+
+  // If no AI messages needed, return empty
+  if (!needsEscapeClause && !needsEftpMotivation && !needsReadinessNote) {
+    return { escapeClause: null, eftpMotivation: null, readinessNote: null };
+  }
+
+  // Build the prompt
+  let prompt = `You are a friendly cycling coach writing short, personalized messages for an athlete's daily email. Write in ${langName}.
+
+CONTEXT:
+- Email type: ${emailType}
+- Recovery: ${context.recovery != null ? context.recovery + '%' : 'unknown'}
+- Workout type: ${context.workoutType || 'N/A'}
+- Current eFTP: ${context.currentEftp || 'N/A'}W
+- Target FTP: ${context.targetFtp || 'N/A'}W
+- Race: ${context.raceName || 'N/A'}
+- Readiness: ${context.readiness || 'N/A'}
+
+Generate the following messages as JSON. Each should be 1-2 sentences, conversational, no emojis unless specified:
+
+`;
+
+  const requestedFields = [];
+
+  if (needsEscapeClause) {
+    prompt += `
+1. "escapeClause": A safety message for when recovery is low (${context.recovery}%) but a hard workout (${context.workoutType}) is planned.
+   - Acknowledge the challenging situation
+   - Give permission to scale back if the intervals feel too hard after the first set
+   - Emphasize health over TSS
+   - Include the ⚠️ emoji at the start
+`;
+    requestedFields.push('escapeClause');
+  }
+
+  if (needsEftpMotivation) {
+    const gap = context.targetFtp - context.currentEftp;
+    if (emailType === 'race') {
+      prompt += `
+2. "eftpMotivation": A race day motivation message.
+   - Current eFTP is ${context.currentEftp}W, target is ${context.targetFtp}W (${gap}W gap)
+   - Mention smart pacing and nutrition (60-90g carbs/hour)
+   - Frame this race as an opportunity to test their progress toward the target
+   - Be motivating without over-promising
+`;
+    } else {
+      prompt += `
+2. "eftpMotivation": A workout motivation message.
+   - Current eFTP is ${context.currentEftp}W, target is ${context.targetFtp}W (${gap}W gap)
+   - Connect today's session to their long-term FTP goal
+   - Be encouraging but realistic
+`;
+    }
+    requestedFields.push('eftpMotivation');
+  }
+
+  if (needsReadinessNote) {
+    prompt += `
+3. "readinessNote": A brief note about their race readiness (${context.readiness}).
+   - If optimal/good: confident and ready
+   - If moderate: acknowledge it's not perfect but they can still perform
+   - If compromised/low: realistic about adjusting expectations, race smart
+`;
+    requestedFields.push('readinessNote');
+  }
+
+  prompt += `
+Return ONLY valid JSON with the requested fields: {${requestedFields.map(f => `"${f}": "..."`).join(', ')}}`;
+
+  try {
+    Logger.log("Generating AI contextual messages for " + emailType + "...");
+    const response = callGeminiAPIText(prompt);
+
+    if (response) {
+      const parsed = parseGeminiJsonResponse(response);
+      if (parsed) {
+        Logger.log("AI contextual messages generated: " + JSON.stringify(parsed));
+        return {
+          escapeClause: parsed.escapeClause || null,
+          eftpMotivation: parsed.eftpMotivation || null,
+          readinessNote: parsed.readinessNote || null
+        };
+      } else {
+        Logger.log("AI contextual messages: parseGeminiJsonResponse returned null");
+      }
+    } else {
+      Logger.log("AI contextual messages: callGeminiAPIText returned empty");
+    }
+  } catch (e) {
+    Logger.log("AI contextual messages failed: " + e.toString());
+  }
+
+  // Return nulls on failure - caller will use fallbacks
+  return { escapeClause: null, eftpMotivation: null, readinessNote: null };
+}

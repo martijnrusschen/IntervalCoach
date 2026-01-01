@@ -66,10 +66,11 @@ function testMonthlyEmail() {
     body += `${aiInsight}\n\n`;
   }
 
-  const formatDiff = function(val, suffix) {
+  const formatDiff = function(val, suffix, decimals) {
     if (val == null || val === 0) return '';
     const sign = val > 0 ? '+' : '';
-    return ` (${sign}${Math.round(val)}${suffix || ''})`;
+    const formatted = decimals != null ? val.toFixed(decimals) : Math.round(val);
+    return ` (${sign}${formatted}${suffix || ''})`;
   };
 
   // I. TRAININGSVOLUME
@@ -97,7 +98,7 @@ function testMonthlyEmail() {
 
   const ctlChange = currentMonth.fitness.ctlEnd - currentMonth.fitness.ctlStart;
   body += `Start: ${currentMonth.fitness.ctlStart.toFixed(1)}\n`;
-  body += `Eind: ${currentMonth.fitness.ctlEnd.toFixed(1)}${formatDiff(ctlChange)}\n`;
+  body += `Eind: ${currentMonth.fitness.ctlEnd.toFixed(1)}${formatDiff(ctlChange, '', 1)}\n`;
   body += (isNL ? 'Trend: [ ' : 'Trend: [ ') + currentMonth.weeklyData.map(w => w.ctl.toFixed(0)).join(' > ') + ' ]\n';
 
   body += '\n';
@@ -166,11 +167,76 @@ function testMonthlyEmail() {
     const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
     if (fourWeekOutlook && fourWeekOutlook.weeks) {
       body += isNL ? '\nWeekschema:\n' : '\nWeekly schedule:\n';
+
+      const weekTypeTranslations = {
+        'Build': 'Opbouw',
+        'Recovery': 'Herstel',
+        'Recovery (tentative)': 'Herstel (optioneel)',
+        'Race Week': 'Wedstrijdweek',
+        'Taper': 'Taper',
+        'Holiday': 'Vakantie',
+        'Pre-Holiday Push': 'Pre-vakantie push'
+      };
+
+      const focusTranslations = {
+        'Endurance': 'Duurzaamheid',
+        'Tempo': 'Tempo',
+        'Threshold': 'Drempel',
+        'VO2max': 'VO2max',
+        'Anaerobic': 'Anaeroob',
+        'Endurance volume': 'Duurzaamheid volume',
+        'Aerobic base': 'Aerobe basis',
+        'Threshold development': 'Drempel ontwikkeling',
+        'VO2max introduction': 'VO2max introductie',
+        'Race-specific efforts': 'Wedstrijdspecifiek',
+        'Sharpening': 'Verscherpen',
+        'Freshness': 'Frisheid',
+        'Openers only': 'Alleen openers',
+        'Easy spinning': 'Rustig fietsen',
+        'Active recovery': 'Actief herstel',
+        'Freshness & race prep': 'Frisheid & wedstrijdvoorbereiding',
+        'Taper & race prep': 'Taper & wedstrijdvoorbereiding',
+        'Maintain sharpness, reduce volume': 'Behoud scherpte, verminder volume',
+        'Recovery week - body needs rest': 'Herstelweek - lichaam heeft rust nodig',
+        'Potential recovery - monitor wellness': 'Mogelijk herstel - monitor welzijn'
+      };
+
       for (let i = 0; i < fourWeekOutlook.weeks.length; i++) {
         const week = fourWeekOutlook.weeks[i];
-        const weekType = isNL ? (week.type === 'recovery' ? 'Herstel' : 'Opbouw') : (week.type === 'recovery' ? 'Recovery' : 'Build');
-        body += `• Week ${i + 1}: ${weekType} (TSS doel: ${week.targetTss})`;
-        if (week.focus) body += ` - ${week.focus}`;
+        const weekType = isNL
+          ? (weekTypeTranslations[week.type] || week.type)
+          : week.type;
+
+        body += isNL
+          ? `• Week ${i + 1}: ${weekType} (TSS doel: ${week.tssTarget})`
+          : `• Week ${i + 1}: ${weekType} (TSS target: ${week.tssTarget})`;
+
+        if (week.focus) {
+          let focus = week.focus;
+          if (isNL) {
+            if (week.focus.startsWith('Planned rest:')) {
+              const holidayName = week.focus.replace('Planned rest: ', '');
+              focus = `Geplande rust: ${holidayName}`;
+            } else if (week.focus.startsWith('Push hard before')) {
+              const holidayName = week.focus.replace('Push hard before ', '');
+              focus = `Extra hard trainen voor ${holidayName}`;
+            } else {
+              focus = focusTranslations[week.focus] || week.focus;
+            }
+            // In Base phase, prefix high-intensity focuses with "Prikkel:"
+            const highIntensityFocuses = ['VO2max', 'Anaeroob'];
+            if (phaseInfo?.phaseName === 'Base' && highIntensityFocuses.includes(focus)) {
+              focus = `Prikkel: ${focus}`;
+            }
+          } else {
+            // English: prefix with "Stimulus:" in Base phase
+            const highIntensityFocuses = ['VO2max', 'Anaerobic'];
+            if (phaseInfo?.phaseName === 'Base' && highIntensityFocuses.includes(week.focus)) {
+              focus = `Stimulus: ${week.focus}`;
+            }
+          }
+          body += ` - ${focus}`;
+        }
         body += '\n';
       }
     }
@@ -232,13 +298,15 @@ function testUnifiedDailyEmail(emailType) {
 
   // Add type-specific params
   if (type === 'workout') {
+    const powerCurve = fetchPowerCurve();
+    const powerProfile = analyzePowerProfile(powerCurve);
     emailParams.workout = {
       type: 'Test_Workout',
       explanation: 'This is a test workout explanation.',
       recommendationReason: 'Testing the unified email with a fake workout.',
       recommendationScore: 8
     };
-    emailParams.powerProfile = { available: false };
+    emailParams.powerProfile = powerProfile;
   } else if (type === 'rest') {
     emailParams.restAssessment = {
       reasoning: 'Test rest day reasoning - your body needs recovery.',
@@ -337,13 +405,16 @@ function testEmailStyles(emailType) {
       body = buildWhoopStyleRestDayEmail(baseParams, isNL);
 
     } else if (type === 'workout') {
+      const powerCurve = fetchPowerCurve();
+      const powerProfile = analyzePowerProfile(powerCurve);
       const params = {
         ...baseParams,
         workout: { type: 'Sweet_Spot' },
         workoutSelection: {
           reason: isNL ? 'Sweet Spot voor aerobe basis.' : 'Sweet Spot for aerobic base.',
           varietyNote: isNL ? 'Afwisseling in je training.' : 'Variety in training.'
-        }
+        },
+        powerProfile: powerProfile
       };
       body = buildWhoopStyleWorkoutEmail(params, isNL);
 
@@ -375,7 +446,7 @@ function testEmailStyles(emailType) {
       const raceDayAdvice = generateRaceDayAdvice(ctx);
       const params = {
         ...baseParams, raceName: 'Test Race', raceCategory: 'A',
-        raceDescription: '100km road race', raceDayAdvice
+        raceDescription: '100km road race', raceDayAdvice, powerProfile
       };
       body = buildWhoopStyleRaceDayEmail(params, isNL);
 

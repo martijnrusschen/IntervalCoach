@@ -1551,6 +1551,9 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
 
   const currentPhaseFocusList = phaseFocus[phaseInfo?.phaseName] || phaseFocus['Build'];
 
+  // Track if we've already scheduled a recovery week (only one per 4-week block)
+  let recoveryScheduledThisBlock = false;
+
   // Generate 4 weeks
   for (let w = 0; w < 4; w++) {
     const weekStart = new Date(currentMonday);
@@ -1620,6 +1623,7 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
       weekType = 'Holiday';
       tssMultiplier = 0.5;
       weekFocus = `Planned rest: ${holidayThisWeek.name}`;
+      recoveryScheduledThisBlock = true; // Holiday counts as recovery
     } else if (phaseInfo?.phaseName === 'Taper') {
       weekType = 'Taper';
       tssMultiplier = 0.6 - (w * 0.1); // Progressive taper
@@ -1634,11 +1638,14 @@ function generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, del
       weekType = 'Recovery';
       tssMultiplier = 0.6;
       weekFocus = 'Recovery week - body needs rest';
-    } else if (w > 0 && weeksWithoutDeload + w >= 4 && !events.some(e => e.category === 'A' || e.category === 'B') && !holidayComingSoon) {
+      recoveryScheduledThisBlock = true;
+    } else if (w > 0 && !recoveryScheduledThisBlock && weeksWithoutDeload + w >= 4 && !events.some(e => e.category === 'A' || e.category === 'B') && !holidayComingSoon) {
       // Suggest recovery when fatigue likely accumulated (but skip if holiday provides recovery soon)
+      // Only schedule one recovery week per 4-week block
       weekType = 'Recovery (tentative)';
       tssMultiplier = 0.6;
       weekFocus = 'Potential recovery - monitor wellness';
+      recoveryScheduledThisBlock = true;
     } else {
       // Build week with progressive overload
       weekType = 'Build';

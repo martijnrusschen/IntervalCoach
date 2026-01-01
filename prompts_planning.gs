@@ -423,7 +423,9 @@ PARAGRAPH 4 - Forward Look:
 - One key focus area for next month
 - Motivating close that's genuine, not generic
 
-Write in a warm, conversational tone. Use "you" and "your" to make it personal. Do not use bullet points, headers, or emoji. Just write natural paragraphs that flow together.`;
+Write in a warm, conversational tone. Use "you" and "your" to make it personal. Do not use bullet points, headers, or emoji. Just write natural paragraphs that flow together.
+
+IMPORTANT: Do NOT start with a greeting like "Hi", "Hello", "Hoi", "Hey" or the athlete's name. The email already has a greeting. Start directly with your first observation or acknowledgment.`;
 
   try {
     const response = callGeminiAPIText(prompt);
@@ -432,7 +434,10 @@ Write in a warm, conversational tone. Use "you" and "your" to make it personal. 
       if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
         text = text.slice(1, -1);
       }
-      return text;
+      // Strip any leading greeting the AI might have added despite instructions
+      text = text.replace(/^(Hoi|Hi|Hello|Hey|Dear)[,!]?\s*/i, '');
+      text = text.replace(/^[A-Za-z]+,\s*\n\n?/i, ''); // Removes "Name,\n" pattern
+      return text.trim();
     }
   } catch (e) {
     Logger.log("Error generating monthly insight: " + e.toString());
