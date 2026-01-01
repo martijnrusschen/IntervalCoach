@@ -128,6 +128,18 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   const wellnessRecords = fetchWellnessDataEnhanced(30);
   const wellness = createWellnessSummary(wellnessRecords);
 
+  // Fetch last workout analysis early - available for all email types
+  let lastWorkoutAnalysis = null;
+  try {
+    lastWorkoutAnalysis = getLastWorkoutAnalysis();
+    if (lastWorkoutAnalysis) {
+      Logger.log("Last workout: " + lastWorkoutAnalysis.activityName +
+                 " - Effectiveness: " + (lastWorkoutAnalysis.effectiveness || 'N/A'));
+    }
+  } catch (e) {
+    Logger.log("Could not fetch last workout analysis: " + e.toString());
+  }
+
   // ===== SICK/INJURED CHECK (highest priority) =====
   // If athlete has marked themselves sick or injured in calendar, skip all training
   const sickStatus = checkSickOrInjured();
@@ -155,7 +167,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       wellness: wellness,
       upcomingDays: upcomingDays,
       sickStatus: sickStatus,
-      returnAdvice: advice
+      returnAdvice: advice,
+      lastWorkoutAnalysis: lastWorkoutAnalysis
     });
 
     Logger.log(`${status} day email sent - rest and recover`);
@@ -251,7 +264,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         raceName: availability.raceName,
         raceCategory: availability.raceCategory,
         raceDescription: availability.raceDescription,
-        raceDayAdvice: raceDayAdvice
+        raceDayAdvice: raceDayAdvice,
+        lastWorkoutAnalysis: lastWorkoutAnalysis
       });
 
     // Check if this is a C event (group ride) day
@@ -289,7 +303,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         upcomingDays: upcomingDays,
         cEventName: availability.cEventName,
         cEventDescription: availability.cEventDescription,
-        groupRideAdvice: groupRideAdvice
+        groupRideAdvice: groupRideAdvice,
+        lastWorkoutAnalysis: lastWorkoutAnalysis
       });
 
     } else {
@@ -316,7 +331,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         weekProgress: weekProgress,
         upcomingDays: upcomingDays,
         midWeekAdaptation: midWeekAdaptation,
-        raceDayAdvice: raceDayAdvice
+        raceDayAdvice: raceDayAdvice,
+        lastWorkoutAnalysis: lastWorkoutAnalysis
       });
     }
 
@@ -387,7 +403,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       wellness: wellness,
       weekProgress: weekProgress,
       upcomingDays: upcomingDays,
-      fitness: fitnessMetrics
+      fitness: fitnessMetrics,
+      lastWorkoutAnalysis: lastWorkoutAnalysis
     });
 
     Logger.log("Workout generation skipped - rest day email sent");
@@ -692,7 +709,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
         wellness: wellness,
         restAssessment: restAssessment,
         weekProgress: weekProgress,
-        upcomingDays: upcomingDays
+        upcomingDays: upcomingDays,
+        lastWorkoutAnalysis: lastWorkoutAnalysis
       });
 
       Logger.log("Workout generation skipped - rest day email sent");
@@ -759,17 +777,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log("Cross-sport equivalency failed (non-critical): " + e.toString());
   }
 
-  // Fetch last workout analysis for feedback-driven intensity adjustment
-  let lastWorkoutAnalysis = null;
-  try {
-    lastWorkoutAnalysis = getLastWorkoutAnalysis();
-    if (lastWorkoutAnalysis) {
-      Logger.log("Last workout feedback: " + lastWorkoutAnalysis.activityName +
-                 " - Difficulty: " + (lastWorkoutAnalysis.difficultyMatch || 'unknown'));
-    }
-  } catch (e) {
-    Logger.log("Last workout analysis fetch failed (non-critical): " + e.toString());
-  }
+  // Note: lastWorkoutAnalysis is fetched early in the function (after wellness)
+  // and is available throughout for all email types and prompt generation
 
   // Build warnings object to pass to prompt (so AI factors these into decisions)
   const warnings = {

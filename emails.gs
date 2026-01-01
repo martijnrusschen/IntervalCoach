@@ -30,7 +30,7 @@
  * @returns {string} Email body
  */
 function buildWhoopStyleRestDayEmail(params, isNL) {
-  const { wellness, weekProgress, upcomingDays, summary, phaseInfo } = params;
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, lastWorkoutAnalysis } = params;
   const today = new Date();
   const dayNames = isNL
     ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
@@ -80,13 +80,10 @@ function buildWhoopStyleRestDayEmail(params, isNL) {
 
   // === MAIN NARRATIVE (flowing, conversational) ===
 
-  // Acknowledge yesterday's work (don't show TSS - week TSS is shown in week context)
-  const lastWorkoutType = weekProgress?.completedTypes?.[weekProgress.completedTypes.length - 1];
-
-  if (lastWorkoutType) {
-    body += isNL
-      ? `Goed bezig gisteren met je ${lastWorkoutType}. `
-      : `Nice work on yesterday's ${lastWorkoutType}. `;
+  // Acknowledge yesterday's work using AI-generated personalized message
+  const yesterdayAck = generateYesterdayAcknowledgment(lastWorkoutAnalysis, wellness, isNL);
+  if (yesterdayAck) {
+    body += yesterdayAck + ' ';
   }
 
   // Explain why rest day based on recovery color
@@ -493,7 +490,7 @@ function buildWhoopStyleWorkoutEmail(params, isNL) {
  * Build Whoop-style group ride email - personal, conversational, data-driven
  */
 function buildWhoopStyleGroupRideEmail(params, isNL) {
-  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, cEventName, cEventDescription, groupRideAdvice } = params;
+  const { wellness, weekProgress, upcomingDays, summary, phaseInfo, cEventName, cEventDescription, groupRideAdvice, lastWorkoutAnalysis } = params;
   const today = new Date();
   const dayNames = isNL
     ? ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag']
@@ -542,6 +539,12 @@ function buildWhoopStyleGroupRideEmail(params, isNL) {
     body += isNL ? '   GROEPSRIT\n' : '   GROUP RIDE\n';
   }
   body += '═══════════════════════════════════════\n\n';
+
+  // === YESTERDAY ACKNOWLEDGMENT ===
+  const yesterdayAck = generateYesterdayAcknowledgment(lastWorkoutAnalysis, wellness, isNL);
+  if (yesterdayAck) {
+    body += yesterdayAck + '\n\n';
+  }
 
   // === EVENT DETAILS ===
   body += `${eventName}`;

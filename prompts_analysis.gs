@@ -863,3 +863,120 @@ function createFallbackImpactPreview(impactData) {
     recommendation: recommendation
   };
 }
+
+// =========================================================
+// YESTERDAY ACKNOWLEDGMENT
+// =========================================================
+
+/**
+ * Generate personalized acknowledgment of yesterday's workout using AI
+ * Creates a brief, meaningful sentence about the last workout
+ * @param {object} lastWorkoutAnalysis - Data from getLastWorkoutAnalysis()
+ * @param {object} wellness - Current wellness summary
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string|null} Personalized acknowledgment or null if no recent workout
+ */
+function generateYesterdayAcknowledgment(lastWorkoutAnalysis, wellness, isNL) {
+  if (!lastWorkoutAnalysis || !lastWorkoutAnalysis.date) {
+    return null;
+  }
+
+  // Check if workout is within 3 days
+  const workoutDate = new Date(lastWorkoutAnalysis.date);
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const workoutDayStart = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate());
+  const daysDiff = Math.floor((todayStart - workoutDayStart) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff > 3 || daysDiff < 1) {
+    return null;
+  }
+
+  // Build when label
+  let whenLabel;
+  if (daysDiff === 1) {
+    whenLabel = isNL ? 'gisteren' : 'yesterday';
+  } else if (daysDiff === 2) {
+    whenLabel = isNL ? 'eergisteren' : '2 days ago';
+  } else {
+    whenLabel = isNL ? '3 dagen geleden' : '3 days ago';
+  }
+
+  const langName = getPromptLanguage();
+  const lw = lastWorkoutAnalysis;
+
+  // Build context for AI
+  let difficultyContext = '';
+  if (lw.difficultyMatch === 'harder_than_expected') {
+    difficultyContext = isNL ? 'voelde zwaarder dan verwacht' : 'felt harder than expected';
+  } else if (lw.difficultyMatch === 'easier_than_expected') {
+    difficultyContext = isNL ? 'voelde makkelijker dan verwacht' : 'felt easier than expected';
+  } else {
+    difficultyContext = isNL ? 'voelde zoals gepland' : 'matched expectations';
+  }
+
+  // Recovery context
+  const recovery = wellness?.today?.recovery;
+  let recoveryContext = '';
+  if (recovery != null) {
+    if (recovery < 34) {
+      recoveryContext = isNL
+        ? 'Je lichaam verwerkt die inspanning nog.'
+        : 'Your body is still processing that effort.';
+    } else if (recovery < 67) {
+      recoveryContext = isNL
+        ? 'Je herstel vordert goed.'
+        : 'Your recovery is progressing well.';
+    } else {
+      recoveryContext = isNL
+        ? 'Je bent goed hersteld.'
+        : 'You\'ve recovered well.';
+    }
+  }
+
+  const prompt = `You are a cycling/running coach giving a brief acknowledgment of a recent workout.
+
+Language: ${langName}
+
+Workout details:
+- Activity: ${lw.activityName || 'Training'}
+- When: ${whenLabel}
+- TSS: ${lw.tss || 'unknown'}
+- Effectiveness score: ${lw.effectiveness || 'unknown'}/10
+- Difficulty: ${difficultyContext}
+- Key insight from analysis: ${lw.keyInsight || 'none'}
+${recoveryContext ? '- Current recovery status: ' + recoveryContext : ''}
+
+Write a single conversational sentence (max 20 words) acknowledging this workout.
+- Be specific about what they did
+- Reference the key insight if relevant
+- Connect to their current recovery state if relevant
+- Tone: warm but not over-the-top positive
+- Do NOT use emojis
+
+Return ONLY the sentence, nothing else.`;
+
+  try {
+    const response = callGeminiAPI(prompt);
+
+    if (response && response.text) {
+      // Clean up the response
+      let text = response.text.trim();
+      // Remove quotes if present
+      text = text.replace(/^["']|["']$/g, '');
+      // Ensure it ends with proper punctuation
+      if (!/[.!?]$/.test(text)) {
+        text += '.';
+      }
+      return text;
+    }
+  } catch (e) {
+    Logger.log("AI yesterday acknowledgment failed: " + e.toString());
+  }
+
+  // Fallback to simple static acknowledgment
+  const activityName = lw.activityName || (isNL ? 'Training' : 'Workout');
+  return isNL
+    ? `Goed bezig ${whenLabel} met je ${activityName}.`
+    : `Nice work on your ${activityName} ${whenLabel}.`;
+}
