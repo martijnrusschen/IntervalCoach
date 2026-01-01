@@ -154,6 +154,18 @@ function buildWhoopStyleRestDayEmail(params, isNL) {
     ? `Vandaag draait om herstel. Actief herstel mag - een wandeling van 20-30 minuten houdt de bloedsomloop op gang zonder stress toe te voegen. Geen intensiteit.\n\n`
     : `Today is about recovery. Active recovery is fine - a 20-30 minute walk keeps blood flowing without adding stress. No intensity.\n\n`;
 
+  // === RESCHEDULE SUGGESTION ===
+  // Check if there was a workout scheduled for today that can be moved
+  if (upcomingDays && upcomingDays.length > 0) {
+    const todayPlaceholder = upcomingDays[0];
+    if (todayPlaceholder && todayPlaceholder.activityType) {
+      const reschedule = suggestWorkoutReschedule(todayPlaceholder, upcomingDays, wellness, weekProgress);
+      if (reschedule && reschedule.suggestReschedule) {
+        body += formatRescheduleSuggestion(reschedule, isNL);
+      }
+    }
+  }
+
   // === LOOKING AHEAD ===
   const futureWorkouts = upcomingDays?.filter((d, i) => i > 0 && (d.activityType || d.hasEvent || d.placeholderName));
   if (futureWorkouts && futureWorkouts.length > 0) {

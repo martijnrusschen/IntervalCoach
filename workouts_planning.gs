@@ -1323,6 +1323,174 @@ function createWeeklyPlanPlaceholder(date, activityType, name, description) {
 }
 
 // =========================================================
+// RESCHEDULE SUGGESTIONS
+// =========================================================
+
+/**
+ * Suggest the best day to reschedule today's workout when a rest day is recommended
+ * Analyzes upcoming days to find optimal rescheduling candidates
+ * @param {object} todayPlaceholder - Today's planned workout { activityType, duration, placeholderName }
+ * @param {array} upcomingDays - Array of next 7 days from fetchUpcomingPlaceholders()
+ * @param {object} wellness - Wellness summary with recovery status
+ * @param {object} weekProgress - Week progress from checkWeekProgress()
+ * @returns {object} { suggestReschedule, candidates, reasoning, todayWorkout }
+ */
+function suggestWorkoutReschedule(todayPlaceholder, upcomingDays, wellness, weekProgress) {
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  const result = {
+    suggestReschedule: false,
+    candidates: [],
+    reasoning: '',
+    todayWorkout: null
+  };
+
+  // Check if there's actually a workout to reschedule today
+  if (!todayPlaceholder || !todayPlaceholder.activityType) {
+    result.reasoning = isNL ? 'Geen training gepland voor vandaag' : 'No workout scheduled for today';
+    return result;
+  }
+
+  result.todayWorkout = {
+    type: todayPlaceholder.activityType,
+    name: todayPlaceholder.placeholderName || todayPlaceholder.activityType,
+    duration: todayPlaceholder.duration
+  };
+
+  // Get recovery status
+  const recoveryStatus = wellness?.recoveryStatus || 'Unknown';
+  const isRedRecovery = recoveryStatus.includes('Red') || recoveryStatus.includes('Strained');
+  const isYellowRecovery = recoveryStatus.includes('Yellow') || recoveryStatus.includes('Moderate');
+
+  // Look through upcoming days (skip today = index 0)
+  const today = formatDateISO(new Date());
+
+  for (let i = 1; i < upcomingDays.length && i <= 5; i++) {
+    const day = upcomingDays[i];
+
+    // Skip days that already have workouts or events
+    if (day.activityType || day.hasEvent) {
+      continue;
+    }
+
+    // Skip tomorrow if recovery is very low (red)
+    if (i === 1 && isRedRecovery) {
+      continue;
+    }
+
+    // Calculate confidence based on various factors
+    let confidence = 'medium';
+    let reason = '';
+
+    if (i === 1) {
+      // Tomorrow - good if yellow recovery
+      confidence = isYellowRecovery ? 'medium' : 'high';
+      reason = isYellowRecovery
+        ? (isNL ? 'Morgen beschikbaar, maar recovery monitoren' : 'Tomorrow available, but monitor recovery')
+        : (isNL ? 'Morgen beschikbaar, verwacht goed hersteld' : 'Tomorrow available, expect good recovery');
+    } else if (i === 2) {
+      // Day after tomorrow - usually optimal for red recovery
+      confidence = 'high';
+      reason = isRedRecovery
+        ? (isNL ? 'Optimaal: extra dag herstel na lage recovery' : 'Optimal: extra recovery day after low recovery')
+        : (isNL ? 'Goed alternatief met voldoende rusttijd' : 'Good alternative with sufficient rest time');
+    } else if (i <= 4) {
+      // 3-4 days out - good backup option
+      confidence = 'medium';
+      reason = isNL ? 'Beschikbaar als langere rust nodig is' : 'Available if longer rest is needed';
+    } else {
+      // 5+ days - too far, affects weekly structure
+      confidence = 'low';
+      reason = isNL ? 'Ver weg - kan weekplanning verstoren' : 'Far out - may disrupt weekly planning';
+    }
+
+    result.candidates.push({
+      date: day.date,
+      dayName: day.dayName,
+      daysFromNow: i,
+      reason: reason,
+      confidence: confidence
+    });
+  }
+
+  // Set overall result
+  if (result.candidates.length > 0) {
+    result.suggestReschedule = true;
+
+    // Build reasoning based on recovery status
+    if (isRedRecovery) {
+      result.reasoning = isNL
+        ? `Je ${result.todayWorkout.name} staat vandaag gepland, maar met lage recovery is rust nu belangrijker. `
+        : `Your ${result.todayWorkout.name} is scheduled for today, but with low recovery, rest is more important right now. `;
+    } else if (isYellowRecovery) {
+      result.reasoning = isNL
+        ? `Je ${result.todayWorkout.name} kan vandaag, maar verschuiven geeft je lichaam meer tijd om te herstellen. `
+        : `Your ${result.todayWorkout.name} could be done today, but rescheduling gives your body more time to recover. `;
+    } else {
+      result.reasoning = isNL
+        ? `Vandaag is strategische rust. Je ${result.todayWorkout.name} kan naar een andere dag. `
+        : `Today is strategic rest. Your ${result.todayWorkout.name} can be moved to another day. `;
+    }
+  } else {
+    result.reasoning = isNL
+      ? 'Geen geschikte dagen gevonden om te verschuiven (komende dagen al bezet of events).'
+      : 'No suitable days found for rescheduling (upcoming days already have workouts or events).';
+  }
+
+  return result;
+}
+
+/**
+ * Format reschedule suggestion for email display
+ * @param {object} reschedule - Output from suggestWorkoutReschedule()
+ * @param {boolean} isNL - Dutch language flag
+ * @returns {string} Formatted section for email
+ */
+function formatRescheduleSuggestion(reschedule, isNL) {
+  if (!reschedule || !reschedule.suggestReschedule || reschedule.candidates.length === 0) {
+    return '';
+  }
+
+  let section = '';
+
+  // Header
+  section += isNL
+    ? '\n━━━ TRAINING VERSCHUIVEN ━━━\n\n'
+    : '\n━━━ RESCHEDULE SUGGESTION ━━━\n\n';
+
+  // Context
+  section += reschedule.reasoning + '\n\n';
+
+  // Best options
+  const topCandidates = reschedule.candidates.slice(0, 2);
+  section += isNL ? 'Beste opties:\n' : 'Best options:\n';
+
+  topCandidates.forEach((candidate, idx) => {
+    const arrow = idx === 0 ? '→' : '○';
+    const dayLabel = isNL
+      ? candidate.dayName
+      : candidate.dayName;
+
+    const daysText = candidate.daysFromNow === 1
+      ? (isNL ? 'morgen' : 'tomorrow')
+      : (isNL ? `over ${candidate.daysFromNow} dagen` : `in ${candidate.daysFromNow} days`);
+
+    section += `  ${arrow} ${dayLabel} (${daysText}): ${candidate.reason}\n`;
+  });
+
+  section += '\n';
+
+  // Action hint
+  const workoutName = reschedule.todayWorkout?.name || 'training';
+  section += isNL
+    ? `Om te verschuiven: verplaats "${workoutName}" in je Intervals.icu kalender.\n\n`
+    : `To reschedule: move "${workoutName}" in your Intervals.icu calendar.\n\n`;
+
+  return section;
+}
+
+// =========================================================
 // FOUR-WEEK OUTLOOK
 // =========================================================
 

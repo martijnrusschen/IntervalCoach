@@ -1116,6 +1116,88 @@ function testYesterdaysReviewDayLabels() {
 }
 
 /**
+ * Test reschedule suggestion feature
+ * Shows how the system suggests alternative days when a rest day is recommended
+ */
+function testRescheduleSuggestion() {
+  Logger.log("=== RESCHEDULE SUGGESTION TEST ===\n");
+  requireValidConfig();
+
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  // Fetch real data
+  const wellnessRecords = fetchWellnessData(7);
+  const wellness = createWellnessSummary(wellnessRecords);
+  const upcomingDays = fetchUpcomingPlaceholders(7);
+  const weekProgress = checkWeekProgress();
+
+  Logger.log("Current wellness status: " + (wellness?.recoveryStatus || "Unknown"));
+  Logger.log("Recovery %: " + (wellness?.today?.recovery || "N/A"));
+
+  Logger.log("\nUpcoming days:");
+  upcomingDays.forEach((day, i) => {
+    const activity = day.activityType || (day.hasEvent ? `[${day.eventCategory}] Event` : "-");
+    Logger.log(`  ${i === 0 ? '>' : ' '} ${day.dayName} (${day.date}): ${activity}${day.placeholderName ? ' - ' + day.placeholderName : ''}`);
+  });
+
+  // Test with today's data
+  const todayPlaceholder = upcomingDays[0];
+
+  Logger.log("\n--- Testing with actual today's data ---");
+  const reschedule = suggestWorkoutReschedule(todayPlaceholder, upcomingDays, wellness, weekProgress);
+
+  Logger.log("\nResult:");
+  Logger.log("  Suggest reschedule: " + reschedule.suggestReschedule);
+  Logger.log("  Today's workout: " + JSON.stringify(reschedule.todayWorkout));
+  Logger.log("  Reasoning: " + reschedule.reasoning);
+
+  if (reschedule.candidates.length > 0) {
+    Logger.log("\n  Candidates:");
+    reschedule.candidates.forEach((c, i) => {
+      Logger.log(`    ${i + 1}. ${c.dayName} (${c.date}) - ${c.daysFromNow} days out`);
+      Logger.log(`       Confidence: ${c.confidence}`);
+      Logger.log(`       Reason: ${c.reason}`);
+    });
+  } else {
+    Logger.log("\n  No suitable reschedule candidates found.");
+  }
+
+  // Test formatted output
+  Logger.log("\n--- Formatted email section ---");
+  const formatted = formatRescheduleSuggestion(reschedule, isNL);
+  if (formatted) {
+    Logger.log(formatted);
+  } else {
+    Logger.log("(No reschedule section - no workout to reschedule or no candidates)");
+  }
+
+  // Test with mock low recovery
+  Logger.log("\n\n--- Testing with mock RED recovery ---");
+  const mockWellnessRed = {
+    ...wellness,
+    recoveryStatus: "Red - Strained",
+    today: { ...wellness?.today, recovery: 28 }
+  };
+
+  const mockTodayRun = {
+    activityType: "Run",
+    placeholderName: "Run - 45min",
+    duration: { min: 40, max: 50 }
+  };
+
+  const rescheduleRed = suggestWorkoutReschedule(mockTodayRun, upcomingDays, mockWellnessRed, weekProgress);
+  Logger.log("Result with red recovery:");
+  Logger.log("  Suggest reschedule: " + rescheduleRed.suggestReschedule);
+  Logger.log("  Reasoning: " + rescheduleRed.reasoning);
+  if (rescheduleRed.candidates.length > 0) {
+    Logger.log("  Best option: " + rescheduleRed.candidates[0].dayName + " (" + rescheduleRed.candidates[0].reason + ")");
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test creating week labels in Intervals.icu calendar
  * Creates NOTE events with week type (Build/Recovery/Race Week)
  */
