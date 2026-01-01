@@ -230,3 +230,34 @@ function testRawFitnessData() {
 
   Logger.log("\n=== TEST COMPLETE ===");
 }
+
+/**
+ * Test fetching recent rides for an athlete
+ */
+function testFetchRecentRides() {
+  Logger.log("=== RECENT RIDES TEST ===");
+
+  // Fetch last 7 days of activities
+  const result = fetchRecentActivityFeedback(7);
+  const activities = result.activities || [];
+
+  if (activities.length === 0) {
+    Logger.log("No activities found in the last 7 days");
+    return;
+  }
+
+  Logger.log("Found " + activities.length + " activities:\n");
+
+  activities.forEach(function(a, i) {
+    Logger.log((i + 1) + ". " + a.name);
+    Logger.log("   Type: " + a.type);
+    Logger.log("   Date: " + a.date);
+    Logger.log("   Duration: " + (a.duration ? Math.round(a.duration / 60) + " min" : "N/A"));
+    Logger.log("   TSS: " + (a.tss || "N/A"));
+    if (a.avgPower) Logger.log("   Avg Power: " + a.avgPower + "W");
+    if (a.avgHr) Logger.log("   Avg HR: " + a.avgHr + " bpm");
+    if (a.rpe) Logger.log("   RPE: " + a.rpe + "/10");
+    if (a.feel) Logger.log("   Feel: " + a.feel + "/5");
+    Logger.log("");
+  });
+}
