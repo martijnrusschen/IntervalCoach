@@ -957,11 +957,11 @@ Write a single conversational sentence (max 20 words) acknowledging this workout
 Return ONLY the sentence, nothing else.`;
 
   try {
-    const response = callGeminiAPI(prompt);
+    const response = callGeminiAPIText(prompt);
 
-    if (response && response.text) {
+    if (response) {
       // Clean up the response
-      let text = response.text.trim();
+      let text = response.trim();
       // Remove quotes if present
       text = text.replace(/^["']|["']$/g, '');
       // Ensure it ends with proper punctuation
