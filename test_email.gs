@@ -23,6 +23,172 @@ function testSimpleEmail() {
 }
 
 /**
+ * Test monthly email structure without sending
+ * Shows the email content in the log for review
+ */
+function testMonthlyEmail() {
+  Logger.log("=== MONTHLY EMAIL TEST ===\n");
+  requireValidConfig();
+
+  const t = getTranslations();
+  const lang = USER_SETTINGS.LANGUAGE || 'en';
+  const isNL = lang === 'nl';
+
+  Logger.log("Fetching monthly data...");
+  const currentMonth = fetchMonthlyProgressData(0);
+  const previousMonth = fetchMonthlyProgressData(1);
+
+  Logger.log(`Current month: ${currentMonth.monthName} ${currentMonth.monthYear}`);
+  Logger.log(`Previous month: ${previousMonth.monthName} ${previousMonth.monthYear}`);
+
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = goals?.available && goals?.primaryGoal
+    ? calculateTrainingPhase(goals.primaryGoal.date)
+    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+
+  Logger.log("Generating AI insight...");
+  const aiInsight = generateMonthlyInsight(currentMonth, previousMonth, phaseInfo, goals);
+
+  Logger.log("Fetching zone progression...");
+  const zoneProgression = getZoneProgression(true);
+  let zoneRecommendations = null;
+  if (zoneProgression && zoneProgression.available) {
+    zoneRecommendations = getZoneRecommendations(zoneProgression, phaseInfo, goals);
+  }
+
+  // Build the email body (same logic as sendMonthlyProgressEmail but don't send)
+  const athleteName = USER_SETTINGS.ATHLETE_NAME || (isNL ? 'atleet' : 'athlete');
+  let body = isNL
+    ? `Hoi ${athleteName},\n\n`
+    : `Hi ${athleteName},\n\n`;
+
+  if (aiInsight) {
+    body += `${aiInsight}\n\n`;
+  }
+
+  const formatDiff = function(val, suffix) {
+    if (val == null || val === 0) return '';
+    const sign = val > 0 ? '+' : '';
+    return ` (${sign}${Math.round(val)}${suffix || ''})`;
+  };
+
+  // I. TRAININGSVOLUME
+  body += '═══════════════════════════════════════\n';
+  body += isNL ? 'I. TRAININGSVOLUME\n' : 'I. TRAINING VOLUME\n';
+  body += '═══════════════════════════════════════\n';
+  body += isNL ? 'Vergelijking met vorige maand\n\n' : 'Comparison with previous month\n\n';
+
+  const tssChange = currentMonth.totals.tss - previousMonth.totals.tss;
+  const timeChange = currentMonth.totals.time - previousMonth.totals.time;
+  const activityChange = currentMonth.totals.activities - previousMonth.totals.activities;
+
+  body += (isNL ? 'Totaal TSS: ' : 'Total TSS: ') + `${currentMonth.totals.tss.toFixed(0)}${formatDiff(tssChange)}\n`;
+  body += (isNL ? 'Totaal Tijd: ' : 'Total Time: ') + `${formatDuration(currentMonth.totals.time)}${formatDiff(Math.round(timeChange / 60), ' min')}\n`;
+  body += (isNL ? 'Sessies: ' : 'Sessions: ') + `${currentMonth.totals.activities}${formatDiff(activityChange)}\n`;
+  body += (isNL ? 'Gem. per week: ' : 'Avg per week: ') + `${currentMonth.totals.avgWeeklyTss.toFixed(0)} TSS | ${formatDuration(currentMonth.totals.avgWeeklyTime)}\n\n`;
+  body += (isNL ? 'Wekelijkse verdeling (TSS): ' : 'Weekly breakdown (TSS): ');
+  body += currentMonth.weeklyData.map((w, i) => `W${i + 1}: ${w.totalTss.toFixed(0)}`).join(' | ') + '\n';
+
+  // II. FITNESS PROGRESSIE
+  body += '\n═══════════════════════════════════════\n';
+  body += isNL ? 'II. FITNESS PROGRESSIE (CTL)\n' : 'II. FITNESS PROGRESSION (CTL)\n';
+  body += '═══════════════════════════════════════\n';
+  body += isNL ? 'De CTL-waarde representeert je belastbaarheid op lange termijn.\n\n' : 'CTL represents your long-term training capacity.\n\n';
+
+  const ctlChange = currentMonth.fitness.ctlEnd - currentMonth.fitness.ctlStart;
+  body += `Start: ${currentMonth.fitness.ctlStart.toFixed(1)}\n`;
+  body += `Eind: ${currentMonth.fitness.ctlEnd.toFixed(1)}${formatDiff(ctlChange)}\n`;
+  body += (isNL ? 'Trend: [ ' : 'Trend: [ ') + currentMonth.weeklyData.map(w => w.ctl.toFixed(0)).join(' > ') + ' ]\n';
+
+  body += '\n';
+  if (ctlChange > 5) {
+    body += isNL ? 'Status: Sterke fitness opbouw. Goed werk!\n' : 'Status: Strong fitness build. Good work!\n';
+  } else if (ctlChange > 0) {
+    body += isNL ? 'Status: Geleidelijke opbouw. De basis groeit weer.\n' : 'Status: Gradual build. The base is growing again.\n';
+  } else if (ctlChange > -3) {
+    body += isNL ? 'Status: Fitness stabiel gehouden.\n' : 'Status: Fitness maintained.\n';
+  } else {
+    body += isNL ? 'Status: Fitness gedaald. Check of dit gepland was.\n' : 'Status: Fitness decreased. Check if this was planned.\n';
+  }
+
+  // III. ZONE ONTWIKKELING
+  if (zoneProgression && zoneProgression.available) {
+    body += '\n═══════════════════════════════════════\n';
+    body += isNL ? 'III. ZONE ONTWIKKELING\n' : 'III. ZONE DEVELOPMENT\n';
+    body += '═══════════════════════════════════════\n';
+    body += isNL ? 'Score op een schaal van 1-10\n\n' : 'Score on a scale of 1-10\n\n';
+
+    const prog = zoneProgression.progression;
+    const zoneLabels = { endurance: isNL ? 'DUURVERMOGEN' : 'ENDURANCE', tempo: 'TEMPO', threshold: isNL ? 'DREMPEL' : 'THRESHOLD', vo2max: 'VO2MAX', anaerobic: isNL ? 'ANAEROOB' : 'ANAEROBIC' };
+    const trendLabels = { improving: isNL ? 'Verbeterend' : 'Improving', stable: isNL ? 'Stabiel' : 'Stable', declining: isNL ? 'Dalend' : 'Declining' };
+
+    const zoneOrder = ['endurance', 'tempo', 'threshold', 'vo2max', 'anaerobic'];
+    for (const zone of zoneOrder) {
+      const data = prog[zone];
+      if (!data) continue;
+      const name = zoneLabels[zone];
+      const filled = Math.round(data.level);
+      const bar = '[' + '='.repeat(filled) + ' '.repeat(10 - filled) + ']';
+      const trend = trendLabels[data.trend] || data.trend;
+      body += `${name} ${bar} ${data.level.toFixed(1)} (${trend})\n`;
+    }
+
+    if (zoneRecommendations?.summary) {
+      body += '\n' + zoneRecommendations.summary + '\n';
+    }
+  }
+
+  // IV. PLANNING
+  const nextMonthName = isNL
+    ? ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'][new Date().getMonth()]
+    : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][new Date().getMonth()];
+
+  body += '\n═══════════════════════════════════════\n';
+  body += `IV. PLANNING ${nextMonthName.toUpperCase()}\n`;
+  body += '═══════════════════════════════════════\n';
+
+  if (goals?.available && goals?.primaryGoal) {
+    const goal = goals.primaryGoal;
+    body += (isNL ? `Doel: ${goal.name} (${goal.date})\n` : `Goal: ${goal.name} (${goal.date})\n`);
+    body += (isNL ? `Fase: ${phaseInfo.phaseName}\n\n` : `Phase: ${phaseInfo.phaseName}\n\n`);
+  }
+
+  body += isNL ? 'Maanddoelen:\n' : 'Monthly goals:\n';
+  const avgWeeklyTss = currentMonth.totals.avgWeeklyTss;
+  const targetTss = avgWeeklyTss < 150 ? Math.round(avgWeeklyTss * 1.15) : Math.round(avgWeeklyTss * 1.05);
+  body += (isNL ? `• Consistentie: Minimaal 4 sessies per week.\n` : `• Consistency: Minimum 4 sessions per week.\n`);
+  body += (isNL ? `• Volume: Toewerken naar ${targetTss} TSS/week.\n` : `• Volume: Work towards ${targetTss} TSS/week.\n`);
+  body += (isNL ? `• Focus: 80% van de tijd in Zone 2.\n` : `• Focus: 80% of time in Zone 2.\n`);
+
+  try {
+    const fitnessMetrics = fetchFitnessMetrics();
+    const deloadCheck = checkDeloadNeeded(fitnessMetrics, null);
+    const fourWeekOutlook = generateFourWeekOutlook(fitnessMetrics, phaseInfo, zoneProgression, deloadCheck);
+    if (fourWeekOutlook && fourWeekOutlook.weeks) {
+      body += isNL ? '\nWeekschema:\n' : '\nWeekly schedule:\n';
+      for (let i = 0; i < fourWeekOutlook.weeks.length; i++) {
+        const week = fourWeekOutlook.weeks[i];
+        const weekType = isNL ? (week.type === 'recovery' ? 'Herstel' : 'Opbouw') : (week.type === 'recovery' ? 'Recovery' : 'Build');
+        body += `• Week ${i + 1}: ${weekType} (TSS doel: ${week.targetTss})`;
+        if (week.focus) body += ` - ${week.focus}`;
+        body += '\n';
+      }
+    }
+  } catch (e) {
+    Logger.log("Four-week outlook failed: " + e.toString());
+  }
+
+  body += isNL ? '\nMet sportieve groet,\n' : '\nWith athletic regards,\n';
+  body += 'IntervalCoach\n';
+
+  Logger.log("\n" + "=".repeat(60));
+  Logger.log("MONTHLY EMAIL PREVIEW:");
+  Logger.log("=".repeat(60) + "\n");
+  Logger.log(body);
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Test unified daily email - tests all three types
  * @param {string} emailType - 'workout', 'rest', or 'status' (default: 'status')
  */
