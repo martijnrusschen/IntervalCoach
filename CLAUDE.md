@@ -133,42 +133,46 @@ This is a Google Apps Script project using clasp for deployment.
 - Always test features in Google Apps Script before committing and pushing.
 - Always update README.md when adding new features, functions, or configuration options.
 
-**Deployment with clasp:**
+**Deployment:**
 ```bash
-# Push local changes to Google Apps Script
-clasp push
+# Deploy to all athletes
+./deploy.sh
 
-# Pull remote changes (if edited in web UI)
-clasp pull
+# Deploy to specific athlete
+./deploy.sh martijn
+./deploy.sh eef
 
-# Open the script in browser
+# Open script in browser (safe to use directly)
 clasp open
+
+# Check clasp status (safe to use directly)
+clasp status
 ```
 
-## Multi-Athlete Deployment
+**IMPORTANT: Never use `clasp push` or `clasp pull` directly!**
+- Direct clasp commands bypass the config management system
+- `clasp push --force` deletes remote config.gs (contains API keys)
+- Always use `./deploy.sh` for all deployments
 
-The project supports multiple athletes, each with their own Apps Script project and credentials.
+## Multi-Athlete Setup
+
+Each athlete has their own Apps Script project with separate credentials.
 
 **File structure:**
 ```
-.clasp.json          # Default project (Martijn)
-.clasp.eef.json      # Eef's project
-config.gs            # Your config (gitignored, managed in Apps Script UI)
-config.eef.gs        # Eef's config template (gitignored, for reference)
-deploy.sh            # Deploy script that preserves config.gs
-```
-
-**Deploy to an athlete's project:**
-```bash
-./deploy.sh          # Deploy to default (your own) project
-./deploy.sh eef      # Deploy to Eef's project
+.clasp.martijn.json  # Martijn's project script ID
+.clasp.eef.json      # Eef's project script ID
+config.martijn.gs    # Martijn's config (gitignored)
+config.eef.gs        # Eef's config (gitignored)
+deploy.sh            # Deploy script that swaps configs per athlete
 ```
 
 **How deploy.sh works:**
-1. Pulls config.gs from remote (backup)
-2. Pushes all code + config.gs back
-3. Cleans up local temp files
-4. Config.gs is always preserved
+1. Swaps `.clasp.json` to target athlete's project
+2. Copies athlete's `config.{name}.gs` to `config.gs`
+3. Temporarily removes `config.gs` from `.claspignore`
+4. Pushes code with correct config
+5. Restores original state
 
 **Adding a new athlete:**
 1. Create new Apps Script project for them
@@ -179,15 +183,9 @@ deploy.sh            # Deploy script that preserves config.gs
      "rootDir": "."
    }
    ```
-3. Create `config.{name}.gs` as a template (gitignored)
-4. Athlete creates `config.gs` in their Apps Script UI with their credentials
+3. Create `config.{name}.gs` with their credentials (gitignored)
+4. Add athlete name to deploy.sh
 5. Deploy with `./deploy.sh {name}`
-
-**Important:**
-- Each athlete's `config.gs` contains their own API keys and settings
-- Config files are managed in Apps Script UI, not via clasp
-- Never use `clasp push --force` directly - it deletes config.gs
-- Always use `./deploy.sh` for safe deployments
 
 **Testing:**
 Run test functions manually in the Apps Script editor (Run button or Ctrl+R)
