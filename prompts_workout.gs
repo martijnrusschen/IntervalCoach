@@ -429,57 +429,59 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
 - Add 10-15s surges at end of some intervals ("kick practice")
 
 **3. WORKOUT FORMAT - Intervals.icu Text Syntax (Critical):**
-Generate the workout in Intervals.icu's native text format. This format syncs perfectly to Zwift with text messages.
+Generate the workout in Intervals.icu's native text format.
 
 **FORMAT STRUCTURE:**
 \`\`\`
 Warmup
-- [Message text] [duration] [power%]
+- [Short message] [duration] [power%] @[cadence]rpm
 
 Main Set
-- [Message text] [duration] [power%]
-- [Message text] [duration] [power%]
+- [Short message] [duration] [power%] @[cadence]rpm
 
 Cooldown
-- [Message text] [duration] [power%]
+- [Short message] [duration] [power%]
 \`\`\`
 
 **FORMAT RULES:**
-- Each line starting with "- " becomes a workout step WITH a text message
-- Duration: use "Xm" for minutes (e.g., "3m", "5m")
-- Power: use percentage of FTP (e.g., "65%", "88-92%", "40-60%" for ramps)
-- Cadence: add "@XXrpm" after power (e.g., "65% @95rpm")
-- **SPLIT LONG BLOCKS INTO SUB-STEPS** - each sub-step gets its own message!
+- Each line "- " = one workout step with a text message
+- Duration: "Xm" (e.g., "5m")
+- Power: FTP % (e.g., "65%", "88-92%" for ramps)
+- Cadence: "@XXrpm" - VARY this per Anti-Monotony rules!
+
+**COMBINING ANTI-MONOTONY WITH MESSAGES:**
+- Follow Anti-Monotony rules for STRUCTURE (max 5min blocks, varied cadence)
+- But keep MESSAGES short and functional
+- Not every block needs motivation - some can just describe the effort
+- Messages at key moments: start, intensity changes, final push, end
 
 **MESSAGE GUIDELINES (${analysisLang}):**
-- **Athlete name:** "${USER_SETTINGS.ATHLETE_NAME || 'Coach'}"
-- **WARMUP:** Personal greeting + explain today's workout
-- **MAIN SET:** Encouraging, technique cues, countdowns, cadence reminders
-- **COOLDOWN:** Congratulate by name + recovery tips
+- **Short and natural** - 1 sentence max
+- **Warmup**: Personal greeting with "${USER_SETTINGS.ATHLETE_NAME || 'Coach'}"
+- **Main Set**: Brief cues - cadence change, effort level, or encouragement at key points
+- **Cooldown**: Congratulate by name
 
-**EXAMPLE (30min Endurance):**
+**EXAMPLE (60min Endurance with Anti-Monotony):**
 \`\`\`
 Warmup
-- Goedemorgen ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! Rustig opwarmen. 2m 40-50%
-- Lekker de benen losmaken. 3m 50-60% @90rpm
+- Goedemorgen ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! 5m 40-55% @85rpm
 
 Main Set
-- Zoek je ritme. 4m 65% @85rpm
-- Goed zo! Schouders ontspannen. 3m 68% @90rpm
-- Even iets hoger tempo. 3m 70% @95rpm
-- Terug naar basis. 4m 65% @85rpm
-- Kracht block: laag toerental! 3m 68% @70rpm
-- Weer omhoog spinnen. 3m 65% @100rpm
+- Zoek je ritme. 5m 65% @90rpm
+- Iets meer druk. 4m 70% @85rpm
+- Laag toerental. 4m 68% @70rpm
+- Hoog toerental. 4m 65% @100rpm
+- Stabiel tempo. 5m 68% @90rpm
+- Micro-variatie. 4m 66-72% @85rpm
+- Tempo touch. 3m 75% @90rpm
+- Terug naar basis. 5m 65% @90rpm
+- Cadans drill. 3m 65% @95rpm
+- Kracht. 3m 68% @70rpm
+- Laatste blok. 5m 65% @90rpm
 
 Cooldown
-- Bijna klaar, goed gedaan! 3m 55-50%
-- Goed gedaan ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! 2m 50-40%
+- Goed gedaan ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! 5m 50-40%
 \`\`\`
-
-**CRITICAL: MAXIMUM 5 MINUTES PER STEP**
-- Split longer efforts into multiple sub-steps at same power
-- Each sub-step = new motivating message
-- This keeps the athlete engaged throughout
 
 **Workout Name:** "${zwiftDisplayName}"
 
