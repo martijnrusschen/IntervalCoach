@@ -198,7 +198,7 @@ function delay(ms) {
 // =========================================================
 
 /**
- * Parse Gemini API response, cleaning markdown code blocks
+ * Parse Gemini API response, cleaning markdown code blocks and fixing common JSON issues
  * @param {string} response - Raw response text from Gemini API
  * @returns {object|null} Parsed JSON object or null if parsing fails
  */
@@ -211,9 +211,17 @@ function parseGeminiJsonResponse(response) {
     let cleaned = response.trim();
     // Remove markdown code block wrappers
     cleaned = cleaned.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```$/g, '').trim();
+
+    // Fix trailing commas before ] or } (common LLM issue)
+    cleaned = cleaned.replace(/,(\s*[\]\}])/g, '$1');
+
     return JSON.parse(cleaned);
   } catch (e) {
     Logger.log("Error parsing Gemini JSON response: " + e.toString());
+
+    // Log first 500 chars of response for debugging
+    Logger.log("Response preview: " + response.substring(0, 500));
+
     return null;
   }
 }
