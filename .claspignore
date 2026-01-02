@@ -1,5 +1,4 @@
-# Ignore config files (each athlete manages their own in Apps Script UI)
-config.gs
+# Ignore config templates/backups (config.gs IS pushed to keep it in sync)
 config.*.gs
 config.sample.gs
 

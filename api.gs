@@ -201,9 +201,10 @@ function callGeminiAPI(prompt) {
 
         if (!result.explanation) throw new Error("Incomplete JSON: missing explanation");
 
-        const isRunWorkout = result.workoutDescription && !result.xml;
+        const isRunWorkout = result.workoutDescription && !result.workoutText && !result.xml;
 
         if (isRunWorkout) {
+          // Running workout - uses workoutDescription
           return {
             success: true,
             workoutDescription: result.workoutDescription,
@@ -211,9 +212,18 @@ function callGeminiAPI(prompt) {
             recommendationScore: result.recommendation_score || 5,
             recommendationReason: result.recommendation_reason || ""
           };
-        } else {
-          if (!result.xml) throw new Error("Incomplete JSON: missing xml");
-
+        } else if (result.workoutText) {
+          // Cycling workout - new text format
+          return {
+            success: true,
+            workoutText: result.workoutText,
+            workoutName: result.workoutName,
+            explanation: result.explanation,
+            recommendationScore: result.recommendation_score || 5,
+            recommendationReason: result.recommendation_reason || ""
+          };
+        } else if (result.xml) {
+          // Legacy ZWO format (backwards compatibility)
           let xml = result.xml.replace(/^```xml\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
 
           // Fix ZWO tag casing - Zwift is case-sensitive
@@ -236,6 +246,8 @@ function callGeminiAPI(prompt) {
             recommendationScore: result.recommendation_score || 5,
             recommendationReason: result.recommendation_reason || ""
           };
+        } else {
+          throw new Error("Incomplete JSON: missing workoutText or xml");
         }
       }
 
@@ -412,9 +424,13 @@ function generateMultipleWorkoutOptions(params) {
         const finalScore = result.recommendationScore || 5;
         Logger.log("  Generated: Score " + finalScore + "/10");
 
-        // Check for TextEvents in generated XML
-        const textEventCount = (result.xml || '').match(/<textevent/gi)?.length || 0;
-        Logger.log("  TextEvents in ZWO: " + textEventCount);
+        // Check format
+        if (result.workoutText) {
+          Logger.log("  Format: Intervals.icu text (" + result.workoutText.length + " chars)");
+        } else if (result.xml) {
+          const textEventCount = (result.xml || '').match(/<textevent/gi)?.length || 0;
+          Logger.log("  Format: ZWO XML, TextEvents: " + textEventCount);
+        }
 
         results.push({
           workoutType: option.workoutType,
@@ -424,6 +440,8 @@ function generateMultipleWorkoutOptions(params) {
           recommendationReason: result.recommendationReason,
           explanation: result.explanation,
           xml: result.xml,
+          workoutText: result.workoutText,
+          workoutName: result.workoutName,
           workoutDescription: result.workoutDescription,
           success: true
         });

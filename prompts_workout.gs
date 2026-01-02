@@ -428,40 +428,60 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
 - Use different recovery durations (not all 2min rest)
 - Add 10-15s surges at end of some intervals ("kick practice")
 
-**3. REQUIRED ZWO FEATURES (Critical):**
-- **Cadence:** You MUST specify target cadence for every interval using the \`Cadence\` attribute. VARY the cadence per the Anti-Monotony rules above (65-105 RPM range). Example: \`Cadence="95"\` for high-cadence blocks, \`Cadence="70"\` for strength blocks.
-- **Text Events (Messages) - Make it feel like a real coach is with you:**
-  - **LANGUAGE: All TextEvent messages MUST be in ${analysisLang}.**
-  - Nest them with timeoffset AND duration: \`<SteadyState ... ><TextEvent timeoffset="10" duration="30" message="Keep pushing!"/></SteadyState>\`
-  - The \`duration\` attribute (seconds to display) is REQUIRED for Zwift compatibility.
+**3. WORKOUT FORMAT - Intervals.icu Text Syntax (Critical):**
+Generate the workout in Intervals.icu's native text format. This format syncs perfectly to Zwift with text messages.
 
-  **WARMUP PHASE (Introduction):**
-  - Start with a PERSONAL GREETING using the athlete's name: "${USER_SETTINGS.ATHLETE_NAME || 'Coach'}"
-  - Example: "Goedemorgen ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! Vandaag gaan we..." or "Hey ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}, ready for..."
-  - Explain TODAY's workout: what we're doing, why, and what to expect
-  - Reference recovery status if relevant ("Recovery is yellow today, so we're keeping it controlled")
-  - Set expectations ("We'll build through 3 sets of Sweet Spot intervals")
-  - Mental preparation ("This is about building your aerobic engine")
+**FORMAT STRUCTURE:**
+\`\`\`
+Warmup
+- [Message text] [duration] [power%]
 
-  **MAIN WORKOUT (Engaging & Fun):**
-  - Be encouraging and energetic, not robotic
-  - Use humor sparingly ("Your legs might disagree, but they'll thank you later")
-  - Countdown cues ("Halfway there!", "Last 30 seconds!")
-  - Technique reminders ("Relax those shoulders", "Smooth circles")
-  - Cadence cues when changing ("Spin it up to 95!", "Drop to 70 RPM, feel the torque")
-  - Effort validation ("This is supposed to feel hard", "You're doing great")
-  - Breathing cues ("Deep breaths", "Find your rhythm")
+Main Set
+- [Message text] [duration] [power%]
+- [Message text] [duration] [power%]
 
-  **RECOVERY INTERVALS:**
-  - Celebrate completing hard efforts ("Nailed it!", "That's how it's done!")
-  - Prepare for next interval ("Shake it out, next one in 30 seconds")
+Cooldown
+- [Message text] [duration] [power%]
+\`\`\`
 
-  **COOLDOWN PHASE:**
-  - Congratulate the athlete BY NAME on completing the workout ("Goed gedaan ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}!")
-  - Summarize what was accomplished
-  - Recovery tips ("Get some protein in within 30 minutes")
+**FORMAT RULES:**
+- Each line starting with "- " becomes a workout step WITH a text message
+- Duration: use "Xm" for minutes (e.g., "3m", "5m")
+- Power: use percentage of FTP (e.g., "65%", "88-92%", "40-60%" for ramps)
+- Cadence: add "@XXrpm" after power (e.g., "65% @95rpm")
+- **SPLIT LONG BLOCKS INTO SUB-STEPS** - each sub-step gets its own message!
 
-  - **Workout Name:** The <name> tag MUST be exactly: "${zwiftDisplayName}" (Do NOT add "IntervalCoach_" prefix here).
+**MESSAGE GUIDELINES (${analysisLang}):**
+- **Athlete name:** "${USER_SETTINGS.ATHLETE_NAME || 'Coach'}"
+- **WARMUP:** Personal greeting + explain today's workout
+- **MAIN SET:** Encouraging, technique cues, countdowns, cadence reminders
+- **COOLDOWN:** Congratulate by name + recovery tips
+
+**EXAMPLE (30min Endurance):**
+\`\`\`
+Warmup
+- Goedemorgen ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! Rustig opwarmen. 2m 40-50%
+- Lekker de benen losmaken. 3m 50-60% @90rpm
+
+Main Set
+- Zoek je ritme. 4m 65% @85rpm
+- Goed zo! Schouders ontspannen. 3m 68% @90rpm
+- Even iets hoger tempo. 3m 70% @95rpm
+- Terug naar basis. 4m 65% @85rpm
+- Kracht block: laag toerental! 3m 68% @70rpm
+- Weer omhoog spinnen. 3m 65% @100rpm
+
+Cooldown
+- Bijna klaar, goed gedaan! 3m 55-50%
+- Goed gedaan ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! 2m 50-40%
+\`\`\`
+
+**CRITICAL: MAXIMUM 5 MINUTES PER STEP**
+- Split longer efforts into multiple sub-steps at same power
+- Each sub-step = new motivating message
+- This keeps the athlete engaged throughout
+
+**Workout Name:** "${zwiftDisplayName}"
 
 **4. Evaluate Recommendation (1-10):**
 - Logic: Based on **Current Phase**, **TSB**, AND **Recovery/Wellness Status**, is "${type}" the right choice today?
@@ -474,7 +494,8 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
   "explanation": "Strategy explanation in **${analysisLang}**. Include how recovery status influenced the workout design.",
   "recommendation_score": (integer 1-10),
   "recommendation_reason": "Reason based on Phase(${phaseInfo.phaseName}), TSB, AND Recovery Status in **${analysisLang}**.",
-  "xml": "<workout_file>...<author>IntervalCoach AI Coach</author><name>${zwiftDisplayName}</name>...valid xml...</workout_file>"
+  "workoutText": "Warmup\\n- Message 3m 50%\\n\\nMain Set\\n- Message 5m 70%\\n\\nCooldown\\n- Message 3m 50%",
+  "workoutName": "${zwiftDisplayName}"
 }
 `;
 }

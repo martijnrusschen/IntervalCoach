@@ -869,7 +869,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     // Upload run to Intervals.icu calendar
     uploadRunToIntervals(displayName, workoutText, isoDateStr, availability.placeholder, availability.duration);
   } else {
-    // For rides: upload ZWO to Intervals.icu (Zwift syncs from there)
+    // For rides: upload text format to Intervals.icu (creates workout with text messages for Zwift)
+    const workoutText = result.workoutText || result.xml; // Fallback to xml for backwards compatibility
 
     workout = {
       type: finalSelectedType,
@@ -878,12 +879,12 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
       recommendationReason: result.recommendationReason,
       whyThisWorkout: result.whyThisWorkout,
       fileName: displayName,
-      xml: result.xml,
+      workoutText: workoutText,
       allOptions: allWorkoutOptions  // Include all options for email
     };
 
     // Upload to Intervals.icu calendar (replaces placeholder)
-    uploadWorkoutToIntervals(displayName, result.xml, isoDateStr, availability.placeholder);
+    uploadWorkoutToIntervals(displayName, workoutText, isoDateStr, availability.placeholder);
   }
 
   // Send unified daily email (workout type)
