@@ -216,6 +216,14 @@ function callGeminiAPI(prompt) {
 
           let xml = result.xml.replace(/^```xml\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
 
+          // Fix ZWO tag casing - Zwift is case-sensitive
+          xml = xml.replace(/<textevent/gi, '<TextEvent');
+          xml = xml.replace(/<\/textevent>/gi, '</TextEvent>');
+          xml = xml.replace(/<steadystate/gi, '<SteadyState');
+          xml = xml.replace(/<\/steadystate>/gi, '</SteadyState>');
+          xml = xml.replace(/<workout_file>/gi, '<workout_file>');
+          xml = xml.replace(/<\/workout_file>/gi, '</workout_file>');
+
           const zwoValidation = validateZwoXml(xml);
           if (!zwoValidation.valid) {
             throw new Error("Invalid ZWO: " + zwoValidation.errors.join(", "));
