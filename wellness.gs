@@ -270,63 +270,83 @@ function createWellnessSummary(wellnessRecords) {
   // Analyze vs personal baseline
   const baselineAnalysis = analyzeWellnessVsBaseline(latestWithData);
 
-  // Determine recovery status - AI-enhanced with personal baselines
+  // Determine recovery status
   let recoveryStatus = "Unknown";
   let intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
   let aiEnhanced = false;
   let personalizedReason = null;
 
-  // Build today's data object for AI
-  const todayData = {
-    recovery: latestWithData.recovery,
-    hrv: latestWithData.hrv,
-    sleep: latestWithData.sleep,
-    restingHR: latestWithData.restingHR,
-    soreness: latestWithData.soreness,
-    fatigue: latestWithData.fatigue,
-    stress: latestWithData.stress,
-    mood: latestWithData.mood
-  };
+  // ===== PRIMARY: Use Whoop/device recovery score directly =====
+  // Trust the device's algorithm - it already factors in HRV, RHR, sleep, etc.
+  if (latestWithData.recovery != null) {
+    Logger.log("Using Whoop recovery score directly: " + latestWithData.recovery + "%");
 
-  const averagesData = {
-    recovery: avgRecovery,
-    hrv: avgHRV,
-    sleep: avgSleep,
-    restingHR: avgRestingHR
-  };
-
-  // Try AI-driven assessment first (pass baseline analysis for 30-day context)
-  try {
-    const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData, baselineAnalysis);
-
-    if (aiAssessment && aiAssessment.recoveryStatus) {
-      Logger.log("AI Recovery Assessment: " + JSON.stringify(aiAssessment));
-      recoveryStatus = aiAssessment.recoveryStatus;
-      intensityModifier = aiAssessment.intensityModifier || TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
-      personalizedReason = aiAssessment.personalizedReason || null;
-      aiEnhanced = true;
+    if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD) {
+      recoveryStatus = "Green (Primed)";
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+    } else if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
+      recoveryStatus = "Yellow (Recovering)";
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
+    } else {
+      recoveryStatus = "Red (Strained)";
+      intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
     }
-  } catch (e) {
-    Logger.log("AI recovery assessment failed, using fallback: " + e.toString());
-  }
 
-  // ===== FALLBACK: Fixed threshold logic =====
-  if (!aiEnhanced) {
-    Logger.log("Using fallback fixed-threshold recovery assessment");
-
-    if (latestWithData.recovery != null) {
-      if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD) {
-        recoveryStatus = "Green (Primed)";
-        intensityModifier = TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
-      } else if (latestWithData.recovery >= TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD) {
-        recoveryStatus = "Yellow (Recovering)";
-        intensityModifier = TRAINING_CONSTANTS.INTENSITY.YELLOW_MODIFIER;
-      } else {
-        recoveryStatus = "Red (Strained)";
-        intensityModifier = TRAINING_CONSTANTS.INTENSITY.RED_MODIFIER;
+    // Still get AI's personalized coaching note (but don't override status/intensity)
+    try {
+      const todayData = {
+        recovery: latestWithData.recovery,
+        hrv: latestWithData.hrv,
+        sleep: latestWithData.sleep,
+        restingHR: latestWithData.restingHR,
+        soreness: latestWithData.soreness,
+        fatigue: latestWithData.fatigue,
+        stress: latestWithData.stress,
+        mood: latestWithData.mood
+      };
+      const averagesData = { recovery: avgRecovery, hrv: avgHRV, sleep: avgSleep, restingHR: avgRestingHR };
+      const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData, baselineAnalysis);
+      if (aiAssessment && aiAssessment.personalizedReason) {
+        personalizedReason = aiAssessment.personalizedReason;
+        aiEnhanced = true;
+        Logger.log("AI coaching note: " + personalizedReason);
       }
-    } else if (latestWithData.hrv != null && avgHRV > 0) {
-      // Fallback: Use HRV trend if no recovery score
+    } catch (e) {
+      Logger.log("AI coaching note failed: " + e.toString());
+    }
+  }
+  // ===== FALLBACK: No recovery score - use AI or HRV-based assessment =====
+  else {
+    Logger.log("No recovery score available - using AI/HRV fallback");
+
+    const todayData = {
+      recovery: latestWithData.recovery,
+      hrv: latestWithData.hrv,
+      sleep: latestWithData.sleep,
+      restingHR: latestWithData.restingHR,
+      soreness: latestWithData.soreness,
+      fatigue: latestWithData.fatigue,
+      stress: latestWithData.stress,
+      mood: latestWithData.mood
+    };
+    const averagesData = { recovery: avgRecovery, hrv: avgHRV, sleep: avgSleep, restingHR: avgRestingHR };
+
+    // Try AI assessment when no device recovery score
+    try {
+      const aiAssessment = generateAIRecoveryAssessment(todayData, averagesData, baselineAnalysis);
+      if (aiAssessment && aiAssessment.recoveryStatus) {
+        Logger.log("AI Recovery Assessment: " + JSON.stringify(aiAssessment));
+        recoveryStatus = aiAssessment.recoveryStatus;
+        intensityModifier = aiAssessment.intensityModifier || TRAINING_CONSTANTS.INTENSITY.GREEN_MODIFIER;
+        personalizedReason = aiAssessment.personalizedReason || null;
+        aiEnhanced = true;
+      }
+    } catch (e) {
+      Logger.log("AI recovery assessment failed: " + e.toString());
+    }
+
+    // HRV-based fallback if AI also failed
+    if (!aiEnhanced && latestWithData.hrv != null && avgHRV > 0) {
       const hrvDeviation = (latestWithData.hrv - avgHRV) / avgHRV;
       if (hrvDeviation >= TRAINING_CONSTANTS.HRV_DEVIATION_THRESHOLD) {
         recoveryStatus = "Above Baseline (Well Recovered)";
