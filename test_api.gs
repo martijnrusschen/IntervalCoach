@@ -261,3 +261,54 @@ function testFetchRecentRides() {
     Logger.log("");
   });
 }
+
+/**
+ * Debug Whoop recovery data vs IntervalCoach interpretation
+ * Compare what Whoop shows vs what IntervalCoach uses
+ */
+function debugWhoopRecovery() {
+  Logger.log("=== WHOOP RECOVERY DEBUG ===\n");
+
+  // Check if Whoop is configured
+  if (typeof isWhoopConfigured !== 'function' || !isWhoopConfigured()) {
+    Logger.log("Whoop is not configured");
+    return;
+  }
+
+  // Raw Whoop API data
+  Logger.log("--- Raw Whoop API Data ---");
+  const whoopRecovery = getWhoopCurrentRecovery();
+  Logger.log("Recovery Score: " + (whoopRecovery.recovery != null ? whoopRecovery.recovery + "%" : "N/A"));
+  Logger.log("HRV: " + (whoopRecovery.hrv || "N/A") + " ms");
+  Logger.log("Resting HR: " + (whoopRecovery.restingHR || "N/A") + " bpm");
+  Logger.log("Created At: " + (whoopRecovery.createdAt || "N/A"));
+  Logger.log("Available: " + whoopRecovery.available);
+  if (whoopRecovery.reason) Logger.log("Reason: " + whoopRecovery.reason);
+
+  // What IntervalCoach does with it
+  Logger.log("\n--- IntervalCoach Interpretation ---");
+  const wellness = createWellnessSummary(fetchWellnessDataEnhanced(7));
+  Logger.log("Recovery Status: " + wellness.recoveryStatus);
+  Logger.log("Intensity Modifier: " + (wellness.intensityModifier * 100).toFixed(0) + "%");
+  Logger.log("Sleep Status: " + wellness.sleepStatus);
+  Logger.log("AI Enhanced: " + wellness.aiEnhanced);
+  if (wellness.personalizedReason) {
+    Logger.log("AI Reason: " + wellness.personalizedReason);
+  }
+
+  // Z-Score analysis if available
+  if (wellness.zScoreIntensity) {
+    Logger.log("\n--- Z-Score Analysis ---");
+    Logger.log("Z-Score Modifier: " + (wellness.zScoreIntensity.modifier * 100).toFixed(0) + "%");
+    Logger.log("Confidence: " + wellness.zScoreIntensity.confidence);
+    Logger.log("Description: " + wellness.zScoreIntensity.description);
+  }
+
+  // Show thresholds for reference
+  Logger.log("\n--- Recovery Thresholds ---");
+  Logger.log("RED (rest): < " + TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD + "%");
+  Logger.log("YELLOW (reduced): " + TRAINING_CONSTANTS.RECOVERY.RED_THRESHOLD + "-" + TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD + "%");
+  Logger.log("GREEN (full): >= " + TRAINING_CONSTANTS.RECOVERY.GREEN_THRESHOLD + "%");
+
+  Logger.log("\n=== DEBUG COMPLETE ===");
+}
