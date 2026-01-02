@@ -404,6 +404,10 @@ function generateMultipleWorkoutOptions(params) {
         const finalScore = result.recommendationScore || 5;
         Logger.log("  Generated: Score " + finalScore + "/10");
 
+        // Check for TextEvents in generated XML
+        const textEventCount = (result.xml || '').match(/<textevent/gi)?.length || 0;
+        Logger.log("  TextEvents in ZWO: " + textEventCount);
+
         results.push({
           workoutType: option.workoutType,
           preScore: option.score,

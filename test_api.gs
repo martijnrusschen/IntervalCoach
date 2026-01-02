@@ -341,6 +341,68 @@ function listRecentWorkouts() {
 }
 
 /**
+ * Test workout generation with TextEvent check
+ * Generates a simple workout and checks if TextEvents are included
+ */
+function testWorkoutTextEvents() {
+  Logger.log("=== TEST WORKOUT TEXT EVENTS ===\n");
+
+  // Simple test prompt for a short endurance workout
+  const testPrompt = `Generate a simple 30-minute Zwift endurance workout in valid ZWO XML format.
+
+REQUIREMENTS:
+1. Include at least 5 TextEvent messages with motivational text in Dutch
+2. Nest TextEvents inside workout segments like: <SteadyState Duration="300" Power="0.65"><textevent timeoffset="10" message="Lekker bezig!"/></SteadyState>
+3. Include warmup, main set, and cooldown
+4. Use Power values as FTP percentage (0.65 = 65% FTP)
+
+Return ONLY valid JSON with this structure:
+{
+  "xml": "<workout_file>...</workout_file>",
+  "explanation": "Brief description"
+}`;
+
+  Logger.log("Calling Gemini API...");
+  const result = callGeminiAPI(testPrompt);
+
+  if (!result.success) {
+    Logger.log("ERROR: " + result.error);
+    return;
+  }
+
+  Logger.log("API call successful\n");
+
+  // Check for TextEvents
+  const xml = result.xml || '';
+  const textEventMatches = xml.match(/<textevent[^>]*>/gi) || [];
+  Logger.log("TextEvents found: " + textEventMatches.length);
+
+  if (textEventMatches.length > 0) {
+    Logger.log("\nSample TextEvents:");
+    textEventMatches.slice(0, 5).forEach((te, i) => {
+      Logger.log("  " + (i + 1) + ". " + te);
+    });
+  } else {
+    Logger.log("\n⚠️ NO TextEvents in generated XML!");
+  }
+
+  Logger.log("\n--- First 1500 chars of ZWO ---");
+  Logger.log(xml.substring(0, 1500));
+
+  // Validate structure
+  const hasSteadyState = xml.includes('<SteadyState') || xml.includes('<Steadystate');
+  const hasWarmup = xml.includes('<Warmup') || xml.includes('<warmup');
+  const hasCooldown = xml.includes('<Cooldown') || xml.includes('<cooldown');
+
+  Logger.log("\n--- Structure Check ---");
+  Logger.log("Has SteadyState: " + hasSteadyState);
+  Logger.log("Has Warmup: " + hasWarmup);
+  Logger.log("Has Cooldown: " + hasCooldown);
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+/**
  * Check ZWO content for a specific workout
  * Run listRecentWorkouts() first to get the ID
  */
