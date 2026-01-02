@@ -314,6 +314,94 @@ function debugWhoopRecovery() {
 }
 
 /**
+ * Test uploading workout with workout_doc format including text events
+ * Uses Intervals.icu native format instead of ZWO
+ */
+function testWorkoutDocUpload() {
+  Logger.log("=== TEST WORKOUT_DOC UPLOAD WITH TEXT ===\n");
+
+  const athleteId = "0";
+  const today = formatDateISO(new Date());
+  const tomorrow = formatDateISO(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+  // Build workout_doc with text events using their syntax: "Message^offset^duration"
+  const workoutDoc = {
+    steps: [
+      {
+        warmup: true,
+        ramp: true,
+        duration: 300,
+        power: { start: 40, end: 60, units: "%ftp" },
+        cadence: { value: 85, units: "rpm" },
+        text: "Goedemorgen Martijn!^10^30 Lekker rustig opwarmen^60^30"
+      },
+      {
+        duration: 600,
+        power: { value: 65, units: "%ftp" },
+        cadence: { value: 90, units: "rpm" },
+        text: "Zoek je ritme^30^30 Mooie constante power^300^30"
+      },
+      {
+        duration: 600,
+        power: { value: 70, units: "%ftp" },
+        cadence: { value: 90, units: "rpm" },
+        text: "Iets meer druk nu^30^30"
+      },
+      {
+        cooldown: true,
+        ramp: true,
+        duration: 300,
+        power: { start: 60, end: 40, units: "%ftp" },
+        cadence: { value: 85, units: "rpm" },
+        text: "Goed gedaan!^10^30 Lekker uitfietsen^60^30"
+      }
+    ],
+    duration: 1800
+  };
+
+  const payload = {
+    category: "WORKOUT",
+    type: "Ride",
+    name: "Test_TextEvents_WorkoutDoc",
+    description: "Testing workout_doc upload with text events",
+    start_date_local: tomorrow + "T10:00:00",
+    workout_doc: workoutDoc
+  };
+
+  Logger.log("Uploading with workout_doc format...");
+  Logger.log("Payload: " + JSON.stringify(payload, null, 2).substring(0, 1000));
+
+  const url = "https://intervals.icu/api/v1/athlete/" + athleteId + "/events";
+  const options = {
+    method: "post",
+    headers: {
+      "Authorization": getIcuAuthHeader(),
+      "Content-Type": "application/json"
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    const body = response.getContentText();
+
+    Logger.log("Response code: " + code);
+    if (code === 200 || code === 201) {
+      Logger.log("SUCCESS! Workout uploaded.");
+      const data = JSON.parse(body);
+      Logger.log("Workout ID: " + data.id);
+      Logger.log("Check in Intervals.icu and sync to Zwift to test TextEvents");
+    } else {
+      Logger.log("FAILED: " + body.substring(0, 500));
+    }
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+  }
+}
+
+/**
  * List recent workouts from Intervals.icu
  */
 function listRecentWorkouts() {
