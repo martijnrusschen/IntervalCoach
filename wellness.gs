@@ -7,6 +7,50 @@
  */
 
 // =========================================================
+// RECOVERY DATA AVAILABILITY CHECK
+// =========================================================
+
+/**
+ * Determine if we should wait for recovery data before generating workouts.
+ *
+ * Auto-detects based on:
+ * 1. Config override (USER_SETTINGS.WAIT_FOR_RECOVERY) - takes precedence
+ * 2. Whoop configured - if yes, wait for recovery
+ * 3. Recent recovery data in Intervals.icu - if yes, wait for recovery
+ *
+ * @returns {boolean} True if workout generation should wait for recovery data
+ */
+function shouldWaitForRecovery() {
+  // Config override takes precedence
+  if (typeof USER_SETTINGS !== 'undefined' && USER_SETTINGS.WAIT_FOR_RECOVERY !== undefined) {
+    Logger.log('Recovery wait setting from config: ' + USER_SETTINGS.WAIT_FOR_RECOVERY);
+    return USER_SETTINGS.WAIT_FOR_RECOVERY;
+  }
+
+  // Auto-detect: Whoop configured?
+  if (typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
+    Logger.log('Whoop configured - will wait for recovery data');
+    return true;
+  }
+
+  // Auto-detect: Recent recovery data in Intervals.icu?
+  try {
+    const recentRecords = fetchWellnessData(7, 0);
+    const hasRecentRecovery = recentRecords.some(r => r.recovery != null);
+    if (hasRecentRecovery) {
+      Logger.log('Recent recovery data found in Intervals.icu - will wait for recovery data');
+      return true;
+    }
+  } catch (e) {
+    Logger.log('Error checking recent recovery data: ' + e.toString());
+  }
+
+  // No wellness device detected - proceed without waiting
+  Logger.log('No wellness device detected - will proceed without recovery data');
+  return false;
+}
+
+// =========================================================
 // SMART WELLNESS DATA FETCHING
 // =========================================================
 

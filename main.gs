@@ -51,11 +51,12 @@ function checkAndGenerateWorkout() {
     Logger.log('Found race event: ' + eventData.raceEvent.category + ' - ' + (eventData.raceEvent.name || 'Unnamed'));
   }
 
-  // Check for wellness data (optional - enhances workout but doesn't block)
-  Logger.log('Checking for wellness data (optional)...');
-
+  // Check if we should wait for recovery data (auto-detected or config override)
+  const waitForRecovery = shouldWaitForRecovery();
   let wellnessSource = 'none';
+  let recoveryAvailable = false;
 
+  // Try to get recovery data
   // Try Whoop API first
   if (typeof isWhoopConfigured === 'function' && isWhoopConfigured()) {
     try {
@@ -64,6 +65,7 @@ function checkAndGenerateWorkout() {
         const recoveryDate = whoopRecovery.createdAt ? whoopRecovery.createdAt.substring(0, 10) : null;
         if (recoveryDate === today) {
           wellnessSource = 'whoop_api';
+          recoveryAvailable = true;
           Logger.log('Whoop API: Recovery ' + whoopRecovery.recovery + '% available');
         } else {
           Logger.log('Whoop API: Recovery data is from ' + recoveryDate + ' (not today)');
@@ -81,17 +83,28 @@ function checkAndGenerateWorkout() {
       const todayRecord = icuRecords.find(r => r.date === today);
       if (todayRecord && todayRecord.recovery != null) {
         wellnessSource = 'intervals_icu';
+        recoveryAvailable = true;
         Logger.log('Intervals.icu: Recovery ' + todayRecord.recovery + '% available');
       } else {
-        Logger.log('Intervals.icu: No recovery data (will use default intensity)');
+        Logger.log('Intervals.icu: No recovery data for today');
       }
     } catch (e) {
       Logger.log('Intervals.icu: ' + e.toString());
     }
   }
 
-  // Proceed with workout generation (wellness data is optional enhancement)
-  Logger.log('Generating workout' + (wellnessSource !== 'none' ? ' with ' + wellnessSource + ' wellness data' : ' without wellness data'));
+  // If we should wait for recovery but don't have it yet, retry next hour
+  if (waitForRecovery && !recoveryAvailable) {
+    Logger.log('Waiting for recovery data - will retry next hour');
+    return;
+  }
+
+  // Proceed with workout generation
+  if (recoveryAvailable) {
+    Logger.log('Generating workout with ' + wellnessSource + ' recovery data');
+  } else {
+    Logger.log('Generating workout without recovery data (using default intensity)');
+  }
 
   try {
     generateOptimalZwiftWorkoutsAutoByGemini();
