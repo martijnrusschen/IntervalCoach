@@ -436,6 +436,8 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
   - The \`duration\` attribute (seconds to display) is REQUIRED for Zwift compatibility.
 
   **WARMUP PHASE (Introduction):**
+  - Start with a PERSONAL GREETING using the athlete's name: "${USER_SETTINGS.ATHLETE_NAME || 'Coach'}"
+  - Example: "Goedemorgen ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}! Vandaag gaan we..." or "Hey ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}, ready for..."
   - Explain TODAY's workout: what we're doing, why, and what to expect
   - Reference recovery status if relevant ("Recovery is yellow today, so we're keeping it controlled")
   - Set expectations ("We'll build through 3 sets of Sweet Spot intervals")
@@ -455,7 +457,7 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
   - Prepare for next interval ("Shake it out, next one in 30 seconds")
 
   **COOLDOWN PHASE:**
-  - Congratulate on completing the workout
+  - Congratulate the athlete BY NAME on completing the workout ("Goed gedaan ${USER_SETTINGS.ATHLETE_NAME || 'Coach'}!")
   - Summarize what was accomplished
   - Recovery tips ("Get some protein in within 30 minutes")
 
