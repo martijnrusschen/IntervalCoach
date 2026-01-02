@@ -411,9 +411,18 @@ Return ONLY valid JSON with this structure:
  * Run listRecentWorkouts() first to get the ID
  */
 function checkWorkoutZwo(workoutId) {
-  // Default to most recent if not specified
+  // Find most recent workout if not specified
   if (!workoutId) {
-    workoutId = 86368140; // Today's workout
+    const today = formatDateISO(new Date());
+    const weekAgo = formatDateISO(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+    const result = fetchIcuApi(`/athlete/0/events?oldest=${weekAgo}&newest=${today}`);
+    if (result.success) {
+      const workouts = result.data.filter(e => e.category === 'WORKOUT');
+      if (workouts.length > 0) {
+        workoutId = workouts[workouts.length - 1].id; // Most recent
+        Logger.log("Using most recent workout: " + workoutId);
+      }
+    }
   }
 
   Logger.log("=== CHECKING WORKOUT ZWO ===");
@@ -435,17 +444,26 @@ function checkWorkoutZwo(workoutId) {
     Logger.log("\n--- Workout Structure ---");
     Logger.log("Steps: " + (doc.steps ? doc.steps.length : 0));
 
-    // Check for text/messages in steps
+    // Check for text/messages in steps - check ALL possible fields
     let messageCount = 0;
     if (doc.steps) {
       doc.steps.forEach((step, i) => {
-        if (step.text) {
-          messageCount++;
-          Logger.log(`Step ${i}: "${step.text}"`);
+        // Check various possible text fields
+        const textFields = ['text', 'message', 'messages', 'textEvents', 'text_events'];
+        textFields.forEach(field => {
+          if (step[field]) {
+            messageCount++;
+            Logger.log(`Step ${i} [${field}]: ${JSON.stringify(step[field])}`);
+          }
+        });
+        // Log full step structure for first step to understand format
+        if (i === 0) {
+          Logger.log("First step structure: " + JSON.stringify(step));
         }
       });
     }
-    Logger.log("Total messages in workout_doc: " + messageCount);
+    Logger.log("Total messages found: " + messageCount);
+    Logger.log("workout_doc keys: " + Object.keys(doc).join(", "));
   }
 
   // Check raw file content if available
