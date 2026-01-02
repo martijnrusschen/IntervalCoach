@@ -312,3 +312,30 @@ function debugWhoopRecovery() {
 
   Logger.log("\n=== DEBUG COMPLETE ===");
 }
+
+/**
+ * List recent workouts from Intervals.icu
+ */
+function listRecentWorkouts() {
+  const today = formatDateISO(new Date());
+  const weekAgo = formatDateISO(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+  const result = fetchIcuApi(`/athlete/0/events?oldest=${weekAgo}&newest=${today}`);
+  if (!result.success) {
+    Logger.log("Failed: " + result.error);
+    return;
+  }
+
+  const workouts = result.data.filter(e => e.category === 'WORKOUT');
+  Logger.log("=== RECENT WORKOUTS ===\n");
+  workouts.forEach(w => {
+    Logger.log(`${w.start_date_local || w.date}: ${w.name}`);
+    Logger.log(`  ID: ${w.id}`);
+    Logger.log(`  Type: ${w.type || 'N/A'}`);
+    Logger.log("");
+  });
+
+  if (workouts.length === 0) {
+    Logger.log("No workouts found in the last 7 days");
+  }
+}
