@@ -372,13 +372,17 @@ Return ONLY valid JSON with this structure:
 
   Logger.log("API call successful\n");
 
-  // Check for TextEvents
-  const xml = result.xml || '';
-  const textEventMatches = xml.match(/<textevent[^>]*>/gi) || [];
+  // Check for TextEvents - apply same case fixing as production code
+  let xml = result.xml || '';
+  xml = xml.replace(/<textevent/gi, '<TextEvent');
+  xml = xml.replace(/<\/textevent>/gi, '</TextEvent>');
+  xml = xml.replace(/<steadystate/gi, '<SteadyState');
+  xml = xml.replace(/<\/steadystate>/gi, '</SteadyState>');
+  const textEventMatches = xml.match(/<TextEvent[^>]*>/gi) || [];
   Logger.log("TextEvents found: " + textEventMatches.length);
 
   if (textEventMatches.length > 0) {
-    Logger.log("\nSample TextEvents:");
+    Logger.log("\nSample TextEvents (should be CamelCase):");
     textEventMatches.slice(0, 5).forEach((te, i) => {
       Logger.log("  " + (i + 1) + ". " + te);
     });
