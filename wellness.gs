@@ -372,16 +372,18 @@ function createWellnessSummary(wellnessRecords) {
 
   // ===== Z-SCORE INTENSITY MODIFIER =====
   // Use continuous z-score based modifier when baseline data is available
-  // This replaces the discrete Red/Yellow/Green categories with smooth scaling
+  // BUT: Only use z-score when NO device recovery score is available
+  // When Whoop/device score exists, trust that score directly
   let zScoreIntensity = null;
   if (baselineAnalysis?.zScoreIntensity?.modifier != null) {
     zScoreIntensity = baselineAnalysis.zScoreIntensity;
+    Logger.log(`Z-Score Intensity: ${(zScoreIntensity.modifier * 100).toFixed(0)}% (${zScoreIntensity.description})`);
 
-    // Override the discrete intensity modifier with z-score based continuous modifier
-    // Only if we have high or medium confidence (actual baseline data)
-    if (zScoreIntensity.confidence !== 'low') {
+    // Only override intensity if NO device recovery score available
+    // When Whoop score exists, we trust that score (already set above)
+    if (latestWithData.recovery == null && zScoreIntensity.confidence !== 'low') {
       intensityModifier = zScoreIntensity.modifier;
-      Logger.log(`Z-Score Intensity: ${(zScoreIntensity.modifier * 100).toFixed(0)}% (${zScoreIntensity.description})`);
+      Logger.log('Applying Z-Score modifier (no device recovery score)');
     }
   }
 
