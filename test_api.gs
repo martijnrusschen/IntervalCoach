@@ -339,3 +339,67 @@ function listRecentWorkouts() {
     Logger.log("No workouts found in the last 7 days");
   }
 }
+
+/**
+ * Check ZWO content for a specific workout
+ * Run listRecentWorkouts() first to get the ID
+ */
+function checkWorkoutZwo(workoutId) {
+  // Default to most recent if not specified
+  if (!workoutId) {
+    workoutId = 86368140; // Today's workout
+  }
+
+  Logger.log("=== CHECKING WORKOUT ZWO ===");
+  Logger.log("Workout ID: " + workoutId);
+
+  const result = fetchIcuApi(`/athlete/0/events/${workoutId}`);
+  if (!result.success) {
+    Logger.log("Failed to fetch workout: " + result.error);
+    return;
+  }
+
+  const workout = result.data;
+  Logger.log("Name: " + workout.name);
+  Logger.log("Type: " + workout.type);
+
+  // Check if there's a zwo_file or workout_doc
+  if (workout.workout_doc) {
+    const doc = workout.workout_doc;
+    Logger.log("\n--- Workout Structure ---");
+    Logger.log("Steps: " + (doc.steps ? doc.steps.length : 0));
+
+    // Check for text/messages in steps
+    let messageCount = 0;
+    if (doc.steps) {
+      doc.steps.forEach((step, i) => {
+        if (step.text) {
+          messageCount++;
+          Logger.log(`Step ${i}: "${step.text}"`);
+        }
+      });
+    }
+    Logger.log("Total messages in workout_doc: " + messageCount);
+  }
+
+  // Check raw file content if available
+  if (workout.file_contents) {
+    Logger.log("\n--- ZWO File Content ---");
+    const textEvents = (workout.file_contents.match(/<textevent/gi) || []).length;
+    Logger.log("TextEvent count: " + textEvents);
+
+    if (textEvents > 0) {
+      // Show first few text events
+      const matches = workout.file_contents.match(/<textevent[^>]*>/gi) || [];
+      Logger.log("Sample TextEvents:");
+      matches.slice(0, 5).forEach(m => Logger.log("  " + m));
+    } else {
+      Logger.log("NO TextEvents found in ZWO!");
+      Logger.log("\nFirst 1000 chars of ZWO:");
+      Logger.log(workout.file_contents.substring(0, 1000));
+    }
+  } else {
+    Logger.log("\nNo file_contents in API response");
+    Logger.log("Available fields: " + Object.keys(workout).join(", "));
+  }
+}
