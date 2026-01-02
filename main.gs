@@ -29,10 +29,31 @@ function checkAndGenerateWorkout() {
     return;
   }
 
-  // Check if wellness data is available
-  Logger.log('Checking for wellness data...');
+  // Check if there's a placeholder workout scheduled for today
+  Logger.log('Checking for scheduled workouts...');
 
-  let wellnessAvailable = false;
+  const eventData = fetchEventsForDate(today);
+  const hasPlaceholder = eventData.success && eventData.placeholders && eventData.placeholders.length > 0;
+  const hasRace = eventData.success && eventData.raceEvent != null;
+
+  if (!hasPlaceholder && !hasRace) {
+    Logger.log('No placeholder workouts or races scheduled for today - skipping');
+    // Mark as done so we don't keep checking
+    props.setProperty('LAST_WORKOUT_RUN_DATE', today);
+    return;
+  }
+
+  if (hasPlaceholder) {
+    Logger.log('Found ' + eventData.placeholders.length + ' placeholder(s): ' +
+               eventData.placeholders.map(p => p.name).join(', '));
+  }
+  if (hasRace) {
+    Logger.log('Found race event: ' + eventData.raceEvent.category + ' - ' + (eventData.raceEvent.name || 'Unnamed'));
+  }
+
+  // Check for wellness data (optional - enhances workout but doesn't block)
+  Logger.log('Checking for wellness data (optional)...');
+
   let wellnessSource = 'none';
 
   // Try Whoop API first
@@ -40,51 +61,37 @@ function checkAndGenerateWorkout() {
     try {
       const whoopRecovery = getWhoopCurrentRecovery();
       if (whoopRecovery.available && whoopRecovery.recovery != null) {
-        // Check if recovery was created today (not yesterday's data)
         const recoveryDate = whoopRecovery.createdAt ? whoopRecovery.createdAt.substring(0, 10) : null;
         if (recoveryDate === today) {
-          wellnessAvailable = true;
           wellnessSource = 'whoop_api';
-          Logger.log('Whoop API: Recovery ' + whoopRecovery.recovery + '% available (created: ' + whoopRecovery.createdAt + ')');
+          Logger.log('Whoop API: Recovery ' + whoopRecovery.recovery + '% available');
         } else {
-          Logger.log('Whoop API: Recovery data is from ' + recoveryDate + ', waiting for today\'s data');
+          Logger.log('Whoop API: Recovery data is from ' + recoveryDate + ' (not today)');
         }
-      } else {
-        Logger.log('Whoop API: No recovery data yet - ' + (whoopRecovery.reason || 'unknown'));
       }
     } catch (e) {
-      Logger.log('Whoop API error: ' + e.toString());
+      Logger.log('Whoop API: ' + e.toString());
     }
   }
 
-  // Fallback to Intervals.icu if Whoop not available
-  if (!wellnessAvailable) {
+  // Fallback to Intervals.icu
+  if (wellnessSource === 'none') {
     try {
-      const icuRecords = fetchWellnessData(2, 0); // Fetch 2 days to check dates
+      const icuRecords = fetchWellnessData(2, 0);
       const todayRecord = icuRecords.find(r => r.date === today);
       if (todayRecord && todayRecord.recovery != null) {
-        wellnessAvailable = true;
         wellnessSource = 'intervals_icu';
-        Logger.log('Intervals.icu: Recovery ' + todayRecord.recovery + '% available for ' + today);
+        Logger.log('Intervals.icu: Recovery ' + todayRecord.recovery + '% available');
       } else {
-        Logger.log('Intervals.icu: No recovery data for today (' + today + ') yet');
-        if (icuRecords.length > 0) {
-          Logger.log('  Latest record is from: ' + icuRecords[0].date);
-        }
+        Logger.log('Intervals.icu: No recovery data (will use default intensity)');
       }
     } catch (e) {
-      Logger.log('Intervals.icu error: ' + e.toString());
+      Logger.log('Intervals.icu: ' + e.toString());
     }
   }
 
-  // If no wellness data, wait for next hour
-  if (!wellnessAvailable) {
-    Logger.log('No wellness data available yet - will retry next hour');
-    return;
-  }
-
-  // Wellness data available - run workout generation
-  Logger.log('Wellness data ready from ' + wellnessSource + ' - generating workout');
+  // Proceed with workout generation (wellness data is optional enhancement)
+  Logger.log('Generating workout' + (wellnessSource !== 'none' ? ' with ' + wellnessSource + ' wellness data' : ' without wellness data'));
 
   try {
     generateOptimalZwiftWorkoutsAutoByGemini();
@@ -490,7 +497,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
   Logger.log("Target Duration: " + availability.duration.min + "-" + availability.duration.max + " min");
 
   if (wellness && wellness.available) {
-    Logger.log("Recovery Status: " + wellness.recoveryStatus + " | Sleep: " + wellness.today.sleep.toFixed(1) + "h (" + wellness.sleepStatus + ")");
+    const sleepStr = wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A';
+    Logger.log("Recovery Status: " + (wellness.recoveryStatus || 'Unknown') + " | Sleep: " + sleepStr + " (" + (wellness.sleepStatus || 'Unknown') + ")");
     Logger.log("HRV: " + (wellness.today.hrv || 'N/A') + " | Resting HR: " + (wellness.today.restingHR || 'N/A'));
   } else {
     Logger.log("Wellness data: Not available");
