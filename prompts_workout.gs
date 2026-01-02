@@ -432,7 +432,8 @@ Mental engagement is as important as physical stimulus. Boring workouts lead to 
 - **Cadence:** You MUST specify target cadence for every interval using the \`Cadence\` attribute. VARY the cadence per the Anti-Monotony rules above (65-105 RPM range). Example: \`Cadence="95"\` for high-cadence blocks, \`Cadence="70"\` for strength blocks.
 - **Text Events (Messages) - Make it feel like a real coach is with you:**
   - **LANGUAGE: All TextEvent messages MUST be in ${analysisLang}.**
-  - Nest them: \`<SteadyState ... ><TextEvent timeoffset="10" message="Keep pushing!"/></SteadyState>\`
+  - Nest them with timeoffset AND duration: \`<SteadyState ... ><TextEvent timeoffset="10" duration="30" message="Keep pushing!"/></SteadyState>\`
+  - The \`duration\` attribute (seconds to display) is REQUIRED for Zwift compatibility.
 
   **WARMUP PHASE (Introduction):**
   - Explain TODAY's workout: what we're doing, why, and what to expect
