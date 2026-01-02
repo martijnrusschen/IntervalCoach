@@ -1,121 +1,67 @@
 #!/bin/bash
 #
 # IntervalCoach Deploy Script
-# Deploys code to athlete-specific Apps Script projects while preserving their config.gs
+# Deploys code to all athlete Apps Script projects with their own config.gs
 #
 # Usage:
-#   ./deploy.sh eef      # Deploy to Eef's project
-#   ./deploy.sh          # Deploy to default (your own) project
+#   ./deploy.sh          # Deploy to all athletes (martijn + eef)
+#   ./deploy.sh martijn  # Deploy to Martijn only
+#   ./deploy.sh eef      # Deploy to Eef only
 #
 
 set -e
 
-ATHLETE=${1:-""}
-CLASP_BACKUP=".clasp.backup.json"
+ATHLETE=${1:-"all"}
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+echo "=== IntervalCoach Deploy ==="
+echo ""
 
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+deploy_athlete() {
+    local name=$1
+    local clasp_file=".clasp.${name}.json"
+    local config_file="config.${name}.gs"
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Cleanup function to restore original .clasp.json
-cleanup() {
-    if [ -f "$CLASP_BACKUP" ]; then
-        mv "$CLASP_BACKUP" .clasp.json
-        log_info "Restored original .clasp.json"
-    fi
-}
-
-# Set trap to cleanup on exit (success or failure)
-trap cleanup EXIT
-
-if [ -n "$ATHLETE" ]; then
-    CLASP_FILE=".clasp.${ATHLETE}.json"
-
-    if [ ! -f "$CLASP_FILE" ]; then
-        log_error "Config file not found: $CLASP_FILE"
-        echo "Available athlete configs:"
-        ls -1 .clasp.*.json 2>/dev/null | grep -v backup || echo "  (none)"
-        exit 1
+    if [ ! -f "$clasp_file" ]; then
+        echo "ERROR: $clasp_file not found"
+        return 1
     fi
 
-    log_info "Deploying to: $ATHLETE"
-
-    # Backup current .clasp.json
-    if [ -f ".clasp.json" ]; then
-        cp .clasp.json "$CLASP_BACKUP"
+    if [ ! -f "$config_file" ]; then
+        echo "ERROR: $config_file not found"
+        return 1
     fi
 
-    # Switch to athlete's project
-    cp "$CLASP_FILE" .clasp.json
-else
-    log_info "Deploying to: default project"
-fi
+    echo "Deploying to: $name"
 
-# Pull to temp dir to backup config.gs
-TEMP_DIR=$(mktemp -d)
-log_info "Checking for existing config.gs..."
+    # Swap clasp config
+    cp .clasp.json .clasp.backup.json 2>/dev/null || true
+    cp "$clasp_file" .clasp.json
 
-# Pull to temp directory
-ORIGINAL_DIR=$(pwd)
-cp .clasp.json "$TEMP_DIR/"
-cd "$TEMP_DIR"
-clasp pull 2>/dev/null || true
-
-# Check if config.gs exists remotely (pulled as config.js)
-if [ -f "config.js" ]; then
-    log_info "Found existing config.gs - backing up"
-    HAS_CONFIG=true
-    # Copy config.js to original dir so it gets pushed back
-    cp config.js "$ORIGINAL_DIR/config.gs.backup"
-else
-    log_warn "No config.gs found - athlete needs to create it"
-    HAS_CONFIG=false
-fi
-
-cd "$ORIGINAL_DIR"
-rm -rf "$TEMP_DIR"
-
-# If we have a config backup, temporarily make it available for push
-if [ "$HAS_CONFIG" = true ]; then
-    # Remove config.gs from .claspignore temporarily
+    # Swap app config (temporarily remove from .claspignore)
+    cp "$config_file" config.gs
     sed -i.bak '/^config\.gs$/d' .claspignore
-    # Rename backup to config.gs
-    mv config.gs.backup config.gs
-fi
 
-# Push code
-log_info "Pushing code..."
-clasp push --force
+    # Push
+    clasp push --force
 
-# Restore .claspignore and remove temp config.gs
-if [ "$HAS_CONFIG" = true ]; then
+    # Restore
     mv .claspignore.bak .claspignore
     rm -f config.gs
-    log_info "Config.gs preserved on remote"
-fi
+    mv .clasp.backup.json .clasp.json 2>/dev/null || true
 
-if [ "$HAS_CONFIG" = false ]; then
+    echo "Done: $name"
     echo ""
-    log_warn "ACTIE VEREIST: Maak config.gs aan in de Apps Script editor"
+}
+
+if [ "$ATHLETE" = "all" ]; then
+    deploy_athlete "martijn"
+    deploy_athlete "eef"
+elif [ "$ATHLETE" = "martijn" ] || [ "$ATHLETE" = "eef" ]; then
+    deploy_athlete "$ATHLETE"
+else
+    echo "Unknown athlete: $ATHLETE"
+    echo "Usage: ./deploy.sh [martijn|eef|all]"
+    exit 1
 fi
 
-log_info "Deploy complete!"
-
-# Show project link
-SCRIPT_ID=$(grep -o '"scriptId"[[:space:]]*:[[:space:]]*"[^"]*"' .clasp.json | cut -d'"' -f4)
-echo ""
-echo "Project URL: https://script.google.com/d/${SCRIPT_ID}/edit"
+echo "=== Deploy complete! ==="

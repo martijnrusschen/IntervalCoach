@@ -1,4 +1,5 @@
-# Ignore config templates/backups (config.gs IS pushed to keep it in sync)
+# Ignore config files (use deploy.sh to push correct config per athlete)
+config.gs
 config.*.gs
 config.sample.gs
 
