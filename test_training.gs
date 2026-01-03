@@ -399,42 +399,35 @@ function testWeekProgressDebug() {
 
 /**
  * Test FTP test suggestion logic
+ * Uses setupTestContext() for DRY context setup
  */
 function testFtpTestSuggestion() {
-  Logger.log("=== FTP TEST SUGGESTION TEST ===");
+  logTestHeader("FTP TEST SUGGESTION");
 
-  // Get current fitness metrics
-  const fitnessMetrics = fetchFitnessMetrics();
+  // Get all context in one call
+  const ctx = setupTestContext();
+
+  // Log key metrics from context
   Logger.log("\n--- Current Fitness ---");
-  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
-  Logger.log("TSB: " + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
-  Logger.log("eFTP from metrics: " + (fitnessMetrics.eftp || 'N/A') + "W");
+  Logger.log("CTL: " + (ctx.ctl?.toFixed(1) || 'N/A'));
+  Logger.log("TSB: " + (ctx.tsb?.toFixed(1) || 'N/A'));
+  Logger.log("eFTP: " + (ctx.fitness.eftp || 'N/A') + "W");
 
-  // Get wellness data
-  const wellness = fetchWellnessDataEnhanced();
   Logger.log("\n--- Wellness ---");
-  Logger.log("Whoop Recovery: " + (wellness.today?.recovery || 'N/A'));
-  Logger.log("Latest Recovery: " + (wellness.latestWithData?.recovery || 'N/A'));
-  Logger.log("HRV: " + (wellness.today?.hrv || wellness.latestWithData?.hrv || 'N/A'));
-  Logger.log("Recovery Status: " + (wellness.recoveryStatus || 'Unknown'));
+  Logger.log("Recovery: " + (ctx.wellness.today?.recovery != null ? ctx.wellness.today.recovery + '%' : 'N/A'));
+  Logger.log("HRV: " + (ctx.wellness.today?.hrv != null ? ctx.wellness.today.hrv.toFixed(1) + 'ms' : 'N/A'));
+  Logger.log("Sleep: " + (ctx.wellness.today?.sleep != null ? ctx.wellness.today.sleep.toFixed(1) + 'h' : 'N/A'));
+  Logger.log("Source: " + (ctx.wellness.today?.source || 'intervals.icu'));
+  Logger.log("Status: " + (ctx.wellness.recoveryStatus || 'Unknown'));
 
-  // Get phase info
-  const goals = fetchUpcomingGoals();
-  Logger.log("\n--- Goals ---");
-  Logger.log("Primary Goal: " + (goals.primaryGoal?.name || 'None'));
-  Logger.log("Primary Goal Date: " + (goals.primaryGoal?.date || 'None'));
-  Logger.log("All Goals: " + (goals.allGoals?.map(g => g.priority + ': ' + g.name).join(', ') || 'None'));
-
-  const targetDate = goals.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
-  Logger.log("Target Date for phase: " + targetDate);
-  const phaseInfo = calculateTrainingPhase(targetDate);
-  Logger.log("\n--- Phase ---");
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("Weeks Out: " + (phaseInfo.weeksOut || 'N/A'));
+  Logger.log("\n--- Goals & Phase ---");
+  Logger.log("Primary Goal: " + (ctx.goals.primaryGoal?.name || 'None') +
+             (ctx.goals.primaryGoal?.date ? ' (' + ctx.goals.primaryGoal.date + ')' : ''));
+  Logger.log("Phase: " + ctx.phase + " (" + (ctx.phaseInfo.weeksOut || 'N/A') + " weeks out)");
 
   // Check FTP test suggestion
   Logger.log("\n--- FTP Test Check ---");
-  const suggestion = checkFtpTestSuggestion(fitnessMetrics, wellness, phaseInfo);
+  const suggestion = checkFtpTestSuggestion(ctx.fitness, ctx.wellness, ctx.phaseInfo);
 
   Logger.log("Suggest Test: " + suggestion.suggest);
   Logger.log("Days Since Update: " + (suggestion.daysSinceUpdate || 'N/A'));

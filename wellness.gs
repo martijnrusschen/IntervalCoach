@@ -101,13 +101,32 @@ function fetchTodayWellness() {
 }
 
 /**
+ * Get wellness summary in one call (DRY helper)
+ * Combines fetchWellnessDataEnhanced() + createWellnessSummary()
+ * @param {number} daysBack - How many days back to fetch (default 30 for baseline tracking)
+ * @param {boolean} useEnhanced - Use Whoop-enhanced data (default true)
+ * @returns {object} Wellness summary with today's data, averages, and recovery status
+ */
+function getWellnessSummary(daysBack, useEnhanced) {
+  daysBack = daysBack || 30;
+  useEnhanced = useEnhanced !== false;  // Default true
+
+  const records = useEnhanced
+    ? fetchWellnessDataEnhanced(daysBack)
+    : fetchWellnessData(daysBack);
+  return createWellnessSummary(records);
+}
+
+/**
  * Fetch wellness data with Whoop enhancement for today
  * Merges real-time Whoop data with Intervals.icu historical data
  * @param {number} daysBack - How many days back to fetch
  * @param {number} daysBackEnd - End offset from today
  * @returns {Array} Array of wellness records
  */
-function fetchWellnessDataEnhanced(daysBack = 7, daysBackEnd = 0) {
+function fetchWellnessDataEnhanced(daysBack, daysBackEnd) {
+  daysBack = daysBack || 7;
+  daysBackEnd = daysBackEnd || 0;
   // Get Intervals.icu data for historical records
   const icuRecords = fetchWellnessData(daysBack, daysBackEnd);
 

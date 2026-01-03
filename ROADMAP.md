@@ -45,34 +45,49 @@ This document tracks opportunities to make IntervalCoach more AI-first by replac
 
 ## Backlog
 
-All pending features, unified and ordered by priority. Pick from the top for maximum value.
+Unified prioritized list. Pick from the top for maximum value.
 
-### 🔴 HIGH Priority
+| # | Feature | Description | Type | Impact |
+|---|---------|-------------|------|--------|
+| 1 | ~~**DRY: Central Context Management**~~ | ✅ Added `getWellnessSummary()` helper and auto-fetch to `gatherTrainingContext()`. | Infrastructure | Done |
+| 2 | ~~**DRY: Test Boilerplate**~~ | ✅ Created `setupTestContext()` and `logTestHeader()`. Updated `testFtpTestSuggestion()` as example. Remaining test files can follow same pattern. | Infrastructure | Done |
+| 3 | **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform | High |
+| 4 | **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First | High |
+| 5 | **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration | Coaching | Medium |
+| 6 | **DRY: Date Math Helpers** | Create `getDateDaysAgo(days)` and `getWeekBoundaries(date)` in utils.gs. Eliminates 12+ patterns | Infrastructure | ~30 lines |
+| 7 | **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching | Medium |
+| 8 | **DRY: Prompt Context Builders** | Create `buildSubjectiveMarkersContext()`, `formatEventDescription()` helpers. Eliminates repeated string building | Infrastructure | ~35 lines |
+| 9 | **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform | Medium |
+| 10 | **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure | Medium |
+| 11 | **Adaptive Duration Defaults** | When no duration specified, calculate baseline based on CTL. (Inspired by Aixle) | Coaching | Low |
+| 12 | **Light Activity Detection Audit** | Verify very light recovery spins aren't misclassified as rest days. Cross-reference timestamps and activity counts. (Inspired by Aixle) | Infrastructure | Low |
+| 13 | **Recent Workout History in Email** | Show last 7 days with AI effectiveness scores in weekly email. (Inspired by Aixle) | Coaching | Low |
+| 14 | **On-Demand Training App** | Web/iOS app for real-time workout generation | Platform | High (effort) |
+| 15 | **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform | Low |
 
-| Feature | Description | Type |
-|---------|-------------|------|
-| **TrainNow-style Quick Picker** | On-demand workout selection without full generation | Platform |
-| **Race Outcome Prediction** | AI predicts race performance given current fitness, compares to goal time | AI-First |
-| **On-Demand Training App** | Web/iOS app for real-time workout generation with instant AI coaching | Platform |
+> **DRY Analysis (Jan 2026):** `gatherTrainingContext()` already exists in context.gs but isn't used everywhere. Expanding it + consistent usage = ~500 lines saved.
 
-### 🟡 MEDIUM Priority
+#### Central Context Management Details
 
-| Feature | Description | Type |
-|---------|-------------|------|
-| **Progressive Endurance Duration** | Gradually increase long weekend ride duration over weeks (e.g., +10-15min/week during Base), trending toward event duration. Track longest endurance ride per week. | Coaching |
-| **RPE-Based Difficulty Calibration** | Adjust workout difficulty based on RPE feedback patterns | Coaching |
-| **Visual Analytics Dashboard** | Charts, trends, progress visualization | Platform |
-| **Easier Setup** | Setup wizard, better documentation, env validation | Infrastructure |
+`gatherTrainingContext()` now provides (all auto-fetch if not provided):
+- ✅ Wellness fetching via `getWellnessSummary()` (NEW)
+- ✅ Goals fetching
+- ✅ Phase calculation
+- ✅ Fitness metrics
+- ✅ Events (today, tomorrow, yesterday, +2 days)
+- ✅ Week progress
+- ✅ Zone progression
+- ✅ Adaptive training context (RPE/Feel + gap analysis)
 
-### 🟢 LOW Priority (Quick Wins)
+**New helper functions:**
+- `getWellnessSummary(daysBack, useEnhanced)` - DRY wrapper for wellness fetching
+- `setupTestContext(options)` - DRY wrapper for test files
+- `logTestHeader(title)` - Consistent test logging
 
-| Feature | Description | Type |
-|---------|-------------|------|
-| **Adaptive Duration Defaults** | When no duration specified in placeholder, calculate personalized baseline based on CTL. Scale volume for advanced vs developing athletes. (Inspired by Aixle) | Coaching |
-| **Light Activity Detection Audit** | Verify very light recovery spins aren't misclassified as rest days. Cross-reference timestamps and activity counts, not just load. (Inspired by Aixle) | Infrastructure |
-| **Recent Workout History in Email** | Show last 7 days of workouts with AI effectiveness scores in weekly email, similar to Aixle dashboard view. (Inspired by Aixle) | Coaching |
-| **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
-| **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
+**Remaining opportunities:**
+- `emails.gs` - can use `gatherTrainingContext()` instead of manual fetching
+- `test_*.gs` (10 files) - can follow `testFtpTestSuggestion()` pattern
+- `wellness.gs` AI functions - can accept context object
 
 ### ✅ Completed
 
@@ -820,4 +835,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Displays pattern duration (consecutive days)
 - Provides training guidance
 
-*Last updated: 2026-01-03 (Added FTP Ramp Test Suggestion)*
+*Last updated: 2026-01-03 (Added DRY Refactoring Analysis)*
