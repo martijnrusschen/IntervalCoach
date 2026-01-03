@@ -67,49 +67,37 @@ function testRecommendationFeedback() {
  * Test AI-driven periodization
  */
 function testAIPeriodization() {
-  Logger.log("=== AI PERIODIZATION TEST ===\n");
-  requireValidConfig();
+  logTestHeader("AI PERIODIZATION");
 
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
-
-  const summary = createAthleteSummary();
+  const ctx = setupTestContext();
+  const goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+  const targetDate = ctx.goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
 
   const powerProfile = analyzePowerProfile(fetchPowerCurve());
-  const recentTypes = getRecentWorkoutTypes(7);
 
   Logger.log("--- Current Context ---");
   Logger.log("Target: " + targetDate);
-  Logger.log("CTL: " + summary.ctl_90.toFixed(1) + " | TSB: " + summary.tsb_current.toFixed(1));
-  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("CTL: " + ctx.ctl.toFixed(1) + " | TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Recovery: " + ctx.wellness.recoveryStatus);
 
-  // Date-based phase
+  // Date-based phase (already calculated in ctx, but show separately for comparison)
   Logger.log("\n--- Date-Based Phase ---");
-  const dateBasedPhase = calculateTrainingPhase(targetDate);
-  Logger.log("Phase: " + dateBasedPhase.phaseName + " (" + dateBasedPhase.weeksOut + " weeks out)");
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
 
   // AI-enhanced phase
   Logger.log("\n--- AI-Enhanced Phase ---");
   const phaseContext = {
     goalDescription: goalDescription,
-    goals: goals,
-    ctl: summary.ctl_90,
-    rampRate: summary.rampRate,
+    goals: ctx.goals,
+    ctl: ctx.ctl,
+    rampRate: ctx.fitness.rampRate,
     currentEftp: powerProfile.available ? powerProfile.currentEftp : null,
     targetFtp: powerProfile.available ? powerProfile.manualFTP : null,
-    tsb: summary.tsb_current,
-    z5Recent: summary.z5_recent_total,
-    wellnessAverages: wellness.available ? wellness.averages : null,
-    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
-    recentWorkouts: {
-      rides: recentTypes.rides,
-      runs: recentTypes.runs,
-      lastIntensity: getLastWorkoutIntensity(recentTypes)
-    },
+    tsb: ctx.tsb,
+    z5Recent: ctx.fitness.z5_recent_total,
+    wellnessAverages: ctx.wellness.averages,
+    recoveryStatus: ctx.wellness.recoveryStatus || 'Unknown',
+    recentWorkouts: ctx.recentWorkouts,
     enableAI: true
   };
 

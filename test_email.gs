@@ -260,38 +260,29 @@ function testMonthlyEmail() {
  */
 function testUnifiedDailyEmail(emailType) {
   const type = emailType || 'status';
-  Logger.log("=== UNIFIED DAILY EMAIL TEST (" + type.toUpperCase() + ") ===");
-  requireValidConfig();
+  logTestHeader("UNIFIED DAILY EMAIL (" + type.toUpperCase() + ")");
 
-  // Fetch all required data
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitnessMetrics = fetchFitnessMetrics();
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
+  const ctx = setupTestContext();
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  const weekProgress = checkWeekProgress();
 
   // Check for mid-week adaptation (unified approach)
   let midWeekAdaptation = null;
-  const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitnessMetrics);
+  const adaptationCheck = checkMidWeekAdaptationNeeded(ctx.weekProgress, upcomingDays, ctx.wellness, ctx.fitness);
   if (adaptationCheck.needed) {
     Logger.log("Adaptation needed: " + adaptationCheck.reason);
-    // Note: In test mode, we don't apply changes, just show what would happen
   }
 
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
-  Logger.log("Week Progress: " + weekProgress.summary);
+  Logger.log("Recovery: " + (ctx.wellness.recoveryStatus || "Unknown"));
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Week Progress: " + ctx.weekProgress.summary);
 
   // Build email params based on type
   const emailParams = {
     type: type,
-    summary: fitnessMetrics,
-    phaseInfo: phaseInfo,
-    wellness: wellness,
-    weekProgress: weekProgress,
+    summary: ctx.fitness,
+    phaseInfo: ctx.phaseInfo,
+    wellness: ctx.wellness,
+    weekProgress: ctx.weekProgress,
     upcomingDays: upcomingDays,
     midWeekAdaptation: midWeekAdaptation
   };
@@ -361,21 +352,13 @@ function testUnifiedEmail_GroupRide() { testUnifiedDailyEmail('group_ride'); }
  * @param {string} emailType - Optional: 'rest', 'workout', 'group_ride', 'race_day', 'sick' (default: all)
  */
 function testEmailStyles(emailType) {
-  Logger.log("=== EMAIL STYLES TEST ===\n");
-  requireValidConfig();
+  logTestHeader("EMAIL STYLES");
 
   const lang = USER_SETTINGS.LANGUAGE || 'en';
   const isNL = lang === 'nl';
 
-  // Fetch shared data once
-  const wellnessRecords = fetchWellnessDataEnhanced(30);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitnessMetrics = fetchFitnessMetrics();
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
+  const ctx = setupTestContext();
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  const weekProgress = checkWeekProgress();
 
   // Fetch last workout analysis for AI-generated yesterday acknowledgment
   let lastWorkoutAnalysis = null;
@@ -399,7 +382,7 @@ function testEmailStyles(emailType) {
     Logger.log(`${'='.repeat(50)}\n`);
 
     let body = '';
-    const baseParams = { wellness, weekProgress, upcomingDays, summary: fitnessMetrics, phaseInfo, lastWorkoutAnalysis };
+    const baseParams = { wellness: ctx.wellness, weekProgress: ctx.weekProgress, upcomingDays, summary: ctx.fitness, phaseInfo: ctx.phaseInfo, lastWorkoutAnalysis };
 
     if (type === 'rest') {
       body = buildWhoopStyleRestDayEmail(baseParams, isNL);

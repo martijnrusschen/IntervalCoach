@@ -13,17 +13,21 @@
  * This ensures all AI-powered decisions have access to the same complete context.
  * When adding new data sources, add them here once and they'll be available everywhere.
  *
- * @param {object} options - { wellness, fitnessMetrics, goals, phaseInfo, skipLogging }
+ * @param {object} options - { wellness, fitnessMetrics, goals, phaseInfo, wellnessDays, skipLogging }
  * @returns {object} Complete training context
  */
 function gatherTrainingContext(options) {
   const {
-    wellness,        // Pre-fetched wellness summary (required)
+    wellness,        // Pre-fetched wellness summary (optional, will fetch if not provided)
     fitnessMetrics,  // Pre-fetched fitness metrics (optional, will fetch if not provided)
     goals,           // Pre-fetched goals (optional, will fetch if not provided)
     phaseInfo,       // Pre-fetched phase info (optional, will fetch if not provided)
+    wellnessDays,    // Days of wellness data to fetch (default 30 for baseline tracking)
     skipLogging      // Skip logging context details (default false)
   } = options || {};
+
+  // Auto-fetch wellness if not provided
+  const wellnessSummary = wellness || getWellnessSummary(wellnessDays || 30);
 
   // Start with provided data or fetch missing pieces
   const fitness = fitnessMetrics || fetchFitnessMetrics();
@@ -34,11 +38,11 @@ function gatherTrainingContext(options) {
   const phase = phaseInfo || calculateTrainingPhase(targetDate);
 
   // Get recent workout types for variety tracking
-  const recentTypes = getRecentWorkoutTypes(7);
+  const recentTypes = getRecentWorkoutTypes(); // Default 14 days
   const twoWeekHistory = getTwoWeekWorkoutHistory();
 
   // Get adaptive training context (RPE/Feel feedback + training gap analysis)
-  const adaptiveContext = getAdaptiveTrainingContext(wellness);
+  const adaptiveContext = getAdaptiveTrainingContext(wellnessSummary);
 
   // Get zone progression (if available)
   let zoneProgression = null;
@@ -60,7 +64,7 @@ function gatherTrainingContext(options) {
   // Build the complete context object
   const ctx = {
     // Core metrics
-    wellness: wellness,
+    wellness: wellnessSummary,
     fitness: fitness,
     tsb: fitness.tsb_current || fitness.tsb || 0,
     ctl: fitness.ctl_90 || fitness.ctl || 0,
@@ -190,4 +194,55 @@ function getLastWorkoutIntensity(recentTypes) {
     return recentTypes.runs[0];
   }
   return null;
+}
+
+// =========================================================
+// TEST HELPERS
+// =========================================================
+
+/**
+ * Setup test context with all necessary data (DRY helper for test files)
+ * Uses gatherTrainingContext() to ensure consistent context across all tests.
+ *
+ * @param {object} options - { includePowerProfile, includeRunning, wellnessDays, skipLogging }
+ * @returns {object} Complete test context with all data
+ */
+function setupTestContext(options) {
+  options = options || {};
+  requireValidConfig();
+
+  // Get base context using centralized function
+  const ctx = gatherTrainingContext({
+    wellnessDays: options.wellnessDays || 30,
+    skipLogging: options.skipLogging !== false ? false : true  // Log by default in tests
+  });
+
+  // Add power profile if requested
+  if (options.includePowerProfile) {
+    try {
+      ctx.powerProfile = fetchPowerCurve();
+      ctx.powerAnalysis = analyzePowerProfile(ctx.powerProfile, ctx.goals);
+    } catch (e) {
+      Logger.log("Power profile not available: " + e.toString());
+    }
+  }
+
+  // Add running data if requested
+  if (options.includeRunning) {
+    try {
+      ctx.runningData = fetchRunningData();
+    } catch (e) {
+      Logger.log("Running data not available: " + e.toString());
+    }
+  }
+
+  return ctx;
+}
+
+/**
+ * Log a test header
+ * @param {string} title - Test title
+ */
+function logTestHeader(title) {
+  Logger.log("=== " + title + " TEST ===");
 }

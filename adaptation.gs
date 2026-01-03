@@ -1342,9 +1342,9 @@ function checkFtpTestSuggestion(fitnessMetrics, wellness, phaseInfo) {
       return result;
     }
 
-    // Check recovery status - not red
-    const recoveryStatus = wellness?.recoveryStatus;
-    if (recoveryStatus === 'red' || recoveryStatus === 'strained') {
+    // Check recovery status - not red (actual values: "Red (Strained)", "Yellow (Recovering)", "Green (Primed)")
+    const recoveryStatus = wellness?.recoveryStatus || '';
+    if (recoveryStatus.toLowerCase().includes('red') || recoveryStatus.toLowerCase().includes('strained')) {
       result.blockers.push(`Recovery is ${recoveryStatus} (need better recovery for accurate test)`);
       return result;
     }
