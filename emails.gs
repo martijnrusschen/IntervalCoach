@@ -1588,7 +1588,7 @@ function sendWeeklySummaryEmail() {
   }
 
   // ===== GENERATE WEEKLY PLAN =====
-  const recentTypes = getRecentWorkoutTypes(7);
+  const recentTypes = getRecentWorkoutTypes(); // Default 14 days
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 

@@ -6,6 +6,94 @@
  */
 
 // =========================================================
+// RECENT WORKOUTS DEBUG
+// =========================================================
+
+/**
+ * Debug function to diagnose recent workout types detection
+ * Shows raw API data vs what getRecentWorkoutTypes returns
+ */
+function testRecentWorkoutsDebug() {
+  logTestHeader("RECENT WORKOUTS DEBUG");
+
+  const today = new Date();
+  const twoWeeksAgo = new Date(today);
+  twoWeeksAgo.setDate(today.getDate() - 14);
+
+  const todayStr = formatDateISO(today);
+  const oldestStr = formatDateISO(twoWeeksAgo);
+
+  Logger.log("Date range: " + oldestStr + " to " + todayStr + " (14 days)\n");
+
+  // 1. Raw API activities
+  Logger.log("=== RAW API ACTIVITIES ===");
+  const activitiesResult = fetchIcuApi("/athlete/0/activities?oldest=" + oldestStr + "&newest=" + todayStr);
+
+  if (!activitiesResult.success) {
+    Logger.log("ERROR: " + activitiesResult.error);
+    return;
+  }
+
+  const activities = activitiesResult.data || [];
+  Logger.log("Total activities from API: " + activities.length + "\n");
+
+  activities.forEach((a, i) => {
+    const isSport = isSportActivity(a);
+    const classified = isSport ? classifyActivityType(a) : null;
+
+    Logger.log((i + 1) + ". " + a.name);
+    Logger.log("   Date: " + (a.start_date_local || "?"));
+    Logger.log("   Type: " + a.type);
+    Logger.log("   Moving time: " + Math.round((a.moving_time || 0) / 60) + " min");
+    Logger.log("   TSS: " + (a.icu_training_load || 0));
+    Logger.log("   isSportActivity: " + isSport);
+    if (classified) {
+      Logger.log("   Classified as: " + classified.type + " (" + classified.sport + ")");
+    } else if (isSport) {
+      Logger.log("   Classified as: NULL (too short or no zone data)");
+    }
+    Logger.log("");
+  });
+
+  // 2. getRecentWorkoutTypes result
+  Logger.log("=== getRecentWorkoutTypes() RESULT (14 days) ===");
+  const recentTypes = getRecentWorkoutTypes();
+  Logger.log("Rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
+  Logger.log("Runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
+  Logger.log("All: " + (recentTypes.all.length > 0 ? recentTypes.all.join(", ") : "None"));
+
+  // 3. Check for discrepancies
+  Logger.log("\n=== ANALYSIS ===");
+  const apiRides = activities.filter(a => a.type === 'Ride' || a.type === 'VirtualRide');
+  const apiRuns = activities.filter(a => a.type === 'Run' || a.type === 'VirtualRun');
+
+  Logger.log("API Rides: " + apiRides.length + " | Detected: " + recentTypes.rides.length);
+  Logger.log("API Runs: " + apiRuns.length + " | Detected: " + recentTypes.runs.length);
+
+  if (apiRides.length !== recentTypes.rides.length) {
+    Logger.log("\n⚠️ RIDE MISMATCH - some rides not classified");
+    apiRides.forEach(a => {
+      const classified = classifyActivityType(a);
+      if (!classified) {
+        Logger.log("  Missing: " + a.name + " (" + Math.round(a.moving_time / 60) + " min)");
+      }
+    });
+  }
+
+  if (apiRuns.length !== recentTypes.runs.length) {
+    Logger.log("\n⚠️ RUN MISMATCH - some runs not classified");
+    apiRuns.forEach(a => {
+      const classified = classifyActivityType(a);
+      if (!classified) {
+        Logger.log("  Missing: " + a.name + " (" + Math.round(a.moving_time / 60) + " min)");
+      }
+    });
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}
+
+// =========================================================
 // ACTIVITY DISCOVERY TESTS
 // =========================================================
 

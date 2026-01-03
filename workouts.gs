@@ -339,10 +339,10 @@ function classifyActivityType(activity) {
 
 /**
  * Fetch recent activities from Intervals.icu to track variety
- * @param {number} daysBack - How many days to look back (default 7)
+ * @param {number} daysBack - How many days to look back (default 14)
  * @returns {object} { rides, runs, all } arrays of workout types
  */
-function getRecentWorkoutTypes(daysBack = 7) {
+function getRecentWorkoutTypes(daysBack = 14) {
   const today = new Date();
   const oldest = new Date(today);
   oldest.setDate(today.getDate() - daysBack);
@@ -374,29 +374,9 @@ function getRecentWorkoutTypes(daysBack = 7) {
     Logger.log("Error fetching recent activities: " + activitiesResult.error);
   }
 
-  // Also check IntervalCoach workouts from events (for planned but not yet executed)
-  const eventsEndpoint = "/athlete/0/events?oldest=" + oldestStr + "&newest=" + todayStr;
-  const eventsResult = fetchIcuApi(eventsEndpoint);
-
-  if (eventsResult.success && Array.isArray(eventsResult.data)) {
-    eventsResult.data.forEach(function(e) {
-      if (isIntervalCoachWorkout(e.name)) {
-        // Match both old format (IntervalCoach_Type_Date) and new format (IntervalCoach Type)
-        const match = e.name.match(/IntervalCoach[_ ]([A-Za-z_]+)/);
-        if (match) {
-          const type = match[1].replace(/_/g, ' ').trim().split(' ')[0]; // Get first word of type
-          result.all.push(type);
-          if (type.startsWith("Run")) {
-            result.runs.push(type);
-          } else {
-            result.rides.push(type);
-          }
-        }
-      }
-    });
-  } else if (eventsResult.error) {
-    Logger.log("Error fetching recent events: " + eventsResult.error);
-  }
+  // Note: We only count completed activities, not planned events.
+  // Planned events would cause duplicates since completed workouts
+  // appear in both activities (actual) and events (planned).
 
   return result;
 }

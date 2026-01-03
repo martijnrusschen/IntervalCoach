@@ -38,7 +38,7 @@ function gatherTrainingContext(options) {
   const phase = phaseInfo || calculateTrainingPhase(targetDate);
 
   // Get recent workout types for variety tracking
-  const recentTypes = getRecentWorkoutTypes(7);
+  const recentTypes = getRecentWorkoutTypes(); // Default 14 days
   const twoWeekHistory = getTwoWeekWorkoutHistory();
 
   // Get adaptive training context (RPE/Feel feedback + training gap analysis)
