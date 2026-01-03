@@ -925,8 +925,7 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
     volumeJump: volumeJump,  // Include volume jump warning if >15% increase
     rampRateWarning: rampRateWarning,  // Include ramp rate warning if sustained high rate
-    illnessPattern: illnessPattern,  // Include illness pattern detection if concerning markers found
-    ftpTestSuggestion: ftpTestSuggestion  // Include FTP test suggestion if 28+ days since last update
+    illnessPattern: illnessPattern  // Include illness pattern detection if concerning markers found
   });
 }
 

@@ -1158,8 +1158,7 @@ function sendDailyEmail(params) {
     taperRecommendation,
     volumeJump,
     rampRateWarning,
-    illnessPattern,
-    ftpTestSuggestion
+    illnessPattern
   } = params;
 
   // Build subject based on type
@@ -1399,26 +1398,7 @@ function sendDailyEmail(params) {
     body += '\n';
   }
 
-  // === SECTION 3.6: FTP Test Suggestion ===
-  if (ftpTestSuggestion?.suggest) {
-    body += '\n';
-    body += isNL
-      ? `📊 **FTP Test aanbevolen**\n`
-      : `📊 **FTP Test Suggested**\n`;
-    body += isNL
-      ? `Je eFTP is ${ftpTestSuggestion.daysSinceUpdate} dagen niet bijgewerkt. `
-      : `Your eFTP hasn't been updated in ${ftpTestSuggestion.daysSinceUpdate} days. `;
-    body += isNL
-      ? `Nu je fris bent (positieve TSB), is dit een goed moment voor een ramp test om je trainingszones te kalibreren.\n`
-      : `Since you're fresh (positive TSB), this is a good time for a ramp test to calibrate your training zones.\n`;
-    if (ftpTestSuggestion.currentEftp) {
-      body += isNL
-        ? `Huidige eFTP: ${ftpTestSuggestion.currentEftp}W\n`
-        : `Current eFTP: ${ftpTestSuggestion.currentEftp}W\n`;
-    }
-  }
-
-  // === SECTION 3.7: Taper Timing (within 6 weeks of A race) ===
+  // === SECTION 3.6: Taper Timing (within 6 weeks of A race) ===
   if (taperRecommendation?.available) {
     body += formatTaperEmailSection(taperRecommendation);
   }
