@@ -37,10 +37,8 @@ function checkAndGenerateWorkout() {
   const hasRace = eventData.success && eventData.raceEvent != null;
 
   if (!hasPlaceholder && !hasRace) {
-    Logger.log('No placeholder workouts or races scheduled for today - skipping');
-    // Mark as done so we don't keep checking
-    props.setProperty('LAST_WORKOUT_RUN_DATE', today);
-    return;
+    Logger.log('No placeholder workouts or races scheduled for today - sending status email');
+    // Still run generation function to send daily status/rest email
   }
 
   if (hasPlaceholder) {
