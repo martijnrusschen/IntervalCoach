@@ -47,6 +47,16 @@ function fetchFitnessMetrics(targetDate) {
   // Fetch eFTP for the target date
   eftp = fetchHistoricalEftp(date);
 
+  // Fallback: if no SET_EFTP events, get current eFTP from athlete data
+  if (eftp == null) {
+    try {
+      const athleteData = fetchAthleteData();
+      eftp = athleteData.eFtp || null;
+    } catch (e) {
+      // Ignore - eFTP will remain null
+    }
+  }
+
   return {
     ctl: ctl,
     atl: atl,
