@@ -14,21 +14,12 @@
  * Generates 3 workout options and shows scores for each
  */
 function testMultiWorkoutOptions() {
-  Logger.log("=== MULTI-WORKOUT OPTIONS TEST ===");
+  logTestHeader("MULTI-WORKOUT OPTIONS");
   Logger.log("Testing: Generate 3 workout options with scores\n");
-  requireValidConfig();
 
-  // Gather context
+  const ctx = setupTestContext({ includePowerProfile: true });
+  ctx.phaseInfo.goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
   const summary = createAthleteSummary();
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const powerCurve = fetchPowerCurve();
-  const powerProfile = analyzePowerProfile(powerCurve);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate, { enableAI: false });
-  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
   const twoWeekHistory = getTwoWeekWorkoutHistory();
 
@@ -36,19 +27,19 @@ function testMultiWorkoutOptions() {
   const recentTypes = getRecentWorkoutTypes(7);
 
   Logger.log("--- Context ---");
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("TSB: " + (summary.tsb_current || 0).toFixed(1));
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "N/A"));
+  Logger.log("Phase: " + ctx.phase);
+  Logger.log("TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Recovery: " + (ctx.wellness.available ? ctx.wellness.recoveryStatus : "N/A"));
 
   // Call selectWorkoutTypes to get 3 options
   Logger.log("\n--- AI Workout Type Selection (3 options) ---");
   const typeSelection = selectWorkoutTypes({
-    wellness: wellness,
+    wellness: ctx.wellness,
     recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
     activityType: "Ride",
-    phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
-    ctl: summary.ctl_90 || summary.ctl,
+    phaseInfo: ctx.phaseInfo,
+    tsb: ctx.tsb,
+    ctl: ctx.ctl,
     eventTomorrow: { hasEvent: false },
     eventYesterday: { hadEvent: false },
     duration: { min: 60, max: 75 },
@@ -80,11 +71,11 @@ function testMultiWorkoutOptions() {
     createPrompt: createPrompt,
     promptParams: {
       summary: summary,
-      phaseInfo: phaseInfo,
+      phaseInfo: ctx.phaseInfo,
       dateStr: dateStr,
       duration: { min: 60, max: 75 },
-      wellness: wellness,
-      powerProfileOrRunningData: powerProfile,
+      wellness: ctx.wellness,
+      powerProfileOrRunningData: ctx.powerAnalysis,
       adaptiveContext: null,
       crossSportEquivalency: null,
       lastWorkoutAnalysis: null,
@@ -121,21 +112,12 @@ function testMultiWorkoutOptions() {
  * Verifies: varied cadence, max 5min blocks, engaging structure
  */
 function testAntiMonotonyWorkout() {
-  Logger.log("=== ANTI-MONOTONY ENGINE TEST ===");
+  logTestHeader("ANTI-MONOTONY ENGINE");
   Logger.log("Testing: Endurance workout should have varied structure\n");
-  requireValidConfig();
 
-  // Gather context
+  const ctx = setupTestContext({ includePowerProfile: true });
+  ctx.phaseInfo.goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
   const summary = createAthleteSummary();
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const powerCurve = fetchPowerCurve();
-  const powerProfile = analyzePowerProfile(powerCurve);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate, { enableAI: false });
-  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
   const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMdd");
 
@@ -145,18 +127,18 @@ function testAntiMonotonyWorkout() {
 
   Logger.log("--- Generating " + workoutType + " workout ---");
   Logger.log("Duration: " + duration.min + "-" + duration.max + " min");
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "N/A"));
+  Logger.log("Phase: " + ctx.phase);
+  Logger.log("Recovery: " + (ctx.wellness.available ? ctx.wellness.recoveryStatus : "N/A"));
 
   // Create prompt with anti-monotony rules
   const prompt = createPrompt(
     workoutType,
     summary,
-    phaseInfo,
+    ctx.phaseInfo,
     dateStr,
     duration,
-    wellness,
-    powerProfile,
+    ctx.wellness,
+    ctx.powerAnalysis,
     null,  // adaptiveContext
     null,  // crossSportEquivalency
     null,  // lastWorkoutAnalysis
@@ -343,43 +325,18 @@ function testWorkoutSelection() {
  * Test AI-driven workout type selection
  */
 function testAIWorkoutDecision() {
-  Logger.log("=== AI WORKOUT DECISION TEST ===");
-  requireValidConfig();
+  logTestHeader("AI WORKOUT DECISION");
 
-  const summary = fetchFitnessMetrics();
-  const wellnessRecords = fetchWellnessData();
-  const wellness = createWellnessSummary(wellnessRecords);
-  const powerProfile = analyzePowerProfile(fetchPowerCurve());
+  const ctx = setupTestContext({ includePowerProfile: true });
   const recentTypes = getRecentWorkoutTypes(7);
 
   // Get 2-week stimulus history for variety check
   const twoWeekHistory = getTwoWeekWorkoutHistory();
 
-  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
-  const goals = goalsResult.success && goalsResult.data ? {
-    available: true,
-    allGoals: goalsResult.data,
-    primaryGoal: goalsResult.data.find(g => g.priority === 'A'),
-    secondaryGoals: goalsResult.data.filter(g => g.priority === 'B')
-  } : { available: false };
-
-  const ctl = summary.ctl_90 || summary.ctl || 0;
-  const tsb = summary.tsb_current || summary.tsb || 0;
-
-  const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
-    (USER_SETTINGS.TARGET_DATE || formatDateISO(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)));
-  const phaseInfo = calculateTrainingPhase(targetDate, {
-    goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
-    goals: goals,
-    ctl: ctl,
-    tsb: tsb,
-    enableAI: true
-  });
-
   Logger.log("\n--- Current State ---");
-  Logger.log("CTL: " + ctl.toFixed(1) + " | TSB: " + tsb.toFixed(1));
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("CTL: " + ctx.ctl.toFixed(1) + " | TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Phase: " + ctx.phase);
+  Logger.log("Recovery: " + (ctx.wellness.available ? ctx.wellness.recoveryStatus : "Unknown"));
 
   // Log stimulus variety info
   Logger.log("\n--- Stimulus Variety (2 weeks) ---");
@@ -396,17 +353,17 @@ function testAIWorkoutDecision() {
   // AI selection with stimulus data
   Logger.log("\n--- AI Workout Decision ---");
   const aiSelection = selectWorkoutTypes({
-    wellness: wellness,
+    wellness: ctx.wellness,
     recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
     activityType: "Ride",
-    phaseInfo: phaseInfo,
-    tsb: tsb,
+    phaseInfo: ctx.phaseInfo,
+    tsb: ctx.tsb,
     eventTomorrow: false,
     eventYesterday: false,
-    ctl: ctl,
+    ctl: ctx.ctl,
     duration: 60,
-    goals: goals,
-    powerProfile: powerProfile,
+    goals: ctx.goals,
+    powerProfile: ctx.powerAnalysis,
     recentStimuli: twoWeekHistory.recentStimuli,
     stimulusCounts: twoWeekHistory.stimulusCounts,
     enableAI: true
@@ -418,11 +375,11 @@ function testAIWorkoutDecision() {
   // Rule-based comparison
   Logger.log("\n--- Rule-Based (comparison) ---");
   const ruleSelection = selectWorkoutTypes({
-    wellness: wellness,
+    wellness: ctx.wellness,
     recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
     activityType: "Ride",
-    phaseInfo: phaseInfo,
-    tsb: tsb,
+    phaseInfo: ctx.phaseInfo,
+    tsb: ctx.tsb,
     eventTomorrow: false,
     eventYesterday: false,
     enableAI: false
@@ -491,26 +448,16 @@ function testPostWorkoutAnalysis() {
   Logger.log("  TSS: " + realWorkout.icu_training_load);
   Logger.log("  Duration: " + Math.round(realWorkout.moving_time / 60) + " min");
 
-  // Fetch context data
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitness = fetchFitnessMetrics();
+  // Fetch context data using setupTestContext
+  const ctx = setupTestContext({ includePowerProfile: true, includeRunning: true, wellnessDays: 7 });
 
   const isRun = realWorkout.type === "Run";
-  let powerProfile = { available: false };
-  let runningData = { available: false };
-
-  if (isRun) {
-    runningData = fetchRunningData();
-  } else {
-    const powerCurve = fetchPowerCurve();
-    const goals = fetchUpcomingGoals();
-    powerProfile = analyzePowerProfile(powerCurve, goals);
-  }
+  const powerProfile = isRun ? { available: false } : ctx.powerAnalysis;
+  const runningData = isRun ? ctx.runningData : { available: false };
 
   // Test 3: AI Analysis
   Logger.log("\n--- Test 3: AI Analysis ---");
-  const analysis = generatePostWorkoutAnalysis(realWorkout, wellness, fitness, powerProfile, runningData);
+  const analysis = generatePostWorkoutAnalysis(realWorkout, ctx.wellness, ctx.fitness, powerProfile, runningData);
 
   if (!analysis || !analysis.success) {
     Logger.log("X AI analysis failed: " + (analysis?.error || "Unknown error"));
@@ -582,8 +529,6 @@ function testPostWorkoutAnalysis() {
   Logger.log("Fetching additional context for enhanced email...");
 
   // Fetch additional context for enhanced email
-  const goals = fetchUpcomingGoals();
-  const phaseInfo = calculateTrainingPhase(goals?.primaryGoal?.date || USER_SETTINGS.TARGET_DATE);
   const weekProgress = checkWeekProgress();
   const recentHistory = fetchRecentActivitySummary(14);
 
@@ -593,15 +538,15 @@ function testPostWorkoutAnalysis() {
 
   Logger.log("  Week Progress: " + weekProgress.summary);
   Logger.log("  Recent History: " + recentHistory.totalActivities + " activities in last 14 days");
-  Logger.log("  Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("  Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
   Logger.log("  Next Workout: " + (nextWorkout ? (nextWorkout.placeholderName || nextWorkout.activityType || nextWorkout.eventName) + " on " + nextWorkout.dayName : "None"));
 
   Logger.log("Sending post-workout analysis email...");
 
   try {
-    sendPostWorkoutAnalysisEmail(realWorkout, analysis, wellness, fitness, powerProfile, runningData, {
-      goals: goals,
-      phaseInfo: phaseInfo,
+    sendPostWorkoutAnalysisEmail(realWorkout, analysis, ctx.wellness, ctx.fitness, powerProfile, runningData, {
+      goals: ctx.goals,
+      phaseInfo: ctx.phaseInfo,
       weekProgress: weekProgress,
       recentHistory: recentHistory,
       nextWorkout: nextWorkout

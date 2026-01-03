@@ -13,7 +13,7 @@
  * Test function for adaptive training
  */
 function testAdaptiveTraining() {
-  Logger.log("=== ADAPTIVE TRAINING TEST ===");
+  logTestHeader("ADAPTIVE TRAINING");
 
   const feedback = fetchRecentActivityFeedback(14);
 
@@ -63,11 +63,10 @@ function testAdaptiveTraining() {
     Logger.log("  - " + r);
   });
 
-  // Get wellness for full context
+  // Get wellness for full context using setupTestContext
   Logger.log("\n--- Training Gap Analysis ---");
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const context = getAdaptiveTrainingContext(wellness);
+  const ctx = setupTestContext({ wellnessDays: 7 });
+  const context = getAdaptiveTrainingContext(ctx.wellness);
 
   Logger.log("Days since last workout: " + (context.gap.daysSinceLastWorkout || 0));
   if (context.gap.lastActivity) {
@@ -130,36 +129,26 @@ function testTrainingLoadAdvisor() {
  * Test AI-enhanced training load advisor with wellness context
  */
 function testAITrainingLoadAdvisor() {
-  Logger.log("=== AI TRAINING LOAD ADVISOR TEST ===");
+  logTestHeader("AI TRAINING LOAD ADVISOR");
 
-  // Fetch fitness metrics
-  const fitnessMetrics = fetchFitnessMetrics();
+  const ctx = setupTestContext();
+
   Logger.log("\n--- Current Fitness ---");
-  Logger.log("CTL: " + fitnessMetrics.ctl.toFixed(1));
-  Logger.log("ATL: " + fitnessMetrics.atl.toFixed(1));
-  Logger.log("TSB: " + fitnessMetrics.tsb.toFixed(1));
-  Logger.log("Ramp Rate: " + (fitnessMetrics.rampRate ? fitnessMetrics.rampRate.toFixed(2) : 'N/A') + " CTL/week");
-
-  // Fetch goals and phase
-  const goals = fetchUpcomingGoals();
-  const phaseInfo = goals?.available && goals?.primaryGoal
-    ? calculateTrainingPhase(goals.primaryGoal.date)
-    : calculateTrainingPhase(USER_SETTINGS.TARGET_DATE);
+  Logger.log("CTL: " + ctx.ctl.toFixed(1));
+  Logger.log("ATL: " + ctx.atl.toFixed(1));
+  Logger.log("TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Ramp Rate: " + (ctx.fitness.rampRate ? ctx.fitness.rampRate.toFixed(2) : 'N/A') + " CTL/week");
 
   Logger.log("\n--- Training Context ---");
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
-  if (goals?.primaryGoal) {
-    Logger.log("Goal: " + goals.primaryGoal.name + " (" + goals.primaryGoal.date + ")");
+  Logger.log("Phase: " + ctx.phase);
+  Logger.log("Weeks to Goal: " + ctx.phaseInfo.weeksOut);
+  if (ctx.goals?.primaryGoal) {
+    Logger.log("Goal: " + ctx.goals.primaryGoal.name + " (" + ctx.goals.primaryGoal.date + ")");
   }
 
-  // Fetch wellness data
-  const wellness = fetchWellnessData();
-  const wellnessSummary = createWellnessSummary(wellness);
-
   Logger.log("\n--- Wellness Data ---");
-  if (wellnessSummary.available) {
-    const avg = wellnessSummary.averages;
+  if (ctx.wellness.available) {
+    const avg = ctx.wellness.averages;
     Logger.log("7-day Avg Sleep: " + (avg.sleep ? avg.sleep.toFixed(1) + "h" : "N/A"));
     Logger.log("7-day Avg HRV: " + (avg.hrv ? avg.hrv.toFixed(0) + " ms" : "N/A"));
     Logger.log("7-day Avg Recovery: " + (avg.recovery ? avg.recovery.toFixed(0) + "%" : "N/A"));
@@ -169,7 +158,7 @@ function testAITrainingLoadAdvisor() {
 
   // Test AI-enhanced advice
   Logger.log("\n--- AI Training Load Advice ---");
-  const advice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, wellnessSummary);
+  const advice = calculateTrainingLoadAdvice(ctx.fitness, ctx.phaseInfo, ctx.goals, ctx.wellness);
 
   Logger.log("AI Enhanced: " + (advice.aiEnhanced ? "YES" : "NO (fallback)"));
   if (advice.aiConfidence) {
@@ -185,7 +174,7 @@ function testAITrainingLoadAdvisor() {
 
   // Compare with fallback
   Logger.log("\n--- Comparison: Fallback Advice ---");
-  const fallbackAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals, null);
+  const fallbackAdvice = calculateTrainingLoadAdvice(ctx.fitness, ctx.phaseInfo, ctx.goals, null);
   if (!fallbackAdvice.aiEnhanced) {
     Logger.log("Fallback Ramp Advice: " + fallbackAdvice.rampRateAdvice);
     Logger.log("Fallback Weekly TSS: " + fallbackAdvice.recommendedWeeklyTSS);
@@ -203,24 +192,10 @@ function testAITrainingLoadAdvisor() {
  * Tests context-aware gap interpretation
  */
 function testAITrainingGapAnalysis() {
-  Logger.log("=== AI TRAINING GAP ANALYSIS TEST ===\n");
-  requireValidConfig();
+  logTestHeader("AI TRAINING GAP ANALYSIS");
 
-  // Fetch real data
+  const ctx = setupTestContext({ wellnessDays: 7 });
   const gapData = getDaysSinceLastWorkout();
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitnessMetrics = fetchFitnessMetrics();
-
-  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
-  const goals = goalsResult.success && goalsResult.data ? {
-    available: true,
-    primaryGoal: goalsResult.data.find(g => g.priority === 'A')
-  } : { available: false };
-
-  const phaseInfo = calculateTrainingPhase(
-    goals.primaryGoal?.date || USER_SETTINGS.TARGET_DATE
-  );
 
   Logger.log("--- Gap Data ---");
   Logger.log("Days since last workout: " + gapData.daysSinceLastWorkout);
@@ -228,17 +203,17 @@ function testAITrainingGapAnalysis() {
   Logger.log("Last intensity: " + (gapData.lastIntensity || 'Unknown'));
 
   Logger.log("\n--- Wellness Context ---");
-  Logger.log("Recovery Status: " + (wellness.available ? wellness.recoveryStatus : 'N/A'));
-  Logger.log("Today's Recovery: " + (wellness.today?.recovery || 'N/A') + "%");
+  Logger.log("Recovery Status: " + (ctx.wellness.available ? ctx.wellness.recoveryStatus : 'N/A'));
+  Logger.log("Today's Recovery: " + (ctx.wellness.today?.recovery || 'N/A') + "%");
 
   Logger.log("\n--- Fitness Context ---");
-  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
-  Logger.log("TSB: " + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
-  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("CTL: " + (ctx.ctl?.toFixed(1) || 'N/A'));
+  Logger.log("TSB: " + (ctx.tsb?.toFixed(1) || 'N/A'));
+  Logger.log("Phase: " + ctx.phase);
 
   // Run analysis
   Logger.log("\n--- AI Training Gap Analysis ---");
-  const analysis = analyzeTrainingGap(gapData, wellness, phaseInfo, fitnessMetrics);
+  const analysis = analyzeTrainingGap(gapData, ctx.wellness, ctx.phaseInfo, ctx.fitness);
 
   Logger.log("AI Enhanced: " + analysis.aiEnhanced);
   Logger.log("Interpretation: " + analysis.interpretation);

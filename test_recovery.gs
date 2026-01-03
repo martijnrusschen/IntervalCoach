@@ -92,9 +92,10 @@ function testSendRestDayEmail() {
  * Test AI-enhanced recovery assessment with personal baselines
  */
 function testAIRecoveryAssessment() {
-  Logger.log("=== AI RECOVERY ASSESSMENT TEST ===");
+  logTestHeader("AI RECOVERY ASSESSMENT");
+  requireValidConfig();
 
-  // Fetch wellness data
+  // This test needs raw wellness records for analysis
   const wellnessRecords = fetchWellnessData(7);
 
   if (!wellnessRecords || wellnessRecords.length === 0) {
@@ -208,41 +209,34 @@ function testAIRestDayAssessment() {
  * Tests fatigue classification, warning signs, and recovery prediction
  */
 function testAICumulativeFatiguePrediction() {
-  Logger.log("=== AI CUMULATIVE FATIGUE PREDICTION TEST ===\n");
-  requireValidConfig();
+  logTestHeader("AI CUMULATIVE FATIGUE PREDICTION");
 
-  // Fetch all required data
+  const ctx = setupTestContext();
+
   Logger.log("--- Fetching Data ---");
-
-  const fitnessMetrics = fetchFitnessMetrics();
-  Logger.log("Current Fitness: CTL=" + (fitnessMetrics.ctl?.toFixed(1) || 'N/A') +
-    ", ATL=" + (fitnessMetrics.atl?.toFixed(1) || 'N/A') +
-    ", TSB=" + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+  Logger.log("Current Fitness: CTL=" + (ctx.ctl?.toFixed(1) || 'N/A') +
+    ", ATL=" + (ctx.atl?.toFixed(1) || 'N/A') +
+    ", TSB=" + (ctx.tsb?.toFixed(1) || 'N/A'));
 
   const fitnessTrend = fetchFitnessTrend(14);
   Logger.log("Fitness trend: " + fitnessTrend.length + " days of data");
 
-  const wellnessRecords = fetchWellnessData();
-  const wellness = createWellnessSummary(wellnessRecords);
-  Logger.log("Wellness: Recovery=" + (wellness.today?.recovery || 'N/A') + "%, HRV=" + (wellness.today?.hrv || 'N/A') +
-    " | Status: " + (wellness.recoveryStatus || 'Unknown'));
+  Logger.log("Wellness: Recovery=" + (ctx.wellness.today?.recovery || 'N/A') + "%, HRV=" + (ctx.wellness.today?.hrv || 'N/A') +
+    " | Status: " + (ctx.wellness.recoveryStatus || 'Unknown'));
 
   const workoutFeedback = fetchRecentActivityFeedback(14);
   Logger.log("Workout feedback: " + (workoutFeedback.summary?.totalWithFeedback || 0) + " activities with RPE/Feel");
 
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
 
   // Run AI analysis
   Logger.log("\n--- AI Fatigue Analysis ---");
   const analysis = generateAICumulativeFatigueAnalysis(
-    fitnessMetrics,
+    ctx.fitness,
     fitnessTrend,
-    wellness,
+    ctx.wellness,
     workoutFeedback,
-    phaseInfo
+    ctx.phaseInfo
   );
 
   if (analysis) {
@@ -295,7 +289,7 @@ function testAICumulativeFatiguePrediction() {
  * Tests both direct Whoop API and enhanced wellness fetching
  */
 function testWhoopWellness() {
-  Logger.log("=== WHOOP WELLNESS INTEGRATION TEST ===\n");
+  logTestHeader("WHOOP WELLNESS INTEGRATION");
 
   // Check if Whoop is configured
   Logger.log("--- Configuration ---");
@@ -365,7 +359,7 @@ function testWhoopWellness() {
  * Test HRV/RHR baseline tracking and deviation analysis
  */
 function testBaselineTracking() {
-  Logger.log("=== BASELINE TRACKING TEST ===");
+  logTestHeader("BASELINE TRACKING");
 
   // Fetch 30 days of wellness data for baseline calculation
   Logger.log("\n--- Fetching 30 Days of Wellness Data ---");
@@ -461,12 +455,10 @@ function testBaselineTracking() {
  * Tests continuous intensity scaling based on HRV/RHR z-scores
  */
 function testZScoreIntensityModifier() {
-  Logger.log("=== Z-SCORE INTENSITY MODIFIER TEST ===\n");
-  requireValidConfig();
+  logTestHeader("Z-SCORE INTENSITY MODIFIER");
 
-  // Fetch wellness data
-  const wellnessRecords = fetchWellnessDataEnhanced(30);
-  const summary = createWellnessSummary(wellnessRecords);
+  const ctx = setupTestContext({ wellnessDays: 30 });
+  const summary = ctx.wellness;
 
   if (!summary?.available) {
     Logger.log("ERROR: No wellness data available");
@@ -570,10 +562,9 @@ function testZScoreIntensityModifier() {
  * Tests detection of illness markers from wellness data
  */
 function testIllnessPatternDetection() {
-  Logger.log("=== ILLNESS PATTERN DETECTION TEST ===\n");
-  requireValidConfig();
+  logTestHeader("ILLNESS PATTERN DETECTION");
 
-  // Fetch wellness data
+  // This test needs raw wellness records for analysis
   const wellnessRecords = fetchWellnessDataEnhanced(7);
 
   if (!wellnessRecords || wellnessRecords.length < 2) {

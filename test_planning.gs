@@ -75,10 +75,10 @@ function testTrainingProposal() {
   Logger.log("\n--- Generated Training Proposal ---");
   const proposal = generateWeeklyTrainingProposal({
     upcoming: upcoming,
-    phaseInfo: phaseInfo,
-    fitnessMetrics: fitnessMetrics,
-    goals: goals,
-    wellness: wellness,
+    phaseInfo: ctx.phaseInfo,
+    fitnessMetrics: ctx.fitness,
+    goals: ctx.goals,
+    wellness: ctx.wellness,
     loadAdvice: loadAdvice
   });
 
@@ -95,46 +95,20 @@ function testTrainingProposal() {
  * Test AI weekly planning
  */
 function testAIWeeklyPlan() {
-  Logger.log("=== AI WEEKLY PLAN TEST ===");
-  requireValidConfig();
+  logTestHeader("AI WEEKLY PLAN");
 
-  const fitnessMetrics = fetchFitnessMetrics();
-  const wellnessRecords = fetchWellnessData();
-  const wellness = createWellnessSummary(wellnessRecords);
-  const powerProfile = analyzePowerProfile(fetchPowerCurve());
+  const ctx = setupTestContext({ includePowerProfile: true });
   const lastWeekActivities = fetchWeeklyActivities(7);
   const recentTypes = getRecentWorkoutTypes(7);
   const upcoming = fetchUpcomingPlaceholders(7);
 
-  const goalsResult = fetchIcuApi("/athlete/" + USER_SETTINGS.ATHLETE_ID + "/goals");
-  const goals = goalsResult.success && goalsResult.data ? {
-    available: true,
-    allGoals: goalsResult.data,
-    primaryGoal: goalsResult.data.find(g => g.priority === 'A'),
-    secondaryGoals: goalsResult.data.filter(g => g.priority === 'B')
-  } : { available: false };
-
-  const targetDate = goals.primaryGoal ? goals.primaryGoal.date :
-    (USER_SETTINGS.TARGET_DATE || formatDateISO(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)));
-  const phaseInfo = calculateTrainingPhase(targetDate, {
-    goalDescription: goals.primaryGoal ? goals.primaryGoal.name : "General fitness",
-    goals: goals,
-    ctl: fitnessMetrics.ctl_90 || fitnessMetrics.ctl,
-    tsb: fitnessMetrics.tsb_current || fitnessMetrics.tsb,
-    enableAI: true
-  });
-
-  const ctl = fitnessMetrics.ctl_90 || fitnessMetrics.ctl || 0;
-  const tsb = fitnessMetrics.tsb_current || fitnessMetrics.tsb || 0;
-  const atl = fitnessMetrics.atl_7 || fitnessMetrics.atl || 0;
-
-  // Calculate load advice after phaseInfo is available
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+  // Calculate load advice
+  const loadAdvice = calculateTrainingLoadAdvice(ctx.fitness, ctx.phaseInfo, ctx.goals);
 
   Logger.log("\n--- Current Status ---");
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks to goal)");
-  Logger.log("CTL: " + ctl.toFixed(0) + " | TSB: " + tsb.toFixed(1));
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks to goal)");
+  Logger.log("CTL: " + ctx.ctl.toFixed(0) + " | TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Recovery: " + (ctx.wellness.available ? ctx.wellness.recoveryStatus : "Unknown"));
   Logger.log("TSS target: " + loadAdvice.tssRange.min + "-" + loadAdvice.tssRange.max);
 
   // Check upcoming events
@@ -156,19 +130,19 @@ function testAIWeeklyPlan() {
 
   const planContext = {
     startDate: formatDateISO(new Date()),
-    phase: phaseInfo.phaseName,
-    weeksOut: phaseInfo.weeksOut,
-    phaseFocus: phaseInfo.focus,
-    phaseReasoning: phaseInfo.reasoning,
-    ctl: ctl,
-    atl: atl,
-    tsb: tsb,
-    eftp: powerProfile.available ? powerProfile.currentEftp : null,
-    ctlTrend: fitnessMetrics.rampRate > 0.5 ? 'increasing' : fitnessMetrics.rampRate < -0.5 ? 'decreasing' : 'stable',
-    recoveryStatus: wellness.available ? wellness.recoveryStatus : 'Unknown',
-    avgRecovery: wellness.available ? wellness.averages?.recovery : null,
-    avgSleep: wellness.available ? wellness.averages?.sleep : null,
-    goals: goals,
+    phase: ctx.phase,
+    weeksOut: ctx.phaseInfo.weeksOut,
+    phaseFocus: ctx.phaseInfo.focus,
+    phaseReasoning: ctx.phaseInfo.reasoning,
+    ctl: ctx.ctl,
+    atl: ctx.atl,
+    tsb: ctx.tsb,
+    eftp: ctx.powerAnalysis?.available ? ctx.powerAnalysis.currentEftp : null,
+    ctlTrend: ctx.fitness.rampRate > 0.5 ? 'increasing' : ctx.fitness.rampRate < -0.5 ? 'decreasing' : 'stable',
+    recoveryStatus: ctx.wellness.available ? ctx.wellness.recoveryStatus : 'Unknown',
+    avgRecovery: ctx.wellness.available ? ctx.wellness.averages?.recovery : null,
+    avgSleep: ctx.wellness.available ? ctx.wellness.averages?.sleep : null,
+    goals: ctx.goals,
     lastWeek: {
       totalTss: lastWeekActivities.totalTss || 0,
       activities: lastWeekActivities.totalActivities || 0,
@@ -299,16 +273,11 @@ function testMonthlyProgress() {
  * Checks if adaptation is needed based on current week progress and wellness
  */
 function testMidWeekAdaptation() {
-  Logger.log("=== MID-WEEK ADAPTATION TEST ===\n");
+  logTestHeader("MID-WEEK ADAPTATION");
 
-  // Fetch current data
+  const ctx = setupTestContext({ wellnessDays: 7 });
   const weekProgress = checkWeekProgress();
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  const wellness = createWellnessSummary(fetchWellnessDataEnhanced(7));
-  const fitness = fetchFitnessMetrics();
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
 
   // Log current state
   Logger.log("=== CURRENT STATE ===");
@@ -326,8 +295,8 @@ function testMidWeekAdaptation() {
   }
 
   Logger.log("\n--- Wellness ---");
-  Logger.log("Recovery: " + (wellness?.recoveryStatus || "Unknown"));
-  Logger.log("TSB: " + (fitness?.tsb?.toFixed(1) || "N/A"));
+  Logger.log("Recovery: " + (ctx.wellness?.recoveryStatus || "Unknown"));
+  Logger.log("TSB: " + (ctx.tsb?.toFixed(1) || "N/A"));
 
   Logger.log("\n--- Remaining Week ---");
   const today = formatDateISO(new Date());
@@ -339,7 +308,7 @@ function testMidWeekAdaptation() {
 
   // Check if adaptation is needed
   Logger.log("\n=== ADAPTATION CHECK ===");
-  const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, wellness, fitness);
+  const adaptationCheck = checkMidWeekAdaptationNeeded(weekProgress, upcomingDays, ctx.wellness, ctx.fitness);
 
   Logger.log("Adaptation needed: " + adaptationCheck.needed);
   Logger.log("Priority: " + adaptationCheck.priority);
@@ -369,7 +338,7 @@ function testMidWeekAdaptation() {
     try {
       // Build the prompt to show what would be sent to AI
       const prompt = buildMidWeekAdaptationPrompt(
-        weekProgress, remaining, wellness, fitness, phaseInfo, goals, adaptationCheck.triggers
+        weekProgress, remaining, ctx.wellness, ctx.fitness, ctx.phaseInfo, ctx.goals, adaptationCheck.triggers
       );
       Logger.log("\nPrompt length: " + prompt.length + " chars");
 
@@ -417,24 +386,18 @@ function testMidWeekAdaptation() {
  * Analyzes last 4 weeks of training to determine if a recovery week is needed
  */
 function testDeloadDetection() {
-  Logger.log("=== DELOAD DETECTION TEST ===\n");
-  requireValidConfig();
+  logTestHeader("DELOAD DETECTION");
 
-  // Fetch current fitness metrics
-  const fitness = fetchFitnessMetrics();
+  const ctx = setupTestContext({ wellnessDays: 7 });
 
   Logger.log("=== CURRENT FITNESS ===");
-  Logger.log("CTL: " + (fitness.ctl?.toFixed(1) || "N/A"));
-  Logger.log("ATL: " + (fitness.atl?.toFixed(1) || "N/A"));
-  Logger.log("TSB: " + (fitness.tsb?.toFixed(1) || "N/A"));
-  Logger.log("Ramp Rate: " + (fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
-
-  // Fetch wellness data (includes sleep debt from Whoop)
-  const wellnessRecords = fetchWellnessDataEnhanced(7, 0);
-  const wellness = createWellnessSummary(wellnessRecords);
+  Logger.log("CTL: " + (ctx.ctl?.toFixed(1) || "N/A"));
+  Logger.log("ATL: " + (ctx.atl?.toFixed(1) || "N/A"));
+  Logger.log("TSB: " + (ctx.tsb?.toFixed(1) || "N/A"));
+  Logger.log("Ramp Rate: " + (ctx.fitness.rampRate?.toFixed(1) || "N/A") + " CTL/week");
 
   Logger.log("\n=== SLEEP DEBT (from Whoop) ===");
-  const sleepDebt = wellness?.today?.sleepDebtHours;
+  const sleepDebt = ctx.wellness?.today?.sleepDebtHours;
   if (sleepDebt != null) {
     const debtLevel = sleepDebt >= 5 ? 'SEVERE' : sleepDebt >= 3 ? 'SIGNIFICANT' : sleepDebt >= 1.5 ? 'MODERATE' : 'LOW';
     Logger.log("Sleep Debt: " + sleepDebt.toFixed(1) + "h (" + debtLevel + ")");
@@ -447,7 +410,7 @@ function testDeloadDetection() {
   }
 
   // Run deload check (now includes wellness/sleep debt)
-  const deloadCheck = checkDeloadNeeded(fitness, wellness);
+  const deloadCheck = checkDeloadNeeded(ctx.fitness, ctx.wellness);
 
   Logger.log("\n=== DELOAD ANALYSIS ===");
   Logger.log(formatDeloadCheckLog(deloadCheck));
@@ -462,15 +425,15 @@ function testDeloadDetection() {
     Logger.log("  [+2] 3 consecutive weeks of sustained load");
   }
 
-  if (fitness.rampRate > 5) {
+  if (ctx.fitness.rampRate > 5) {
     Logger.log("  [+2] High ramp rate (>" + 5 + " CTL/week)");
-  } else if (fitness.rampRate > 3) {
+  } else if (ctx.fitness.rampRate > 3) {
     Logger.log("  [+1] Elevated ramp rate (>" + 3 + " CTL/week)");
   }
 
-  if (fitness.tsb < -30) {
+  if (ctx.tsb < -30) {
     Logger.log("  [+3] High fatigue (TSB < -30)");
-  } else if (fitness.tsb < -20) {
+  } else if (ctx.tsb < -20) {
     Logger.log("  [+1] Moderate fatigue (TSB < -20)");
   }
 
@@ -830,20 +793,19 @@ function testAdaptivePhaseTransitions() {
 
   // Calculate phase with AI enhancement
   Logger.log("\n=== PHASE CALCULATION (AI-enhanced) ===");
-  const fitness = fetchFitnessMetrics();
-  const wellness = createWellnessSummary(fetchWellnessData(7));
+  const ctx = setupTestContext({ wellnessDays: 7 });
 
   const context = {
     enableAI: true,
-    goals: goals,
-    goalDescription: goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION,
-    ctl: fitness.ctl,
-    rampRate: fitness.rampRate,
-    currentEftp: fitness.eftp,
+    goals: ctx.goals,
+    goalDescription: ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION,
+    ctl: ctx.ctl,
+    rampRate: ctx.fitness.rampRate,
+    currentEftp: ctx.fitness.eftp,
     targetFtp: USER_SETTINGS.MANUAL_FTP,
-    wellnessAverages: wellness.averages,
-    recoveryStatus: wellness.recoveryStatus,
-    tsb: fitness.tsb
+    wellnessAverages: ctx.wellness.averages,
+    recoveryStatus: ctx.wellness.recoveryStatus,
+    tsb: ctx.tsb
   };
 
   const phaseAI = calculateTrainingPhase(targetDate, context);
