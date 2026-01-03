@@ -243,20 +243,10 @@ function testAntiMonotonyWorkout() {
  * Test personalized coaching note generation
  */
 function testCoachingNote() {
-  Logger.log("=== COACHING NOTE TEST ===");
+  logTestHeader("COACHING NOTE");
 
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
-  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
-
-  const summary = createAthleteSummary();
-
-  const powerCurve = fetchPowerCurve();
-  const powerProfile = analyzePowerProfile(powerCurve);
+  const ctx = setupTestContext({ includePowerProfile: true });
+  ctx.phaseInfo.goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
   const mockWorkout = {
     type: "Tempo_SweetSpot",
@@ -264,13 +254,13 @@ function testCoachingNote() {
   };
 
   Logger.log("--- Input Data ---");
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
-  Logger.log("Recovery: " + wellness.recoveryStatus);
-  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Recovery: " + ctx.wellness.recoveryStatus);
+  Logger.log("TSB: " + ctx.tsb.toFixed(1));
   Logger.log("Workout: " + mockWorkout.type);
 
   Logger.log("\n--- Generated Coaching Note ---");
-  const note = generatePersonalizedCoachingNote(summary, phaseInfo, mockWorkout, wellness, powerProfile);
+  const note = generatePersonalizedCoachingNote(ctx.fitness, ctx.phaseInfo, mockWorkout, ctx.wellness, ctx.powerAnalysis);
 
   if (note) {
     Logger.log(note);
@@ -285,39 +275,27 @@ function testCoachingNote() {
  * Test workout type selection logic
  */
 function testWorkoutSelection() {
-  Logger.log("=== WORKOUT SELECTION TEST ===\n");
+  logTestHeader("WORKOUT SELECTION");
 
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
-
-  const summary = createAthleteSummary();
-
-  const recentTypes = getRecentWorkoutTypes(7);
-  const eventTomorrow = hasEventTomorrow();
-  const eventYesterday = hasEventYesterday();
+  const ctx = setupTestContext();
 
   Logger.log("--- Current Context ---");
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
-  Logger.log("TSB: " + summary.tsb_current.toFixed(1));
-  Logger.log("Recovery: " + wellness.recoveryStatus + (wellness.today?.recovery ? " (" + wellness.today.recovery + "%)" : ""));
-  Logger.log("Event Tomorrow: " + (eventTomorrow.hasEvent ? eventTomorrow.category + (eventTomorrow.eventName ? " - " + eventTomorrow.eventName : "") : "None"));
-  Logger.log("Event Yesterday: " + (eventYesterday.hadEvent ? eventYesterday.category + (eventYesterday.eventName ? " - " + eventYesterday.eventName : "") : "None"));
-  Logger.log("Recent rides: " + (recentTypes.rides.length > 0 ? recentTypes.rides.join(", ") : "None"));
-  Logger.log("Recent runs: " + (recentTypes.runs.length > 0 ? recentTypes.runs.join(", ") : "None"));
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
+  Logger.log("TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Recovery: " + ctx.wellness.recoveryStatus + (ctx.wellness.today?.recovery ? " (" + ctx.wellness.today.recovery + "%)" : ""));
+  Logger.log("Event Tomorrow: " + (ctx.eventTomorrow.hasEvent ? ctx.eventTomorrow.category + (ctx.eventTomorrow.eventName ? " - " + ctx.eventTomorrow.eventName : "") : "None"));
+  Logger.log("Event Yesterday: " + (ctx.eventYesterday.hadEvent ? ctx.eventYesterday.category + (ctx.eventYesterday.eventName ? " - " + ctx.eventYesterday.eventName : "") : "None"));
+  Logger.log("Recent rides: " + (ctx.recentTypes.rides.length > 0 ? ctx.recentTypes.rides.join(", ") : "None"));
+  Logger.log("Recent runs: " + (ctx.recentTypes.runs.length > 0 ? ctx.recentTypes.runs.join(", ") : "None"));
 
-  // Fetch zone progression
+  // Zone progression from context
   Logger.log("\n--- Zone Progression Context ---");
-  const zoneProgression = getZoneProgression();
-  if (zoneProgression && zoneProgression.available) {
+  if (ctx.zoneProgression?.available) {
     Logger.log("Zone levels:");
-    for (const [zone, data] of Object.entries(zoneProgression.progression)) {
+    for (const [zone, data] of Object.entries(ctx.zoneProgression.progression)) {
       Logger.log("  " + zone + ": " + data.level.toFixed(1) + " (" + data.trend + ")");
     }
-    Logger.log("Focus areas: " + zoneProgression.focusAreas.join(", "));
+    Logger.log("Focus areas: " + ctx.zoneProgression.focusAreas.join(", "));
   } else {
     Logger.log("Zone progression not available");
   }
@@ -325,13 +303,13 @@ function testWorkoutSelection() {
   // Test with real data - Ride (no AI)
   Logger.log("\n--- Ride Selection (Fallback) ---");
   const rideSelection = selectWorkoutTypes({
-    wellness: wellness,
-    recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
+    wellness: ctx.wellness,
+    recentWorkouts: ctx.recentWorkouts,
     activityType: "Ride",
-    phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
-    eventTomorrow: eventTomorrow,
-    eventYesterday: eventYesterday,
+    phaseInfo: ctx.phaseInfo,
+    tsb: ctx.tsb,
+    eventTomorrow: ctx.eventTomorrow,
+    eventYesterday: ctx.eventYesterday,
     enableAI: false
   });
   Logger.log("Max intensity: " + rideSelection.maxIntensity);
@@ -341,14 +319,14 @@ function testWorkoutSelection() {
   // Test with AI enabled + zone progression
   Logger.log("\n--- Ride Selection (AI + Zone Progression) ---");
   const aiRideSelection = selectWorkoutTypes({
-    wellness: wellness,
-    recentWorkouts: { types: recentTypes, lastIntensity: getLastWorkoutIntensity(recentTypes) },
+    wellness: ctx.wellness,
+    recentWorkouts: ctx.recentWorkouts,
     activityType: "Ride",
-    phaseInfo: phaseInfo,
-    tsb: summary.tsb_current,
-    eventTomorrow: eventTomorrow,
-    eventYesterday: eventYesterday,
-    zoneProgression: zoneProgression,
+    phaseInfo: ctx.phaseInfo,
+    tsb: ctx.tsb,
+    eventTomorrow: ctx.eventTomorrow,
+    eventYesterday: ctx.eventYesterday,
+    zoneProgression: ctx.zoneProgression,
     enableAI: true
   });
   Logger.log("Selected type: " + aiRideSelection.types[0]);
