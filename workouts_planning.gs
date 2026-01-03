@@ -376,6 +376,18 @@ ${h.daysUntil > 14 && h.daysUntil <= 28 ? '- HOLIDAY COMING: Plan regular traini
 `;
   }
 
+  // Build FTP test suggestion context
+  let ftpTestContext = '';
+  if (context.ftpTestSuggestion?.suggest) {
+    const ftp = context.ftpTestSuggestion;
+    ftpTestContext = `
+**FTP TEST RECOMMENDED:**
+- Last eFTP update: ${ftp.daysSinceUpdate} days ago
+- Current eFTP: ${ftp.currentEftp || 'N/A'}W
+- Note: Athlete should do a Zwift ramp test this week when fresh. Plan an easy day before to ensure freshness.
+`;
+  }
+
   // Build taper context if within race window
   let taperContext = '';
   if (context.taperRecommendation?.available) {
@@ -420,7 +432,7 @@ ${context.phaseReasoning ? '- AI Phase Reasoning: ' + context.phaseReasoning : '
 - TSB (Form): ${context.tsb?.toFixed(1) || 'N/A'} ${context.tsb < -15 ? '(FATIGUED)' : context.tsb > 5 ? '(FRESH)' : '(BALANCED)'}
 - eFTP: ${context.eftp || 'N/A'}W
 - CTL Trend: ${context.ctlTrend || 'stable'}
-${goalsContext}${taperContext}${periodizationContext}${holidayContext}
+${goalsContext}${ftpTestContext}${taperContext}${periodizationContext}${holidayContext}
 **RECOVERY STATUS:**
 - Current: ${context.recoveryStatus || 'Unknown'}
 - 7-day Avg Recovery: ${context.avgRecovery ? context.avgRecovery.toFixed(0) + '%' : 'N/A'}

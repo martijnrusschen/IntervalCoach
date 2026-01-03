@@ -392,3 +392,49 @@ function testWeekProgressDebug() {
 
   Logger.log("\n=== DEBUG COMPLETE ===");
 }
+
+// =========================================================
+// FTP TEST SUGGESTION TEST
+// =========================================================
+
+/**
+ * Test FTP test suggestion logic
+ */
+function testFtpTestSuggestion() {
+  Logger.log("=== FTP TEST SUGGESTION TEST ===");
+
+  // Get current fitness metrics
+  const fitnessMetrics = fetchFitnessMetrics();
+  Logger.log("\n--- Current Fitness ---");
+  Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
+  Logger.log("TSB: " + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+
+  // Get wellness data
+  const wellness = fetchWellnessDataEnhanced();
+  Logger.log("\n--- Wellness ---");
+  Logger.log("Recovery Status: " + (wellness.recoveryStatus || 'Unknown'));
+
+  // Get phase info
+  const goals = fetchUpcomingGoals();
+  const phaseInfo = calculateTrainingPhase(fitnessMetrics, goals);
+  Logger.log("\n--- Phase ---");
+  Logger.log("Phase: " + phaseInfo.phaseName);
+  Logger.log("Weeks Out: " + (phaseInfo.weeksOut || 'N/A'));
+
+  // Check FTP test suggestion
+  Logger.log("\n--- FTP Test Check ---");
+  const suggestion = checkFtpTestSuggestion(fitnessMetrics, wellness, phaseInfo);
+
+  Logger.log("Suggest Test: " + suggestion.suggest);
+  Logger.log("Days Since Update: " + (suggestion.daysSinceUpdate || 'N/A'));
+  Logger.log("Current eFTP: " + (suggestion.currentEftp || 'N/A') + "W");
+
+  if (suggestion.suggest) {
+    Logger.log("✅ Reason: " + suggestion.reason);
+  } else {
+    Logger.log("❌ Blockers:");
+    suggestion.blockers.forEach(b => Logger.log("  - " + b));
+  }
+
+  Logger.log("\n=== TEST COMPLETE ===");
+}

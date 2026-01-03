@@ -68,6 +68,8 @@ All pending features, unified and ordered by priority. Pick from the top for max
 
 | Feature | Description | Type |
 |---------|-------------|------|
+| **Adaptive Duration Defaults** | When no duration specified in placeholder, calculate personalized baseline based on CTL. Scale volume for advanced vs developing athletes. (Inspired by Aixle) | Coaching |
+| **Light Activity Detection Audit** | Verify very light recovery spins aren't misclassified as rest days. Cross-reference timestamps and activity counts, not just load. (Inspired by Aixle) | Infrastructure |
 | **Recent Workout History in Email** | Show last 7 days of workouts with AI effectiveness scores in weekly email, similar to Aixle dashboard view. (Inspired by Aixle) | Coaching |
 | **Multi-year Plan Builder** | Long-term periodization (2+ years) | Platform |
 | **Code Cleanup** | Refactor, remove dead code, improve structure | Infrastructure |
@@ -91,6 +93,7 @@ All pending features, unified and ordered by priority. Pick from the top for max
 | ~~Training Load Rate Warnings~~ | Warn when CTL ramp rate exceeds safe thresholds for 2+ weeks |
 | ~~Illness Detection Patterns~~ | Detect illness from elevated RHR, suppressed HRV, poor sleep, elevated skin temp for 2+ days |
 | ~~Recovery Debt Tracking~~ | Use Whoop sleep debt to trigger earlier deload recommendations |
+| ~~FTP Ramp Test Suggestion~~ | Suggest ramp test when eFTP not updated in 28+ days, TSB positive (fresh), recovery not red, and not in taper phase. Integrates with daily email and weekly planning. (Inspired by Aixle) |
 
 ---
 
@@ -119,6 +122,14 @@ AI Coach for Intervals.icu - Similar architecture to IntervalCoach (daily .zwo g
 2. **Smarter Wellness Logic**: "Freshness Matters: The system now strictly distinguishes between 'No Data' and 'Bad Data.' Sync Pending Status: If your device hasn't synced yet, Aixle recognizes this status instead of making assumptions based on old fatigue data."
 
 3. **Workout Options with Scores**: Primary recommendation with score (9/10), plus 2 alternatives with strategy explanations (e.g., "Given your excellent recovery signals, Threshold Over-Unders provides a different stimulus...").
+
+**Key Aixle Innovations (Jan 2026 update):**
+
+1. **Robust "Yesterday" Detection**: Rewritten activity detection engine cross-references timestamps and activity counts, not just load numbers. Light recovery spins no longer misinterpreted as rest days.
+
+2. **Adaptive Defaults by Rider Level**: When no duration/intensity specified, calculates personalized baseline based on current CTL. Advanced athletes get sufficient stimulus (longer blocks), developing riders get manageable durations.
+
+3. **Monthly FTP Calibration**: First days of month, suggests ramp test if FTP not tested in 28+ days AND TSB positive. Won't suggest if fatigued.
 
 ---
 
@@ -809,4 +820,4 @@ TrainerRoad claims 27% more accurate workout recommendations using proprietary A
 - Displays pattern duration (consecutive days)
 - Provides training guidance
 
-*Last updated: 2026-01-01 (Added AI Contextual Email Messages)*
+*Last updated: 2026-01-03 (Added FTP Ramp Test Suggestion)*

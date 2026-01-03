@@ -1158,7 +1158,8 @@ function sendDailyEmail(params) {
     taperRecommendation,
     volumeJump,
     rampRateWarning,
-    illnessPattern
+    illnessPattern,
+    ftpTestSuggestion
   } = params;
 
   // Build subject based on type
@@ -1398,7 +1399,26 @@ function sendDailyEmail(params) {
     body += '\n';
   }
 
-  // === SECTION 3.6: Taper Timing (within 6 weeks of A race) ===
+  // === SECTION 3.6: FTP Test Suggestion ===
+  if (ftpTestSuggestion?.suggest) {
+    body += '\n';
+    body += isNL
+      ? `📊 **FTP Test aanbevolen**\n`
+      : `📊 **FTP Test Suggested**\n`;
+    body += isNL
+      ? `Je eFTP is ${ftpTestSuggestion.daysSinceUpdate} dagen niet bijgewerkt. `
+      : `Your eFTP hasn't been updated in ${ftpTestSuggestion.daysSinceUpdate} days. `;
+    body += isNL
+      ? `Nu je fris bent (positieve TSB), is dit een goed moment voor een ramp test om je trainingszones te kalibreren.\n`
+      : `Since you're fresh (positive TSB), this is a good time for a ramp test to calibrate your training zones.\n`;
+    if (ftpTestSuggestion.currentEftp) {
+      body += isNL
+        ? `Huidige eFTP: ${ftpTestSuggestion.currentEftp}W\n`
+        : `Current eFTP: ${ftpTestSuggestion.currentEftp}W\n`;
+    }
+  }
+
+  // === SECTION 3.7: Taper Timing (within 6 weeks of A race) ===
   if (taperRecommendation?.available) {
     body += formatTaperEmailSection(taperRecommendation);
   }
@@ -1809,6 +1829,17 @@ function buildWeeklyPlanContext(tomorrow, phaseInfo, fitnessMetrics, powerProfil
     }
   } catch (e) {
     Logger.log("Holiday fetch failed (non-critical): " + e.toString());
+  }
+
+  // Add FTP test suggestion if conditions are met
+  try {
+    const ftpTestSuggestion = checkFtpTestSuggestion(fitnessMetrics, wellnessSummary, phaseInfo);
+    if (ftpTestSuggestion.suggest) {
+      planContext.ftpTestSuggestion = ftpTestSuggestion;
+      Logger.log("FTP test suggested for weekly plan: " + ftpTestSuggestion.reason);
+    }
+  } catch (e) {
+    Logger.log("FTP test suggestion check failed (non-critical): " + e.toString());
   }
 
   return planContext;

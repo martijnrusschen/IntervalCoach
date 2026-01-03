@@ -1265,3 +1265,100 @@ function checkRampRateWarning(currentFitness) {
 
   return result;
 }
+
+// =========================================================
+// FTP TEST SUGGESTION
+// =========================================================
+
+/**
+ * Check if FTP test (ramp test) should be suggested
+ * Conditions:
+ * - eFTP hasn't been updated in 28+ days
+ * - TSB is positive (athlete is fresh)
+ * - Recovery is not red
+ * - Not in taper phase (within 2 weeks of A race)
+ *
+ * @param {object} fitnessMetrics - Current fitness (TSB, CTL, etc)
+ * @param {object} wellness - Current wellness data
+ * @param {object} phaseInfo - Current training phase
+ * @returns {object} { suggest: boolean, reason: string, daysSinceUpdate: number }
+ */
+function checkFtpTestSuggestion(fitnessMetrics, wellness, phaseInfo) {
+  const result = {
+    suggest: false,
+    reason: null,
+    daysSinceUpdate: null,
+    currentEftp: null,
+    blockers: []
+  };
+
+  try {
+    // Get the last eFTP update date from fitness-model-events
+    const eventsResult = fetchIcuApi("/athlete/0/fitness-model-events");
+
+    if (!eventsResult.success) {
+      result.blockers.push("Could not fetch eFTP history");
+      return result;
+    }
+
+    const events = eventsResult.data;
+
+    // Find most recent SET_EFTP event
+    const eftpEvents = events
+      .filter(function(e) { return e.category === "SET_EFTP"; })
+      .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
+
+    if (eftpEvents.length === 0) {
+      // No eFTP history - definitely suggest a test
+      result.suggest = true;
+      result.reason = "No FTP test on record. A ramp test will establish your training zones.";
+      result.daysSinceUpdate = 999;
+      return result;
+    }
+
+    const lastUpdate = eftpEvents[0];
+    result.currentEftp = lastUpdate.value;
+
+    // Calculate days since last update
+    const lastUpdateDate = new Date(lastUpdate.start_date);
+    const today = new Date();
+    const daysSince = Math.floor((today - lastUpdateDate) / (1000 * 60 * 60 * 24));
+    result.daysSinceUpdate = daysSince;
+
+    // Check if it's been long enough (28+ days)
+    if (daysSince < 28) {
+      result.blockers.push(`eFTP updated ${daysSince} days ago (need 28+)`);
+      return result;
+    }
+
+    // Check TSB - need to be fresh (TSB > 0)
+    const tsb = fitnessMetrics?.tsb || fitnessMetrics?.tsb_current || 0;
+    if (tsb < 0) {
+      result.blockers.push(`TSB is ${tsb.toFixed(0)} (need positive for accurate test)`);
+      return result;
+    }
+
+    // Check recovery status - not red
+    const recoveryStatus = wellness?.recoveryStatus;
+    if (recoveryStatus === 'red' || recoveryStatus === 'strained') {
+      result.blockers.push(`Recovery is ${recoveryStatus} (need better recovery for accurate test)`);
+      return result;
+    }
+
+    // Check phase - not in taper (within 2 weeks of race)
+    if (phaseInfo?.weeksOut && phaseInfo.weeksOut <= 2) {
+      result.blockers.push(`In taper phase (${phaseInfo.weeksOut} weeks to race)`);
+      return result;
+    }
+
+    // All conditions met - suggest the test
+    result.suggest = true;
+    result.reason = `eFTP hasn't been tested in ${daysSince} days. You're fresh (TSB +${tsb.toFixed(0)}) - perfect time for a ramp test to recalibrate your zones.`;
+
+  } catch (e) {
+    Logger.log('FTP test suggestion check error: ' + e.toString());
+    result.blockers.push("Error checking FTP history");
+  }
+
+  return result;
+}

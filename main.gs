@@ -578,6 +578,22 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     Logger.log(`Illness pattern check failed (non-critical): ${e.toString()}`);
   }
 
+  // ===== FTP TEST SUGGESTION =====
+  // Check if athlete should do a ramp test (eFTP not updated in 28+ days, fresh, not in taper)
+  let ftpTestSuggestion = null;
+  if (!isRun) {  // Only for cycling
+    try {
+      ftpTestSuggestion = checkFtpTestSuggestion(summary, wellness, phaseInfo);
+      if (ftpTestSuggestion.suggest) {
+        Logger.log(`FTP Test Suggested: ${ftpTestSuggestion.reason}`);
+      } else if (ftpTestSuggestion.daysSinceUpdate !== null) {
+        Logger.log(`FTP Test: Last update ${ftpTestSuggestion.daysSinceUpdate} days ago`);
+      }
+    } catch (e) {
+      Logger.log(`FTP test suggestion check failed (non-critical): ${e.toString()}`);
+    }
+  }
+
   // ===== TAPER TIMING =====
   // Calculate optimal taper timing for upcoming A races (within 6 weeks)
   let taperRecommendation = null;
@@ -804,7 +820,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     volumeJump: volumeJump,
     rampRateWarning: rampRateWarning,
     deloadCheck: deloadCheck,
-    illnessPattern: illnessPattern
+    illnessPattern: illnessPattern,
+    ftpTestSuggestion: ftpTestSuggestion
   };
 
   // Generate multiple workout options and auto-select best
@@ -908,7 +925,8 @@ function generateOptimalZwiftWorkoutsAutoByGemini() {
     taperRecommendation: taperRecommendation,  // Include taper timing if within 6 weeks of race
     volumeJump: volumeJump,  // Include volume jump warning if >15% increase
     rampRateWarning: rampRateWarning,  // Include ramp rate warning if sustained high rate
-    illnessPattern: illnessPattern  // Include illness pattern detection if concerning markers found
+    illnessPattern: illnessPattern,  // Include illness pattern detection if concerning markers found
+    ftpTestSuggestion: ftpTestSuggestion  // Include FTP test suggestion if 28+ days since last update
   });
 }
 
