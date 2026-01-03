@@ -413,16 +413,21 @@ function testFtpTestSuggestion() {
   // Get wellness data
   const wellness = fetchWellnessDataEnhanced();
   Logger.log("\n--- Wellness ---");
-  Logger.log("Recovery Score: " + (wellness.today?.recovery || wellness.recovery || 'N/A'));
+  Logger.log("Whoop Recovery: " + (wellness.today?.recovery || 'N/A'));
+  Logger.log("Latest Recovery: " + (wellness.latestWithData?.recovery || 'N/A'));
+  Logger.log("HRV: " + (wellness.today?.hrv || wellness.latestWithData?.hrv || 'N/A'));
   Logger.log("Recovery Status: " + (wellness.recoveryStatus || 'Unknown'));
 
   // Get phase info
   const goals = fetchUpcomingGoals();
   Logger.log("\n--- Goals ---");
   Logger.log("Primary Goal: " + (goals.primaryGoal?.name || 'None'));
+  Logger.log("Primary Goal Date: " + (goals.primaryGoal?.date || 'None'));
   Logger.log("All Goals: " + (goals.allGoals?.map(g => g.priority + ': ' + g.name).join(', ') || 'None'));
 
-  const phaseInfo = calculateTrainingPhase(fitnessMetrics, goals);
+  const targetDate = goals.primaryGoal?.date || USER_SETTINGS.TARGET_DATE;
+  Logger.log("Target Date for phase: " + targetDate);
+  const phaseInfo = calculateTrainingPhase(targetDate);
   Logger.log("\n--- Phase ---");
   Logger.log("Phase: " + phaseInfo.phaseName);
   Logger.log("Weeks Out: " + (phaseInfo.weeksOut || 'N/A'));
