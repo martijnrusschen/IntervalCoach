@@ -36,25 +36,18 @@ function testWeeklySummary() {
  * Test training proposal generation
  */
 function testTrainingProposal() {
-  Logger.log("=== TRAINING PROPOSAL TEST ===\n");
+  logTestHeader("TRAINING PROPOSAL");
 
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
-  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
-
-  const fitnessMetrics = fetchFitnessMetrics();
-  const loadAdvice = calculateTrainingLoadAdvice(fitnessMetrics, phaseInfo, goals);
+  const ctx = setupTestContext();
+  ctx.phaseInfo.goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+  const loadAdvice = calculateTrainingLoadAdvice(ctx.fitness, ctx.phaseInfo, ctx.goals);
 
   Logger.log("--- Current Context ---");
-  Logger.log("Phase: " + phaseInfo.phaseName + " (" + phaseInfo.weeksOut + " weeks out)");
-  Logger.log("Goal: " + (phaseInfo.goalDescription || "General fitness"));
-  Logger.log("CTL: " + fitnessMetrics.ctl.toFixed(0));
-  Logger.log("TSB: " + fitnessMetrics.tsb.toFixed(0));
-  Logger.log("Recovery: " + wellness.recoveryStatus);
+  Logger.log("Phase: " + ctx.phase + " (" + ctx.phaseInfo.weeksOut + " weeks out)");
+  Logger.log("Goal: " + (ctx.phaseInfo.goalDescription || "General fitness"));
+  Logger.log("CTL: " + ctx.ctl.toFixed(0));
+  Logger.log("TSB: " + ctx.tsb.toFixed(0));
+  Logger.log("Recovery: " + ctx.wellness.recoveryStatus);
   Logger.log("Weekly TSS Target: " + loadAdvice.tssRange.min + "-" + loadAdvice.tssRange.max);
 
   Logger.log("\n--- Upcoming Placeholders (7 days) ---");

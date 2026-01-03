@@ -13,28 +13,22 @@
  * Test rest day email functionality
  */
 function testRestDayEmail() {
-  Logger.log("=== REST DAY EMAIL TEST ===");
+  logTestHeader("REST DAY EMAIL");
 
-  const wellnessRecords = fetchWellnessData(7);
-  const wellness = createWellnessSummary(wellnessRecords);
+  // Get all context in one call
+  const ctx = setupTestContext();
 
   Logger.log("--- Current Wellness Data ---");
-  Logger.log("Recovery Status: " + wellness.recoveryStatus);
-  Logger.log("Recovery Score: " + (wellness.today?.recovery != null ? wellness.today.recovery + "%" : "N/A"));
-  Logger.log("Is Rest Day Recommended: " + isRestDayRecommended(wellness));
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
+  Logger.log("Recovery Status: " + ctx.wellness.recoveryStatus);
+  Logger.log("Recovery Score: " + (ctx.wellness.today?.recovery != null ? ctx.wellness.today.recovery + "%" : "N/A"));
+  Logger.log("Is Rest Day Recommended: " + isRestDayRecommended(ctx.wellness));
 
   Logger.log("\n--- Phase Info ---");
-  Logger.log("Phase: " + phaseInfo.phaseName);
-  Logger.log("Weeks to Goal: " + phaseInfo.weeksOut);
+  Logger.log("Phase: " + ctx.phase);
+  Logger.log("Weeks to Goal: " + ctx.phaseInfo.weeksOut);
 
   // Fetch additional context for coaching note
-  const fitnessMetrics = fetchFitnessMetrics();
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  const weekProgress = checkWeekProgress();
 
   Logger.log("\n--- Upcoming Workouts ---");
   const nextWorkouts = upcomingDays.filter(d => d.activityType || d.hasEvent).slice(0, 3);
@@ -52,11 +46,11 @@ function testRestDayEmail() {
 
   Logger.log("\n--- AI Rest Day Coaching Note ---");
   const coachingNote = generateRestDayCoachingNote({
-    wellness: wellness,
-    phaseInfo: phaseInfo,
-    weekProgress: weekProgress,
+    wellness: ctx.wellness,
+    phaseInfo: ctx.phaseInfo,
+    weekProgress: ctx.weekProgress,
     upcomingDays: upcomingDays,
-    fitness: fitnessMetrics
+    fitness: ctx.fitness
   });
   if (coachingNote) {
     Logger.log(coachingNote);
@@ -72,30 +66,23 @@ function testRestDayEmail() {
  * Actually send a test rest day email (for testing the full flow)
  */
 function testSendRestDayEmail() {
-  Logger.log("=== SENDING TEST REST DAY EMAIL ===");
+  logTestHeader("SENDING REST DAY EMAIL");
 
-  const wellnessRecords = fetchWellnessDataEnhanced(7);
-  const wellness = createWellnessSummary(wellnessRecords);
-  const fitnessMetrics = fetchFitnessMetrics();
+  const ctx = setupTestContext();
   const upcomingDays = fetchUpcomingPlaceholders(7);
-  const weekProgress = checkWeekProgress();
-
-  const goals = fetchUpcomingGoals();
-  const targetDate = goals?.available && goals?.primaryGoal ? goals.primaryGoal.date : USER_SETTINGS.TARGET_DATE;
-  const phaseInfo = calculateTrainingPhase(targetDate);
-  phaseInfo.goalDescription = goals?.available ? buildGoalDescription(goals) : USER_SETTINGS.GOAL_DESCRIPTION;
+  ctx.phaseInfo.goalDescription = ctx.goals?.available ? buildGoalDescription(ctx.goals) : USER_SETTINGS.GOAL_DESCRIPTION;
 
   sendDailyEmail({
     type: 'rest',
     summary: {
-      ctl_90: fitnessMetrics.ctl || 0,
-      tsb_current: fitnessMetrics.tsb || 0
+      ctl_90: ctx.fitness.ctl || 0,
+      tsb_current: ctx.fitness.tsb || 0
     },
-    phaseInfo: phaseInfo,
-    wellness: wellness,
-    weekProgress: weekProgress,
+    phaseInfo: ctx.phaseInfo,
+    wellness: ctx.wellness,
+    weekProgress: ctx.weekProgress,
     upcomingDays: upcomingDays,
-    fitness: fitnessMetrics
+    fitness: ctx.fitness
   });
 
   Logger.log("Rest day email sent!");
@@ -168,38 +155,28 @@ function testAIRecoveryAssessment() {
  * Test AI-driven rest day assessment
  */
 function testAIRestDayAssessment() {
-  Logger.log("=== AI REST DAY ASSESSMENT TEST ===");
-  requireValidConfig();
+  logTestHeader("AI REST DAY ASSESSMENT");
 
-  const summary = fetchFitnessMetrics();
-  const wellnessRecords = fetchWellnessData();
-  const wellness = createWellnessSummary(wellnessRecords);
-  const recentTypes = getRecentWorkoutTypes(7);
-  const eventTomorrow = hasEventTomorrow();
-  const eventIn2Days = hasEventInDays(2);
-
-  const ctl = summary.ctl_90 || summary.ctl || 0;
-  const tsb = summary.tsb_current || summary.tsb || 0;
-  const atl = summary.atl_7 || summary.atl || 0;
+  const ctx = setupTestContext();
 
   Logger.log("\n--- Current State ---");
-  Logger.log("CTL: " + ctl.toFixed(1) + " | ATL: " + atl.toFixed(1) + " | TSB: " + tsb.toFixed(1));
-  Logger.log("Recovery: " + (wellness.available ? wellness.recoveryStatus : "Unknown"));
-  if (wellness.available && wellness.today) {
-    Logger.log("Recovery Score: " + (wellness.today.recovery || 'N/A') + "%");
-    Logger.log("Sleep: " + (wellness.today.sleep ? wellness.today.sleep.toFixed(1) + 'h' : 'N/A'));
+  Logger.log("CTL: " + ctx.ctl.toFixed(1) + " | ATL: " + ctx.atl.toFixed(1) + " | TSB: " + ctx.tsb.toFixed(1));
+  Logger.log("Recovery: " + (ctx.wellness.recoveryStatus || "Unknown"));
+  if (ctx.wellness.today) {
+    Logger.log("Recovery Score: " + (ctx.wellness.today.recovery || 'N/A') + "%");
+    Logger.log("Sleep: " + (ctx.wellness.today.sleep ? ctx.wellness.today.sleep.toFixed(1) + 'h' : 'N/A'));
   }
 
   const restDayContext = {
-    wellness: wellness,
-    tsb: tsb,
-    ctl: ctl,
-    atl: atl,
-    phase: "Build",
-    eventTomorrow: eventTomorrow,
-    eventIn2Days: eventIn2Days,
-    recentWorkouts: { rides: recentTypes.rides, runs: recentTypes.runs },
-    lastIntensity: getLastWorkoutIntensity(recentTypes),
+    wellness: ctx.wellness,
+    tsb: ctx.tsb,
+    ctl: ctx.ctl,
+    atl: ctx.atl,
+    phase: ctx.phase,
+    eventTomorrow: ctx.eventTomorrow,
+    eventIn2Days: ctx.eventIn2Days,
+    recentWorkouts: ctx.recentWorkouts,
+    lastIntensity: ctx.recentWorkouts.lastIntensity,
     consecutiveDays: "Unknown"
   };
 
@@ -216,7 +193,7 @@ function testAIRestDayAssessment() {
   }
 
   Logger.log("\n--- Rule-Based (comparison) ---");
-  const ruleBasedRest = isRestDayRecommended(wellness);
+  const ruleBasedRest = isRestDayRecommended(ctx.wellness);
   Logger.log("Decision: " + (ruleBasedRest ? "REST DAY" : "TRAIN"));
 
   Logger.log("\n=== TEST COMPLETE ===");
