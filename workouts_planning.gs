@@ -381,10 +381,13 @@ ${h.daysUntil > 14 && h.daysUntil <= 28 ? '- HOLIDAY COMING: Plan regular traini
   if (context.ftpTestSuggestion?.suggest) {
     const ftp = context.ftpTestSuggestion;
     ftpTestContext = `
-**FTP TEST RECOMMENDED:**
+**FTP TEST REQUIRED THIS WEEK (IMPORTANT):**
 - Last eFTP update: ${ftp.daysSinceUpdate} days ago
 - Current eFTP: ${ftp.currentEftp || 'N/A'}W
-- Note: Athlete should do a Zwift ramp test this week when fresh. Plan an easy day before to ensure freshness.
+- Action: Schedule "FTP Test" as a workout on a day when athlete will be fresh
+- Plan an easy/rest day before the FTP Test day
+- The athlete will use Zwift's built-in ramp test
+- Use workout type "FTP_Test" (25-30 min) for this day
 `;
   }
 
@@ -446,9 +449,10 @@ ${adaptationContext}${eventTrainingContext}${lastWeekContext}${historyContext}${
 - Daily TSS Range: ${context.dailyTss?.min || 50}-${context.dailyTss?.max || 100}
 
 **AVAILABLE WORKOUT TYPES:**
-Cycling: Recovery_Easy (1), Endurance_Z2 (2), Endurance_Tempo (3), SweetSpot (3), Tempo_Sustained (3), FTP_Threshold (4), Over_Unders (4), VO2max_Intervals (5), Anaerobic_Sprints (5)
+Cycling: Recovery_Easy (1), Endurance_Z2 (2), Endurance_Tempo (3), SweetSpot (3), Tempo_Sustained (3), FTP_Threshold (4), Over_Unders (4), VO2max_Intervals (5), Anaerobic_Sprints (5), FTP_Test (5)
 Running: Run_Recovery (1), Run_Easy (2), Run_Long (3), Run_Tempo (3), Run_Fartlek (3), Run_Threshold (4), Run_Intervals (5), Run_Strides (2)
 (Numbers = intensity 1-5)
+Note: FTP_Test is a placeholder for Zwift's built-in ramp test (25-30min). Only schedule when FTP TEST context is present above.
 
 **PLANNING RULES:**
 1. ADAPTIVE FREQUENCY: Base workout count on last week's activity count. Max increase of +1 workout from last week. If last week had 3 activities, plan max 4 this week.
