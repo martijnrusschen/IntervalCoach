@@ -408,14 +408,20 @@ function testFtpTestSuggestion() {
   Logger.log("\n--- Current Fitness ---");
   Logger.log("CTL: " + (fitnessMetrics.ctl?.toFixed(1) || 'N/A'));
   Logger.log("TSB: " + (fitnessMetrics.tsb?.toFixed(1) || 'N/A'));
+  Logger.log("eFTP from metrics: " + (fitnessMetrics.eftp || 'N/A') + "W");
 
   // Get wellness data
   const wellness = fetchWellnessDataEnhanced();
   Logger.log("\n--- Wellness ---");
+  Logger.log("Recovery Score: " + (wellness.today?.recovery || wellness.recovery || 'N/A'));
   Logger.log("Recovery Status: " + (wellness.recoveryStatus || 'Unknown'));
 
   // Get phase info
   const goals = fetchUpcomingGoals();
+  Logger.log("\n--- Goals ---");
+  Logger.log("Primary Goal: " + (goals.primaryGoal?.name || 'None'));
+  Logger.log("All Goals: " + (goals.allGoals?.map(g => g.priority + ': ' + g.name).join(', ') || 'None'));
+
   const phaseInfo = calculateTrainingPhase(fitnessMetrics, goals);
   Logger.log("\n--- Phase ---");
   Logger.log("Phase: " + phaseInfo.phaseName);
