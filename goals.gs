@@ -76,14 +76,17 @@ function fetchUpcomingGoals() {
         description: nextARace.description || ''
       };
     } else {
-      // If no A-race, use the first B-race
-      const nextBRace = goalEvents[0];
-      result.primaryGoal = {
-        name: nextBRace.name,
-        date: nextBRace.start_date_local.split('T')[0],
-        type: nextBRace.type,
-        description: nextBRace.description || ''
-      };
+      // If no A-race, use the first B-race (not C-races - those are just group rides)
+      const nextBRace = goalEvents.find(function(e) { return e.category === 'RACE_B'; });
+      if (nextBRace) {
+        result.primaryGoal = {
+          name: nextBRace.name,
+          date: nextBRace.start_date_local.split('T')[0],
+          type: nextBRace.type,
+          description: nextBRace.description || ''
+        };
+      }
+      // If only C-races, don't set primaryGoal - they shouldn't influence phase
     }
 
     // Collect B-races
