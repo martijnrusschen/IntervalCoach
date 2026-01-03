@@ -1308,16 +1308,20 @@ function checkFtpTestSuggestion(fitnessMetrics, wellness, phaseInfo) {
       .filter(function(e) { return e.category === "SET_EFTP"; })
       .sort(function(a, b) { return b.start_date.localeCompare(a.start_date); });
 
+    // Get current eFTP from fitness metrics as fallback
+    const currentEftpFromMetrics = fitnessMetrics?.eftp || null;
+
     if (eftpEvents.length === 0) {
       // No eFTP history - definitely suggest a test
       result.suggest = true;
       result.reason = "No FTP test on record. A ramp test will establish your training zones.";
       result.daysSinceUpdate = 999;
+      result.currentEftp = currentEftpFromMetrics;  // Use fitness metrics eFTP
       return result;
     }
 
     const lastUpdate = eftpEvents[0];
-    result.currentEftp = lastUpdate.value;
+    result.currentEftp = lastUpdate.value || currentEftpFromMetrics;
 
     // Calculate days since last update
     const lastUpdateDate = new Date(lastUpdate.start_date);
